@@ -1,0 +1,48 @@
+name: Build and Deploy Frontend to Vultr
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Docker
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      run: |
+        docker build -t pramool-frontend:latest .
+
+    - name: Save image to tarball
+      run: |
+        docker save pramool-frontend:latest -o pramool-frontend.tar
+
+    - name: Copy image and docker-compose to VPS
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        source: "docker-compose.yml,pramool-frontend.tar"
+        target: "~/pramool"
+        
+    - name: Load image and run docker-compose on VPS
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        script: |
+          cd ~/pramool
+
+          docker load -i pramool-frontend.tar
+
+          docker-compose down
+          docker-compose up -d --remove-orphans
