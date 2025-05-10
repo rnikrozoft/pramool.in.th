@@ -24,7 +24,7 @@ jobs:
       run: |
         docker save pramool-frontend:latest -o pramool-frontend.tar
 
-    - name: Copy image and docker-compose to VPS
+    - name: Copy image to VPS
       uses: appleboy/scp-action@v0.1.4
       with:
         host: ${{ secrets.VPS_HOST }}
@@ -33,7 +33,7 @@ jobs:
         source: "pramool-frontend.tar"
         target: "~/pramool"
         
-    - name: Load image and run docker-compose on VPS
+    - name: Load image and run container on VPS
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.VPS_HOST }}
@@ -44,5 +44,10 @@ jobs:
 
           docker load -i pramool-frontend.tar
 
-          docker-compose down
-          docker-compose up -d --remove-orphans
+          docker stop pramool-frontend || true
+          docker rm pramool-frontend || true
+
+          docker run -d \
+            --name pramool-frontend \
+            -p 3002:3000 \
+            pramool-frontend:latest
