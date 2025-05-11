@@ -50,6 +50,6 @@ jobs:
           docker run -d \
             --name pramool-frontend \
             -p 3002:3000 \
-            --network backend-network \
+            --network pramool_backend-network \
             pramool-frontend:latest
           docker build -t my-nextjs-app .
