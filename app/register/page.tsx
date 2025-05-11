@@ -21,7 +21,7 @@ export default function Register({ }: Props) {
         e.preventDefault();
 
         try {
-            const response = await fetch("http://localhost:3001/register", {
+            const response = await fetch("http://backend:3001/register", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
