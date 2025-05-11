@@ -47,11 +47,9 @@ jobs:
           docker stop pramool-frontend || true
           docker rm pramool-frontend || true
 
-          docker build -t pramool-frontend:latest .
-          
           docker run -d \
-          --name pramool-frontend \
-          --network backend-network \
-          -p 3002:3000 \
-          pramool-frontend:latest
-
+            --name pramool-frontend \
+            -p 3002:3000 \
+            --network backend-network \
+            pramool-frontend:latest
+          docker build -t my-nextjs-app .
