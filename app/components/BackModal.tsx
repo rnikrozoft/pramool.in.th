@@ -1,42 +1,27 @@
+import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 import React from 'react'
 
-type Props = {}
+type Props = {
+    isOpen: boolean
+    onClose: () => void
+}
 
-export default function BackModal({ }: Props) {
+export default function BackModal({ isOpen, onClose }: Props) {
     return (
-        <div
-            className="modal fade"
-            id="exampleModal"
-            tabIndex={-1}
-            aria-labelledby="exampleModalLabel"
-            aria-hidden="true"
-        >
-            <div className="modal-dialog">
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h1 className="modal-title fs-5" id="exampleModalLabel">
-                            Modal title
-                        </h1>
-                        <button
-                            type="button"
-                            className="btn-close"
-                            data-bs-dismiss="modal"
-                            aria-label="Close"></button>
+        <Dialog open={isOpen} onClose={onClose} className="relative z-50">
+            <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
+            <div className="fixed inset-0 flex items-center justify-center p-4">
+                <DialogPanel className="w-full max-w-md rounded-xl bg-white p-5 shadow-lg">
+                    <DialogTitle className="text-lg font-semibold text-slate-900">ย้อนการบิดล่าสุด</DialogTitle>
+                    <p className="mt-3 text-sm text-slate-600">
+                        ระบบจะยกเลิกรายการบิดล่าสุดของคุณในรายการนี้
+                    </p>
+                    <div className="mt-6 flex justify-end gap-2">
+                        <button type="button" className="btn-outline" onClick={onClose}>ปิด</button>
+                        <button type="button" className="btn-primary" onClick={onClose}>ยืนยัน</button>
                     </div>
-                    <div className="modal-body">...</div>
-                    <div className="modal-footer">
-                        <button
-                            type="button"
-                            className="btn btn-secondary"
-                            data-bs-dismiss="modal">Close</button
-                        >
-                        <button type="button" className="btn btn-primary"
-                        >Save changes</button
-                        >
-                    </div>
-                </div>
+                </DialogPanel>
             </div>
-        </div>
-
+        </Dialog>
     )
 }

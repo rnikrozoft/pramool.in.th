@@ -1,139 +1,74 @@
-import React from 'react'
+import Link from "next/link"
 
-type Props = {}
+const footerMenus = [
+  {
+    title: "เมนูหลัก",
+    items: [
+      { label: "หน้าแรก", href: "/" },
+      { label: "สินค้าประมูล", href: "/auctions" },
+      { label: "วิธีใช้งาน", href: "/how-it-works" },
+      { label: "แจ้งเตือน", href: "/notifications" },
+    ],
+  },
+  {
+    title: "บัญชีผู้ใช้",
+    items: [
+      { label: "เข้าสู่ระบบ", href: "/login" },
+      { label: "สมัครสมาชิก", href: "/register" },
+      { label: "โปรไฟล์ของฉัน", href: "/account/profile" },
+      { label: "ยืนยันตัวตน (KYC)", href: "/account/kyc" },
+    ],
+  },
+  {
+    title: "การประมูลของฉัน",
+    items: [
+      { label: "รายการที่ฉันกำลังประมูล", href: "/bids/active" },
+      { label: "ประวัติการประมูล", href: "/bids/history" },
+      { label: "รายการที่ฉันเปิดประมูล", href: "/seller/auctions" },
+      { label: "ประวัติการเติมเงิน", href: "/wallet/transactions" },
+    ],
+  },
+]
 
-export default function Footer({ }: Props) {
-    return (
-        <div className="container">
-            <footer className="py-5">
-                <div className="row">
-                    <div className="col-4 col-md-2 mb-3">
-                        <h5>Section</h5>
-                        <ul className="nav flex-column">
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >Home</a>
-                            </li>
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >Features</a>
-                            </li>
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >Pricing</a>
-                            </li>
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >FAQs</a>
-                            </li>
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >About</a>
-                            </li>
-                        </ul>
-                    </div>
-
-                    <div className="col-4 col-md-2 mb-3">
-                        <h5>Section</h5>
-                        <ul className="nav flex-column">
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >Home</a>
-                            </li>
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >Features</a>
-                            </li>
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >Pricing</a>
-                            </li>
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >FAQs</a>
-                            </li>
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >About</a>
-                            </li>
-                        </ul>
-                    </div>
-
-                    <div className="col-4 col-md-2 mb-3">
-                        <h5>Section</h5>
-                        <ul className="nav flex-column">
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >Home</a>
-                            </li>
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >Features</a>
-                            </li>
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >Pricing</a>
-                            </li>
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >FAQs</a>
-                            </li>
-                            <li className="nav-item mb-2">
-                                <a href="#" className="nav-link p-0 text-body-secondary"
-                                >About</a>
-                            </li>
-                        </ul>
-                    </div>
-
-                    <div className="col-md-5 offset-md-1 mb-3">
-                        <form>
-                            <h5>Subscribe to our newsletter</h5>
-                            <p>Monthly digest of what's new and exciting from us.</p>
-                            <div className="d-flex flex-column flex-sm-row w-100 gap-2">
-                                <label htmlFor="newsletter1" className="visually-hidden"
-                                >Email address</label
-                                >
-                                <input
-                                    id="newsletter1"
-                                    type="text"
-                                    className="form-control"
-                                    placeholder="Email address"
-                                />
-                                <button className="btn btn-primary" type="button"
-                                >Subscribe</button
-                                >
-                            </div>
-                        </form>
-                    </div>
-                </div>
-
-                <div
-                    className="d-flex flex-column flex-sm-row justify-content-between py-4 my-4 border-top"
-                >
-                    <p>© 2024 Company, Inc. All rights reserved.</p>
-                    <ul className="list-unstyled d-flex">
-                        <li className="ms-3">
-                            <a className="link-body-emphasis" href="#"
-                            ><svg className="bi" width="24" height="24"
-                            ><use xlinkHref="#twitter"></use></svg
-                                ></a>
-                        </li>
-                        <li className="ms-3">
-                            <a className="link-body-emphasis" href="#"
-                            ><svg className="bi" width="24" height="24"
-                            ><use xlinkHref="#instagram"></use></svg
-                                ></a>
-                        </li>
-                        <li className="ms-3">
-                            <a className="link-body-emphasis" href="#"
-                            ><svg className="bi" width="24" height="24"
-                            ><use xlinkHref="#facebook"></use></svg
-                                ></a>
-                        </li>
-                    </ul>
-                </div>
-            </footer>
+export default function Footer() {
+  return (
+    <div className="mt-12 border-t border-slate-200 bg-slate-50">
+      <footer className="mx-auto max-w-7xl px-4 py-10">
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+          {footerMenus.map((section) => (
+            <div key={section.title}>
+              <h5 className="mb-3 text-sm font-semibold text-slate-900">{section.title}</h5>
+              <ul className="space-y-2 text-sm text-slate-600">
+                {section.items.map((item) => (
+                  <li key={item.href}>
+                    <Link href={item.href} className="hover:text-slate-900">
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <div className="space-y-3">
+            <h5 className="text-sm font-semibold text-slate-900">ช่วยเหลือและติดต่อ</h5>
+            <p className="text-sm text-slate-600">ทีมงานพร้อมช่วยเหลือเรื่องการใช้งาน การชำระเงิน และความปลอดภัยในการประมูล</p>
+            <ul className="space-y-2 text-sm text-slate-600">
+              <li><a href="mailto:support@pramool.in.th" className="hover:text-slate-900">support@pramool.in.th</a></li>
+              <li><a href="tel:+66020000000" className="hover:text-slate-900">02-000-0000 (09:00 - 18:00)</a></li>
+              <li><a href="#" className="hover:text-slate-900">นโยบายความเป็นส่วนตัว</a></li>
+              <li><a href="#" className="hover:text-slate-900">ข้อกำหนดการใช้งาน</a></li>
+            </ul>
+          </div>
         </div>
-
-    )
+        <div className="mt-8 flex flex-col gap-3 border-t border-slate-200 pt-6 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+          <p>© 2026 Pramool. All rights reserved.</p>
+          <div className="flex items-center gap-4 text-base">
+            <a className="hover:text-slate-900" href="#"><i className="fab fa-facebook"></i></a>
+            <a className="hover:text-slate-900" href="#"><i className="fab fa-instagram"></i></a>
+            <a className="hover:text-slate-900" href="#"><i className="fab fa-line"></i></a>
+          </div>
+        </div>
+      </footer>
+    </div>
+  )
 }

@@ -1,16 +1,34 @@
-.banner-slide {
-    width: 1296px;
-    height: 400px;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 .overflow-hidden-scroll::-webkit-scrollbar {
-    display: none;
-    /* ซ่อน Scrollbar ใน Chrome และ Safari */
+  display: none;
 }
 
 .overflow-hidden-scroll {
-    scrollbar-width: none;
-    /* ซ่อน Scrollbar ใน Firefox */
-    -ms-overflow-style: none;
-    /* ซ่อน Scrollbar ใน IE/Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+@layer components {
+  .form-input {
+    @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200;
+  }
+
+  .form-select {
+    @apply block w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 pr-10 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-slate-100;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%2364758b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 14px 14px;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100;
+  }
 }

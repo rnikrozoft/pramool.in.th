@@ -16,16 +16,19 @@ type item = {
     price: string
 }
 
-function formatTimeLeft(secondsLeft: number): string {
-    const days = Math.floor(secondsLeft / (3600 * 24));
-    const hours = Math.floor((secondsLeft % (3600 * 24)) / 3600);
-    const minutes = Math.floor((secondsLeft % 3600) / 60);
-    const seconds = secondsLeft % 60;
-
-    return `${days} วัน ${hours}:${minutes}:${seconds}`;
-}
 
 export default function ProductCard({ item }: Props) {
+    const [isModalOpen, setIsModalOpen] = useState(false)
+
+    function formatTimeLeft(secondsLeft: number): string {
+        const days = Math.floor(secondsLeft / (3600 * 24));
+        const hours = Math.floor((secondsLeft % (3600 * 24)) / 3600);
+        const minutes = Math.floor((secondsLeft % 3600) / 60);
+        const seconds = secondsLeft % 60;
+
+        return `${days} วัน ${hours}:${minutes}:${seconds}`;
+    }
+
     const [timeLeft, setTimeLeft] = useState<number>(0);
 
     useEffect(() => {
@@ -45,50 +48,50 @@ export default function ProductCard({ item }: Props) {
 
     return (
         <>
-            <div className="position-relative">
+            <div className="relative">
                 <Image
                     src={item.image}
                     alt={item.image}
-                    className='object-fit-cover border rounded w-100'
+                    className='h-[310px] w-full rounded-lg border border-slate-200 object-cover'
                     width={250}
                     height={310}
                 />
                 <div
-                    className="d-flex w-100 position-absolute top-0 end-0 justify-content-between p-2"
+                    className="absolute inset-x-0 top-0 flex w-full items-center justify-between p-2"
                 >
-                    <a
-                        href="javascript:void(0)"
-                        data-bs-toggle="modal"
-                        data-bs-target="#exampleModal"
+                    <button
+                        type="button"
+                        onClick={() => setIsModalOpen(true)}
+                        className="rounded-full bg-rose-500 px-2.5 py-1 text-xs font-semibold text-white shadow"
                     >
-                        <span className="badge rounded-pill text-bg-danger">
-                            <i className="fas fa-undo"></i>
-                        </span>
-                    </a>
-                    <BackModal />
-                    <span className="badge rounded-pill text-bg-light">
+                        <i className="fas fa-undo"></i>
+                    </button>
+                    <BackModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+                    <span className="rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-slate-700 shadow">
                         <i className="fas fa-eye"></i> 99+
                     </span>
                 </div>
             </div>
-            <div className="mt-2" data-countdown={item.countdown}>
-                <p className="m-0 p-0">{item.name}</p>
-                <div className="d-flex justify-content-between">
-                    <strong className='text-success'>{item.price}</strong>
+            <div className="mt-2 space-y-1" data-countdown={item.countdown}>
+                <p className="text-sm text-slate-800">{item.name}</p>
+                <div className="flex items-center justify-between text-sm">
+                    <strong className='text-emerald-600'>{item.price}</strong>
                     {timeLeft > 0 ? formatTimeLeft(timeLeft) : "หมดเวลาแล้ว"}
                 </div>
-                <i className="fa-solid fa-star text-warning"></i>
-                <i className="fa-solid fa-star text-warning"></i>
-                <i className="fa-solid fa-star text-warning"></i>
-                <i className="fa-solid fa-star text-warning"></i>
-                <i className="fa-solid fa-star text-warning"></i>
+                <div className="text-amber-400">
+                    <i className="fa-solid fa-star"></i>
+                    <i className="fa-solid fa-star"></i>
+                    <i className="fa-solid fa-star"></i>
+                    <i className="fa-solid fa-star"></i>
+                    <i className="fa-solid fa-star"></i>
+                </div>
             </div>
             <Link
                 href={`/product/${item.id}`}
-                className="mt-2 btn btn-outline-dark btn-sm w-100"
+                className="btn-outline mt-2 w-full"
             >
-                <i className="fa-solid fa-gavel"></i>
-                ร่วมประมูล (บิดครั้งละ 120)
+                <i className="fa-solid fa-gavel mr-1"></i>
+                <span>ร่วมประมูล (บิดครั้งละ 120)</span>
             </Link>
         </>
     )

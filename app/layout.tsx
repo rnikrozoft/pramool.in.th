@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { Noto_Sans_Thai } from "next/font/google";
-import 'bootstrap/dist/css/bootstrap.css';
 import "./globals.css";
-import BootstrapClient from "./components/BootstrapClient";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import { UserProvider } from "./context/UserContext";
+import OnboardingGuard from "./components/OnboardingGuard";
 
 const geistSans = Noto_Sans_Thai({
   weight: "500",
@@ -30,10 +30,12 @@ export default function RootLayout({
         />
       </head>
       <body className={`${geistSans.className}`}>
-        <Navbar></Navbar>
-        {children}
-        <Footer></Footer>
-        <BootstrapClient />
+        <UserProvider>
+          <OnboardingGuard />
+          <Navbar />
+          {children}
+        </UserProvider>
+        <Footer />
       </body>
     </html>
   );

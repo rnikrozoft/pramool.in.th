@@ -65,42 +65,40 @@ export default function Home() {
   ];
 
   return (
-    <main className="mt-4">
-      <div className="container">
-        <div className="row">
-          <div className="col-12">
-            <BannerSlide />
-          </div>
+    <main className="mt-6">
+      <div className="mx-auto max-w-7xl px-4">
+        <div>
+          <BannerSlide />
         </div>
-        <div className="row mt-3">
+        <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           {
             ads.map((ad) => (
-              <div className="col-12 col-md-6 col-lg-3" key={ad.id}>
+              <div key={ad.id}>
                 <Ad title={ad.title} image={ad.image} />
               </div>
             ))
           }
         </div>
-        <div className="row my-5 row-gap-3">
-          <div className="col-12">
-            <h5>Explore your Interests</h5>
+        <div className="my-8 space-y-4">
+          <div>
+            <h5 className="text-lg font-semibold text-slate-900">Explore your Interests</h5>
             <div
-              className="d-flex flex-nowrap overflow-x-auto w-100 gap-2 overflow-hidden-scroll"
+              className="overflow-hidden-scroll mt-3 flex w-full flex-nowrap gap-2 overflow-x-auto"
             >
               {
                 menus.map((v, i) => (
-                  <button type="button" className="btn btn-outline-dark btn-sm text-nowrap" key={i}>
+                  <button type="button" className="btn-outline shrink-0 text-nowrap" key={i}>
                     {v.name}
                   </button>
                 ))
               }
             </div>
           </div>
-          <div className="col-12">
-            <div className="row">
+          <div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
               {
                 images.map((v) => (
-                  <div className="col-6 p-2 col-md-4 col-lg" key={v.id}>
+                  <div key={v.id}>
                     <ProductCard item={v} />
                   </div>
                 ))
@@ -109,10 +107,8 @@ export default function Home() {
           </div>
         </div>
         <Features />
-        <div className="row">
-          <div className="col-12">
+        <div className="mt-8">
             <AccountTypes />
-          </div>
         </div>
       </div>
     </main>

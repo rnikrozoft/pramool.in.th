@@ -1,0 +1,387 @@
+[
+    {
+        "province_id": 10,
+        "name_th": "กรุงเทพมหานคร",
+        "name_en": "Bangkok"
+    },
+    {
+        "province_id": 11,
+        "name_th": "สมุทรปราการ",
+        "name_en": "Samut Prakarn"
+    },
+    {
+        "province_id": 12,
+        "name_th": "นนทบุรี",
+        "name_en": "Nonthaburi"
+    },
+    {
+        "province_id": 13,
+        "name_th": "ปทุมธานี",
+        "name_en": "Pathum Thani"
+    },
+    {
+        "province_id": 14,
+        "name_th": "พระนครศรีอยุธยา",
+        "name_en": "Phra Nakhon Si Ayutthaya"
+    },
+    {
+        "province_id": 15,
+        "name_th": "อ่างทอง",
+        "name_en": "Ang Thong"
+    },
+    {
+        "province_id": 16,
+        "name_th": "ลพบุรี",
+        "name_en": "Lop Buri"
+    },
+    {
+        "province_id": 17,
+        "name_th": "สิงห์บุรี",
+        "name_en": "Sing Buri"
+    },
+    {
+        "province_id": 18,
+        "name_th": "ชัยนาท",
+        "name_en": "Chai Nat"
+    },
+    {
+        "province_id": 19,
+        "name_th": "สระบุรี",
+        "name_en": "Saraburi"
+    },
+    {
+        "province_id": 20,
+        "name_th": "ชลบุรี",
+        "name_en": "Chon Buri"
+    },
+    {
+        "province_id": 21,
+        "name_th": "ระยอง",
+        "name_en": "Rayong"
+    },
+    {
+        "province_id": 22,
+        "name_th": "จันทบุรี",
+        "name_en": "Chanthaburi"
+    },
+    {
+        "province_id": 23,
+        "name_th": "ตราด",
+        "name_en": "Trat"
+    },
+    {
+        "province_id": 24,
+        "name_th": "ฉะเชิงเทรา",
+        "name_en": "Chachoengsao"
+    },
+    {
+        "province_id": 25,
+        "name_th": "ปราจีนบุรี",
+        "name_en": "Prachin Buri"
+    },
+    {
+        "province_id": 26,
+        "name_th": "นครนายก",
+        "name_en": "Nakhon Nayok"
+    },
+    {
+        "province_id": 27,
+        "name_th": "สระแก้ว",
+        "name_en": "Sa kaeo"
+    },
+    {
+        "province_id": 30,
+        "name_th": "นครราชสีมา",
+        "name_en": "Nakhon Ratchasima"
+    },
+    {
+        "province_id": 31,
+        "name_th": "บุรีรัมย์",
+        "name_en": "Buri Ram"
+    },
+    {
+        "province_id": 32,
+        "name_th": "สุรินทร์",
+        "name_en": "Surin"
+    },
+    {
+        "province_id": 33,
+        "name_th": "ศรีสะเกษ",
+        "name_en": "Si Sa Ket"
+    },
+    {
+        "province_id": 34,
+        "name_th": "อุบลราชธานี",
+        "name_en": "Ubon Ratchathani"
+    },
+    {
+        "province_id": 35,
+        "name_th": "ยโสธร",
+        "name_en": "Yasothon"
+    },
+    {
+        "province_id": 36,
+        "name_th": "ชัยภูมิ",
+        "name_en": "Chaiyaphum"
+    },
+    {
+        "province_id": 37,
+        "name_th": "อำนาจเจริญ",
+        "name_en": "Amnat Charoen"
+    },
+    {
+        "province_id": 38,
+        "name_th": "บึงกาฬ",
+        "name_en": "Bueng Kan"
+    },
+    {
+        "province_id": 39,
+        "name_th": "หนองบัวลำภู",
+        "name_en": "Nong Bua Lam Phu"
+    },
+    {
+        "province_id": 40,
+        "name_th": "ขอนแก่น",
+        "name_en": "Khon Kaen"
+    },
+    {
+        "province_id": 41,
+        "name_th": "อุดรธานี",
+        "name_en": "Udon Thani"
+    },
+    {
+        "province_id": 42,
+        "name_th": "เลย",
+        "name_en": "Loei"
+    },
+    {
+        "province_id": 43,
+        "name_th": "หนองคาย",
+        "name_en": "Nong Khai"
+    },
+    {
+        "province_id": 44,
+        "name_th": "มหาสารคาม",
+        "name_en": "Maha Sarakham"
+    },
+    {
+        "province_id": 45,
+        "name_th": "ร้อยเอ็ด",
+        "name_en": "Roi Et"
+    },
+    {
+        "province_id": 46,
+        "name_th": "กาฬสินธุ์",
+        "name_en": "Kalasin"
+    },
+    {
+        "province_id": 47,
+        "name_th": "สกลนคร",
+        "name_en": "Sakon Nakhon"
+    },
+    {
+        "province_id": 48,
+        "name_th": "นครพนม",
+        "name_en": "Nakhon Phanom"
+    },
+    {
+        "province_id": 49,
+        "name_th": "มุกดาหาร",
+        "name_en": "Mukdahan"
+    },
+    {
+        "province_id": 50,
+        "name_th": "เชียงใหม่",
+        "name_en": "Chiang Mai"
+    },
+    {
+        "province_id": 51,
+        "name_th": "ลำพูน",
+        "name_en": "Lamphun"
+    },
+    {
+        "province_id": 52,
+        "name_th": "ลำปาง",
+        "name_en": "Lampang"
+    },
+    {
+        "province_id": 53,
+        "name_th": "อุตรดิตถ์",
+        "name_en": "Uttaradit"
+    },
+    {
+        "province_id": 54,
+        "name_th": "แพร่",
+        "name_en": "Phrae"
+    },
+    {
+        "province_id": 55,
+        "name_th": "น่าน",
+        "name_en": "Nan"
+    },
+    {
+        "province_id": 56,
+        "name_th": "พะเยา",
+        "name_en": "Phayao"
+    },
+    {
+        "province_id": 57,
+        "name_th": "เชียงราย",
+        "name_en": "Chiang Rai"
+    },
+    {
+        "province_id": 58,
+        "name_th": "แม่ฮ่องสอน",
+        "name_en": "Mae Hong Son"
+    },
+    {
+        "province_id": 60,
+        "name_th": "นครสวรรค์",
+        "name_en": "Nakhon Sawan"
+    },
+    {
+        "province_id": 61,
+        "name_th": "อุทัยธานี",
+        "name_en": "Uthai Thani"
+    },
+    {
+        "province_id": 62,
+        "name_th": "กำแพงเพชร",
+        "name_en": "Kamphaeng Phet"
+    },
+    {
+        "province_id": 63,
+        "name_th": "ตาก",
+        "name_en": "Tak"
+    },
+    {
+        "province_id": 64,
+        "name_th": "สุโขทัย",
+        "name_en": "Sukhothai"
+    },
+    {
+        "province_id": 65,
+        "name_th": "พิษณุโลก",
+        "name_en": "Phitsanulok"
+    },
+    {
+        "province_id": 66,
+        "name_th": "พิจิตร",
+        "name_en": "Phichit"
+    },
+    {
+        "province_id": 67,
+        "name_th": "เพชรบูรณ์",
+        "name_en": "Phetchabun"
+    },
+    {
+        "province_id": 70,
+        "name_th": "ราชบุรี",
+        "name_en": "Ratchaburi"
+    },
+    {
+        "province_id": 71,
+        "name_th": "กาญจนบุรี",
+        "name_en": "Kanchanaburi"
+    },
+    {
+        "province_id": 72,
+        "name_th": "สุพรรณบุรี",
+        "name_en": "Suphan Buri"
+    },
+    {
+        "province_id": 73,
+        "name_th": "นครปฐม",
+        "name_en": "Nakhon Pathom"
+    },
+    {
+        "province_id": 74,
+        "name_th": "สมุทรสาคร",
+        "name_en": "Samut Sakhon"
+    },
+    {
+        "province_id": 75,
+        "name_th": "สมุทรสงคราม",
+        "name_en": "Samut Songkhram"
+    },
+    {
+        "province_id": 76,
+        "name_th": "เพชรบุรี",
+        "name_en": "Phetchaburi"
+    },
+    {
+        "province_id": 77,
+        "name_th": "ประจวบคีรีขันธ์",
+        "name_en": "Prachuap Khiri Khan"
+    },
+    {
+        "province_id": 80,
+        "name_th": "นครศรีธรรมราช",
+        "name_en": "Nakhon Si Thammarat"
+    },
+    {
+        "province_id": 81,
+        "name_th": "กระบี่",
+        "name_en": "Krabi"
+    },
+    {
+        "province_id": 82,
+        "name_th": "พังงา",
+        "name_en": "Phang-nga"
+    },
+    {
+        "province_id": 83,
+        "name_th": "ภูเก็ต",
+        "name_en": "Phuket"
+    },
+    {
+        "province_id": 84,
+        "name_th": "สุราษฎร์ธานี",
+        "name_en": "Surat Thani"
+    },
+    {
+        "province_id": 85,
+        "name_th": "ระนอง",
+        "name_en": "Ranong"
+    },
+    {
+        "province_id": 86,
+        "name_th": "ชุมพร",
+        "name_en": "Chumphon"
+    },
+    {
+        "province_id": 90,
+        "name_th": "สงขลา",
+        "name_en": "Songkhla"
+    },
+    {
+        "province_id": 91,
+        "name_th": "สตูล",
+        "name_en": "Satun"
+    },
+    {
+        "province_id": 92,
+        "name_th": "ตรัง",
+        "name_en": "Trang"
+    },
+    {
+        "province_id": 93,
+        "name_th": "พัทลุง",
+        "name_en": "Phatthalung"
+    },
+    {
+        "province_id": 94,
+        "name_th": "ปัตตานี",
+        "name_en": "Pattani"
+    },
+    {
+        "province_id": 95,
+        "name_th": "ยะลา",
+        "name_en": "Yala"
+    },
+    {
+        "province_id": 96,
+        "name_th": "นราธิวาส",
+        "name_en": "Narathiwat"
+    }
+]

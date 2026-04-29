@@ -4,44 +4,40 @@ type Props = {}
 
 export default function Login({ }: Props) {
     return (
-        <div className="container mt-4">
-            <div className="row">
-                <div className="col-md-6"></div>
-                <div className="col-md-6">
-                    <h4 className="text-center">เข้าสู่ระบบ</h4>
-                    <form className="needs-validation" noValidate>
-                        <div className="mb-3">
-                            <label className="form-label"> อีเมล </label>
-                            <input
-                                type="email"
-                                className="form-control"
-                                placeholder="กรอกอีเมล"
-                                required
-                            />
-                            <div className="invalid-feedback">
-                                Please enter a valid email.
-                            </div>
-                        </div>
-                        <div className="mb-3">
-                            <label className="form-label"> รหัสผ่าน </label>
-                            <input type="password" className="form-control" required />
-                        </div>
-                        <div className="mb-3 form-check">
-                            <input type="checkbox" className="form-check-input" />
-                            <label className="form-check-label">
-                                จดจำการเข้าสู่ระบบ
-                            </label>
-                        </div>
-                        <div className="d-grid gap-2">
-                            <button className="btn btn-success" type="submit">
-                                เข้าสู่ระบบ
-                            </button>
-                            <button className="btn btn-outline-primary" type="button">
-                                เข้าสู่ระบบด้วย Facebook
-                            </button>
-                        </div>
-                    </form>
-                </div>
+        <div className="mx-auto mt-8 grid max-w-7xl gap-6 px-4 md:grid-cols-2">
+            <div></div>
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h4 className="text-center text-2xl font-semibold">เข้าสู่ระบบ</h4>
+                <form className="mt-6 space-y-4" noValidate>
+                    <div>
+                        <label className="mb-1 block text-sm font-medium"> เบอร์โทรศัพท์ </label>
+                        <input
+                            type="text"
+                            className="form-input"
+                            placeholder="08xxxxxxxx"
+                            inputMode="numeric"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-sm font-medium"> รหัสผ่าน </label>
+                        <input type="password" className="form-input" required />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <input type="checkbox" className="h-4 w-4 rounded border-slate-300" />
+                        <label className="text-sm text-slate-600">
+                            จดจำการเข้าสู่ระบบ
+                        </label>
+                    </div>
+                    <div className="grid gap-2">
+                        <button className="btn-primary w-full" type="submit">
+                            เข้าสู่ระบบ
+                        </button>
+                        <button className="btn-outline w-full" type="button">
+                            เข้าสู่ระบบด้วย Facebook
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     )

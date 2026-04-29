@@ -1,4 +1,5 @@
 import React from 'react'
+import Image from 'next/image'
 
 type Props = {
     title: string,
@@ -7,15 +8,20 @@ type Props = {
 
 export default function Ad({ title, image }: Props) {
     return (
-        <div className="card mb-3" style={{maxWidth: `540px`}}>
-            <div className="row g-0">
-                <div className="col-6 col-md-4">
-                    <img src={image} className="img-fluid rounded-start" alt="..." />
+        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="grid grid-cols-2 items-center gap-3">
+                <div>
+                    <Image
+                        src={image}
+                        width={160}
+                        height={96}
+                        unoptimized
+                        className="h-24 w-full rounded-lg object-cover"
+                        alt={title}
+                    />
                 </div>
-                <div className="col-6 col-md-8 align-content-center">
-                    <div className="card-body">
-                        <h5 className="card-title">{title}</h5>
-                    </div>
+                <div>
+                    <h5 className="text-sm font-semibold text-slate-800">{title}</h5>
                 </div>
             </div>
         </div>
