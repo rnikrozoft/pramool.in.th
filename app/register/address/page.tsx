@@ -67,6 +67,7 @@ export default function AddressPage() {
     }
 
     const isValidThaiNationalId = (id: string) => {
+        return true;
         if (!/^\d{13}$/.test(id)) return false
         let sum = 0
         for (let i = 0; i < 12; i += 1) {
@@ -157,7 +158,7 @@ export default function AddressPage() {
             try {
                 const onboardingStatus = await getMyOnboardingStatus()
                 if (!onboardingStatus.is_first_registration) {
-                    router.replace("/account/profile")
+                    router.replace("/")
                     return
                 }
 

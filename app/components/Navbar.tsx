@@ -33,20 +33,6 @@ export default function Navbar() {
         { href: '/', label: 'หน้าแรก' },
         { href: '/auctions', label: 'สินค้าประมูล' },
     ]
-    const categoryItems = [
-        { href: '/auctions?category=เครื่องใช้ไฟฟ้า', label: 'เครื่องใช้ไฟฟ้า' },
-        { href: '/auctions?category=โทรศัพท์มือถือ', label: 'โทรศัพท์มือถือ' },
-        { href: '/auctions?category=แท็บเล็ต', label: 'แท็บเล็ต' },
-        { href: '/auctions?category=คอมพิวเตอร์', label: 'คอมพิวเตอร์' },
-        { href: '/auctions?category=กล้องถ่ายรูป', label: 'กล้องถ่ายรูป' },
-        { href: '/auctions?category=เครื่องดนตรี', label: 'เครื่องดนตรี' },
-        { href: '/auctions?category=นาฬิกา', label: 'นาฬิกา' },
-        { href: '/auctions?category=ของสะสม', label: 'ของสะสม' },
-        { href: '/auctions?category=แฟชั่น', label: 'แฟชั่น' },
-        { href: '/auctions?category=ของแต่งบ้าน', label: 'ของแต่งบ้าน' },
-        { href: '/auctions?category=ยานยนต์', label: 'ยานยนต์' },
-        { href: '/auctions?category=อื่นๆ', label: 'อื่นๆ' },
-    ]
     const userMenuItems = [
         { href: '/account/profile', label: 'โปรไฟล์ของฉัน' },
         { href: '/account/kyc', label: 'การยืนยันตัวตน (KYC)' },
@@ -347,45 +333,6 @@ export default function Navbar() {
                                 {item.label}
                             </Link>
                         ))}
-                        <div
-                            className="static"
-                            onMouseEnter={openCategoryMenu}
-                            onMouseLeave={closeCategoryMenu}
-                        >
-                            <button
-                                type="button"
-                                className="text-slate-700 hover:text-slate-900"
-                                onClick={() => setIsCategoryMenuOpen((prev) => !prev)}
-                            >
-                                หมวดหมู่
-                            </button>
-                            {isCategoryMenuOpen && (
-                                <div
-                                    className="absolute left-0 top-full z-[60] mt-2 w-full rounded-xl border border-slate-200 bg-white p-4 shadow-lg"
-                                    onMouseEnter={openCategoryMenu}
-                                    onMouseLeave={closeCategoryMenu}
-                                >
-                                    <div className="mb-2 flex items-center justify-between">
-                                        <p className="text-sm font-semibold text-slate-800">หมวดหมู่สินค้าประมูล</p>
-                                        <Link href="/auctions" className="text-xs text-blue-600 hover:text-blue-700">
-                                            ดูทั้งหมด
-                                        </Link>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {categoryItems.map((item) => (
-                                            <Link
-                                                key={item.href}
-                                                href={item.href}
-                                                className="rounded-md px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
-                                                onClick={() => setIsCategoryMenuOpen(false)}
-                                            >
-                                                {item.label}
-                                            </Link>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
                         <Link href="/how-it-works" className="text-slate-700 hover:text-slate-900">
                             วิธีใช้งาน
                         </Link>

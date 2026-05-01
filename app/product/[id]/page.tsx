@@ -3,9 +3,9 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import React, { useContext, useEffect, useMemo, useState } from 'react'
-import { getAuctionDetail, getAuctionWebSocketURL, placeAuctionBid, type AuctionDetail } from '@/app/lib/api/auction'
-import { AUCTION_API_BASE_URL } from '@/app/lib/constants/common'
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { getAuctionDetail, getAuctionWebSocketURL, type AuctionDetail } from '@/app/lib/api/auction'
+import { CORE_API_BASE_URL } from '@/app/lib/constants/common'
 import { UserContext } from '@/app/context/UserContext'
 
 type Props = {}
@@ -31,13 +31,18 @@ export default function Product({ }: Props) {
   const [isPlacingBid, setIsPlacingBid] = useState(false)
   const [bidError, setBidError] = useState('')
   const [wsStatus, setWSStatus] = useState<'disconnected' | 'connected'>('disconnected')
+  const wsRef = useRef<WebSocket | null>(null)
+  const setUserRef = useRef(setUser)
+  const refreshSessionRef = useRef(refreshSession)
+  setUserRef.current = setUser
+  refreshSessionRef.current = refreshSession
 
   const imageList = useMemo(() => {
     if (!auction) return [] as string[]
     const raw = auction.images.length > 0 ? auction.images : [auction.cover_image_url]
     return raw.map((url) => {
       if (url.startsWith('http://') || url.startsWith('https://')) return url
-      return `${AUCTION_API_BASE_URL}${url}`
+      return `${CORE_API_BASE_URL}${url}`
     })
   }, [auction])
 
@@ -107,6 +112,7 @@ export default function Product({ }: Props) {
   useEffect(() => {
     if (!auctionID || !user) return
     const ws = new WebSocket(getAuctionWebSocketURL(auctionID))
+    wsRef.current = ws
 
     ws.onopen = () => setWSStatus('connected')
     ws.onclose = () => setWSStatus('disconnected')
@@ -119,10 +125,24 @@ export default function Product({ }: Props) {
           bidder_id?: string
           current_bid?: number
           total_bids?: number
+          remaining_credit?: number
           message?: string
         }
         if (payload.type === 'error') {
           setBidError(payload.message || 'ไม่สามารถเสนอราคาได้')
+          setIsPlacingBid(false)
+          return
+        }
+        if (payload.type === 'bid_ack') {
+          if (typeof payload.remaining_credit === 'number') {
+            setUserRef.current((prev) => {
+              if (!prev) return prev
+              return { ...prev, credit: Number(payload.remaining_credit) }
+            })
+          }
+          void refreshSessionRef.current()
+          setIsBidSheetOpen(false)
+          setIsPlacingBid(false)
           return
         }
         if (payload.type === 'bid_update') {
@@ -153,11 +173,12 @@ export default function Product({ }: Props) {
     }
 
     return () => {
+      wsRef.current = null
       ws.close()
     }
   }, [auctionID, user])
 
-  const submitBid = async (amount: number) => {
+  const submitBid = (amount: number) => {
     if (!auctionID || !auction) return
     if (!canBid) {
       if (!user) {
@@ -173,23 +194,14 @@ export default function Product({ }: Props) {
       setBidError(`ราคาต้องไม่น้อยกว่า ${minRequiredBid.toLocaleString()} ฿`)
       return
     }
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      setBidError('ยังไม่เชื่อมต่อแบบเรียลไทม์ กรุณารอสักครู่หรือรีเฟรชหน้า')
+      return
+    }
     setIsPlacingBid(true)
     setBidError('')
-    try {
-      const result = await placeAuctionBid(auctionID, amount)
-      if (typeof result.remaining_credit === 'number') {
-        setUser((prev) => {
-          if (!prev) return prev
-          return { ...prev, credit: Number(result.remaining_credit) }
-        })
-      }
-      await refreshSession()
-      setIsBidSheetOpen(false)
-    } catch (error) {
-      setBidError(error instanceof Error ? error.message : 'ไม่สามารถเสนอราคาได้')
-    } finally {
-      setIsPlacingBid(false)
-    }
+    ws.send(JSON.stringify({ type: 'bid', amount }))
   }
 
   if (loading) {
@@ -226,7 +238,7 @@ export default function Product({ }: Props) {
         <section className="lg:col-span-8">
           <div className="relative h-[240px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50 sm:h-[360px] lg:h-[460px]">
             <Image
-              src={imageList[activeImage] || `${AUCTION_API_BASE_URL}${auction.cover_image_url}`}
+              src={imageList[activeImage] || `${CORE_API_BASE_URL}${auction.cover_image_url}`}
               width={1200}
               height={800}
               className="object-contain"

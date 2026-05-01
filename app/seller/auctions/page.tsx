@@ -3,7 +3,7 @@
 import Link from "next/link"
 import React, { useEffect, useMemo, useState } from "react"
 import { getMySellerAuctions, SellerAuctionItem } from "@/app/lib/api/auction"
-import { AUCTION_API_BASE_URL } from "@/app/lib/constants/common"
+import { CORE_API_BASE_URL } from "@/app/lib/constants/common"
 
 type AuctionStatus = "active" | "closed"
 
@@ -58,7 +58,7 @@ export default function SellerAuctionsPage() {
     const toCoverSrc = (coverImageURL: string): string => {
         if (!coverImageURL) return "https://placehold.co/600x400?text=No+Image"
         if (coverImageURL.startsWith("http://") || coverImageURL.startsWith("https://")) return coverImageURL
-        return `${AUCTION_API_BASE_URL}${coverImageURL}`
+        return `${CORE_API_BASE_URL}${coverImageURL}`
     }
 
     return (

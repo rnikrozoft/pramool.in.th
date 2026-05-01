@@ -388,6 +388,7 @@ export default function ProfilePage() {
                       value={zipcode}
                       onChange={(zip) => {
                         setZipcode(zip)
+                        setForm((prev) => ({ ...prev, zip_code: zip }))
                         setErrors((prev) => ({ ...prev, zip_code: "" }))
                         setProvinceId(null)
                         setDistrictId(null)

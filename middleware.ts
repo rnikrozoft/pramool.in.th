@@ -29,5 +29,27 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  const requiresAuth =
+    pathname.startsWith("/account") ||
+    pathname.startsWith("/seller") ||
+    pathname.startsWith("/bids") ||
+    pathname.startsWith("/wallet");
+  if (requiresAuth && !isLoggedIn) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
   return NextResponse.next();
 }
+
+export const config = {
+  matcher: [
+    "/register",
+    "/register/:path*",
+    "/account/:path*",
+    "/seller/:path*",
+    "/bids/:path*",
+    "/wallet/:path*",
+  ],
+};

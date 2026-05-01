@@ -20,7 +20,7 @@ export default function OnboardingGuard() {
           return
         }
         if (!status.is_first_registration && pathname.startsWith("/register/address")) {
-          router.replace("/account/profile")
+          router.replace("/")
         }
       })
       .catch(() => {
