@@ -15,6 +15,7 @@ import { callPostAPI } from '@/app/lib/utils/call-api';
 import { callGetAPI } from '@/app/lib/utils/call-api';
 import { useRouter } from 'next/navigation';
 import { UserContext } from '@/app/context/UserContext';
+import { AppPageShell, APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
 
 
 export default function AddressPage() {
@@ -213,7 +214,8 @@ export default function AddressPage() {
     }, [router])
 
     return (
-        <form className="mx-auto max-w-7xl space-y-6 px-4 py-6 lg:py-8" noValidate onSubmit={handleSubmit}>
+        <AppPageShell>
+        <form className={`${APP_PAGE_INNER_WIDE} space-y-6`} noValidate onSubmit={handleSubmit}>
             <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-white to-slate-50 p-5 shadow-sm">
                 <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Onboarding</p>
                 <h1 className="mt-1 text-2xl font-semibold text-slate-900">ข้อมูลสมัครสมาชิก</h1>
@@ -449,5 +451,6 @@ export default function AddressPage() {
             </div>
 
         </form>
+        </AppPageShell>
     )
 }

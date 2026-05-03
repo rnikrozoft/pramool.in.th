@@ -1,8 +1,15 @@
-import AccountTypes from "./components/AccountTypes";
+import dynamic from "next/dynamic";
 import Ad from "./components/Ad";
 import BannerSlide from "./components/BannerSlide";
-import Features from "./components/Features";
 import ProductCard from "./components/ProductCard";
+
+/** Below-the-fold: defer chunk until needed so first paint stays light. */
+const Features = dynamic(() => import("./components/Features"), {
+  loading: () => <div className="h-40 animate-pulse rounded-xl bg-slate-100" aria-hidden />,
+});
+const AccountTypes = dynamic(() => import("./components/AccountTypes"), {
+  loading: () => <div className="h-32 animate-pulse rounded-xl bg-slate-100" aria-hidden />,
+});
 
 export default function Home() {
   const ads = [

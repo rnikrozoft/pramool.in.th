@@ -1,24 +1,18 @@
 "use client"
 
 import React, { createContext, useState, useEffect, useCallback, ReactNode } from "react"
+import { loadSessionUser } from "../lib/data/sessionPreload"
 import { onCreditChangedFromOtherTab } from "../lib/creditSync"
-import { callGetAPI } from "../lib/utils/call-api"
+import type { SessionUser } from "../lib/types/session"
 
-interface User {
-    userId: string
-    firstName: string
-    lastName: string
-    credit: number
-    /** จาก GET /users — ใช้เมื่อมีฟีเจอร์ถอนเงิน */
-    withdrawalBlocked?: boolean
-    withdrawalBlockReason?: string
-}
+export type User = SessionUser
 
 interface UserContextType {
     user: User | null
     setUser: React.Dispatch<React.SetStateAction<User | null>>
     loading: boolean
-    refreshSession: () => Promise<void>
+    /** Refetch session; use `force` after wallet/bid changes. `silent` avoids navbar flicker on background refresh. */
+    refreshSession: (opts?: { force?: boolean; silent?: boolean }) => Promise<void>
 }
 
 export const UserContext = createContext<UserContextType>({
@@ -32,27 +26,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null)
     const [loading, setLoading] = useState(true)
 
-    const refreshSession = useCallback(async () => {
+    const refreshSession = useCallback(async (opts?: { force?: boolean; silent?: boolean }) => {
+        if (!opts?.silent) setLoading(true)
         try {
-            const res = await callGetAPI("/users", true)
-            if (res.ok) {
-                const data = await res.json()
-                const user: User = {
-                    userId: data.user_id,
-                    firstName: data.first_name,
-                    lastName: data.last_name,
-                    credit: Number(data.credit ?? 0),
-                    withdrawalBlocked: Boolean(data.withdrawal_blocked),
-                    withdrawalBlockReason: typeof data.withdrawal_block_reason === "string" ? data.withdrawal_block_reason : undefined,
-                };
-                setUser(user);
-            } else {
-                setUser(null)
-            }
+            const u = await loadSessionUser({ force: opts?.force })
+            setUser(u)
         } catch {
             setUser(null)
         } finally {
-            setLoading(false)
+            if (!opts?.silent) setLoading(false)
         }
     }, [])
 
@@ -62,7 +44,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         return onCreditChangedFromOtherTab(() => {
-            void refreshSession()
+            void refreshSession({ force: true, silent: true })
         })
     }, [refreshSession])
 

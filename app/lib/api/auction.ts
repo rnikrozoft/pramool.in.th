@@ -1,8 +1,9 @@
-import { AUCTION_REALTIME_BASE_URL, CORE_API_BASE_URL } from "../constants/common";
+import { getAuctionRealtimeBaseUrl } from "../constants/common";
 import { callGetAPI, callPostAPI } from "../utils/call-api";
 
 export type CreateAuctionPayload = {
     title: string;
+    /** หมวดหลายรายการคั่นด้วย | สูงสุด 5 — ต้องตรงกับ whitelist ฝั่งเซิร์ฟเวอร์ */
     category: string;
     condition: string;
     description: string;
@@ -10,6 +11,8 @@ export type CreateAuctionPayload = {
     bidStep: number;
     endAtISO: string;
     allowEarlyClose: boolean;
+    /** 0 = ไม่ใช้ — ถ้าผู้ประมูลเสนอราคาถึงยอดนี้ ระบบจะปิดรายการทันที */
+    buyNowPrice: number;
     images: File[];
 };
 
@@ -23,6 +26,7 @@ export type SellerAuctionItem = {
     total_bids: number;
     end_at: string;
     cover_image_url: string;
+    buy_now_price?: number;
 };
 
 export type AuctionDetail = {
@@ -52,6 +56,8 @@ export type AuctionDetail = {
     escrow_auto_confirm_days?: number;
     /** RFC3339 — seller_shipped_at + escrow_auto_confirm_days */
     escrow_auto_confirm_at?: string;
+    /** 0 = ไม่กำหนด — ถ้าเสนอราคา >= ยอดนี้ รายการจะปิดทันที */
+    buy_now_price?: number;
 };
 
 export async function createSellerAuction(payload: CreateAuctionPayload): Promise<{ auction_id: string }> {
@@ -64,11 +70,14 @@ export async function createSellerAuction(payload: CreateAuctionPayload): Promis
     formData.append("bid_step", String(payload.bidStep));
     formData.append("end_at", payload.endAtISO);
     formData.append("allow_early_close", String(payload.allowEarlyClose));
+    if (payload.buyNowPrice > 0) {
+        formData.append("buy_now_price", String(payload.buyNowPrice));
+    }
     payload.images.forEach((file) => {
         formData.append("images", file);
     });
 
-    const response = await fetch(`${CORE_API_BASE_URL}/seller/auctions`, {
+    const response = await fetch(`${getAuctionRealtimeBaseUrl()}/seller/auctions`, {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -87,7 +96,7 @@ export async function createSellerAuction(payload: CreateAuctionPayload): Promis
 }
 
 export async function getMySellerAuctions(): Promise<SellerAuctionItem[]> {
-    const response = await callGetAPI("/seller/auctions", true, CORE_API_BASE_URL);
+    const response = await callGetAPI("/seller/auctions", true, getAuctionRealtimeBaseUrl());
     if (!response.ok) {
         throw new Error("Failed to fetch seller auctions");
     }
@@ -96,7 +105,7 @@ export async function getMySellerAuctions(): Promise<SellerAuctionItem[]> {
 }
 
 export async function getAuctionDetail(auctionID: string): Promise<AuctionDetail> {
-    const url = `${AUCTION_REALTIME_BASE_URL}/auctions/${encodeURIComponent(auctionID)}?_=${Date.now()}`;
+    const url = `${getAuctionRealtimeBaseUrl()}/auctions/${encodeURIComponent(auctionID)}?_=${Date.now()}`;
     const response = await fetch(url, {
         method: "GET",
         credentials: "omit",
@@ -109,7 +118,7 @@ export async function getAuctionDetail(auctionID: string): Promise<AuctionDetail
 }
 
 export async function closeAuctionEarly(auctionID: string): Promise<void> {
-    const response = await callPostAPI(`/auctions/${auctionID}/close-early`, {}, true, AUCTION_REALTIME_BASE_URL);
+    const response = await callPostAPI(`/auctions/${auctionID}/close-early`, {}, true, getAuctionRealtimeBaseUrl());
     if (!response.ok) {
         throw new Error("Failed to close auction early");
     }
@@ -117,7 +126,7 @@ export async function closeAuctionEarly(auctionID: string): Promise<void> {
 
 /** ผู้ขายบันทึกว่าจัดส่งแล้ว (หลังประมูลปิดและมีผู้ชนะ) */
 export async function markAuctionShipped(auctionID: string): Promise<void> {
-    const response = await callPostAPI(`/auctions/${encodeURIComponent(auctionID)}/mark-shipped`, {}, true, AUCTION_REALTIME_BASE_URL);
+    const response = await callPostAPI(`/auctions/${encodeURIComponent(auctionID)}/mark-shipped`, {}, true, getAuctionRealtimeBaseUrl());
     if (!response.ok) {
         let msg = "บันทึกการจัดส่งไม่สำเร็จ";
         try {
@@ -132,7 +141,7 @@ export async function markAuctionShipped(auctionID: string): Promise<void> {
 
 /** ผู้ชนะยืนยันรับของ — ระบบจึงโอนเครดิตให้ผู้ขาย */
 export async function confirmAuctionReceived(auctionID: string): Promise<void> {
-    const response = await callPostAPI(`/auctions/${encodeURIComponent(auctionID)}/confirm-received`, {}, true, AUCTION_REALTIME_BASE_URL);
+    const response = await callPostAPI(`/auctions/${encodeURIComponent(auctionID)}/confirm-received`, {}, true, getAuctionRealtimeBaseUrl());
     if (!response.ok) {
         let msg = "ยืนยันรับของไม่สำเร็จ";
         try {
@@ -150,7 +159,7 @@ export async function reopenSellerAuction(auctionID: string, endAtISO: string): 
         `/seller/auctions/${encodeURIComponent(auctionID)}/reopen`,
         { end_at: endAtISO },
         true,
-        CORE_API_BASE_URL,
+        getAuctionRealtimeBaseUrl(),
     );
     if (!response.ok) {
         let msg = "ไม่สามารถเปิดประมูลใหม่ได้";
@@ -164,8 +173,26 @@ export async function reopenSellerAuction(auctionID: string, endAtISO: string): 
     }
 }
 
+/** ลบรายการที่ปิดแล้วและไม่มีผู้บิด — เฉพาะผู้ขายเจ้าของรายการ */
+export async function deleteSellerAuction(auctionID: string): Promise<void> {
+    const response = await fetch(
+        `${getAuctionRealtimeBaseUrl()}/seller/auctions/${encodeURIComponent(auctionID)}`,
+        { method: "DELETE", credentials: "include" },
+    );
+    if (!response.ok) {
+        let msg = "ลบรายการไม่สำเร็จ";
+        try {
+            const data = (await response.json()) as { message?: string };
+            if (data?.message) msg = data.message;
+        } catch {
+            /* ignore */
+        }
+        throw new Error(msg);
+    }
+}
+
 export function getAuctionWebSocketURL(auctionID: string): string {
-    const baseURL = AUCTION_REALTIME_BASE_URL.replace(/^http/, "ws");
+    const baseURL = getAuctionRealtimeBaseUrl().replace(/^http/, "ws");
     return `${baseURL}/ws/auctions/${auctionID}`;
 }
 
@@ -237,7 +264,7 @@ export type MyActiveBidItem = {
 };
 
 export async function getMyActiveBids(): Promise<MyActiveBidItem[]> {
-    const response = await callGetAPI("/my/active-bids", true, AUCTION_REALTIME_BASE_URL);
+    const response = await callGetAPI("/my/active-bids", true, getAuctionRealtimeBaseUrl());
     if (response.status === 401) {
         throw new Error("unauthorized");
     }
@@ -268,7 +295,7 @@ export async function getMyBidHistory(params?: { limit?: number; offset?: number
     if (params?.offset != null && params.offset >= 0) sp.set("offset", String(params.offset));
     const q = sp.toString();
     const path = q ? `/my/bid-history?${q}` : "/my/bid-history";
-    const response = await callGetAPI(path, true, AUCTION_REALTIME_BASE_URL);
+    const response = await callGetAPI(path, true, getAuctionRealtimeBaseUrl());
     if (response.status === 401) {
         throw new Error("unauthorized");
     }
@@ -290,6 +317,7 @@ export type PublicAuctionListItem = {
     bidder_count: number;
     end_at: string;
     cover_image_url: string;
+    buy_now_price?: number;
 };
 
 export type AuctionListSort =
@@ -345,7 +373,7 @@ export async function listPublicAuctions(params: {
     if (params.sort) sp.set("sort", params.sort);
     sp.set("limit", String(Math.min(params.limit ?? 100, 100)));
     sp.set("offset", String(params.offset ?? 0));
-    const url = `${AUCTION_REALTIME_BASE_URL}/auctions?${sp.toString()}`;
+    const url = `${getAuctionRealtimeBaseUrl()}/auctions?${sp.toString()}`;
     const response = await fetch(url, {
         method: "GET",
         credentials: "omit",

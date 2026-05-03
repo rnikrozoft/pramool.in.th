@@ -3,7 +3,8 @@
 import Link from "next/link"
 import React, { useEffect, useMemo, useState } from "react"
 import { getMySellerAuctions, SellerAuctionItem } from "@/app/lib/api/auction"
-import { CORE_API_BASE_URL } from "@/app/lib/constants/common"
+import { getCoreApiBaseUrl } from "@/app/lib/constants/common"
+import { AppPageShell, APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
 
 type AuctionStatus = "active" | "closed"
 
@@ -58,11 +59,12 @@ export default function SellerAuctionsPage() {
     const toCoverSrc = (coverImageURL: string): string => {
         if (!coverImageURL) return "https://placehold.co/600x400?text=No+Image"
         if (coverImageURL.startsWith("http://") || coverImageURL.startsWith("https://")) return coverImageURL
-        return `${CORE_API_BASE_URL}${coverImageURL}`
+        return `${getCoreApiBaseUrl()}${coverImageURL}`
     }
 
     return (
-        <main className="mx-auto max-w-7xl px-4 py-8">
+        <AppPageShell>
+        <main className={APP_PAGE_INNER_WIDE}>
             <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-semibold text-slate-900">รายการที่ฉันเปิดประมูล</h1>
@@ -120,7 +122,9 @@ export default function SellerAuctionsPage() {
                             <div className="flex items-start justify-between gap-2">
                                 <div>
                                     <h2 className="line-clamp-1 text-base font-semibold text-slate-900">{item.title}</h2>
-                                    <p className="mt-0.5 text-xs text-slate-500">{item.auction_id} • {item.category}</p>
+                                    <p className="mt-0.5 text-xs text-slate-500">
+                                        {item.auction_id} • {item.category.split("|").filter(Boolean).join(" · ")}
+                                    </p>
                                 </div>
                                 <span className={`whitespace-nowrap rounded-full px-2 py-1 text-[11px] sm:px-2.5 sm:text-xs ${statusClass[(item.status as AuctionStatus)] || "bg-slate-100 text-slate-700"}`}>
                                     {statusLabel[(item.status as AuctionStatus)] || item.status}
@@ -153,5 +157,6 @@ export default function SellerAuctionsPage() {
                 ))}
             </div>
         </main>
+        </AppPageShell>
     )
 }

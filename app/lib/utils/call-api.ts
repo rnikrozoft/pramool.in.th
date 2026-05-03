@@ -1,11 +1,11 @@
-import { API_BASE_URL } from "../constants/common";
+import { getApiBaseUrl } from "../constants/common";
 import { GET, POST, PUT } from "../constants/method";
 
 export async function callPostAPI(
     path: string,
     body: any,
     userCredentials: boolean = false,
-    baseURL: string = API_BASE_URL,
+    baseURL: string = getApiBaseUrl(),
 ) {
     const credentialsMode = userCredentials ? "include" : "omit";
     return await fetch(`${baseURL}${path}`, {
@@ -18,7 +18,7 @@ export async function callPostAPI(
     });
 }
 
-export async function callGetAPI(path: string, userCredentials: boolean = false, baseURL: string = API_BASE_URL) {
+export async function callGetAPI(path: string, userCredentials: boolean = false, baseURL: string = getApiBaseUrl()) {
     const credentialsMode = userCredentials ? "include" : "omit";
     return await fetch(`${baseURL}${path}`, {
         method: GET,
@@ -30,7 +30,7 @@ export async function callPutAPI(
     path: string,
     body: any,
     userCredentials: boolean = false,
-    baseURL: string = API_BASE_URL,
+    baseURL: string = getApiBaseUrl(),
 ) {
     const credentialsMode = userCredentials ? "include" : "omit";
     return await fetch(`${baseURL}${path}`, {

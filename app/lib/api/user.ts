@@ -1,7 +1,7 @@
 import { callGetAPI } from "../utils/call-api";
 import { callPostAPI } from "../utils/call-api";
 import { callPutAPI } from "../utils/call-api";
-import { USER_API_BASE_URL } from "../constants/common";
+import { getUserApiBaseUrl } from "../constants/common";
 
 export type UserProfile = {
     user_id: string;
@@ -31,7 +31,7 @@ export type BankOption = {
 };
 
 export const isTelAlreadyUsed = async (tel: string): Promise<boolean> => {
-    const response = await callGetAPI(`/users/${tel}`, false, USER_API_BASE_URL);
+    const response = await callGetAPI(`/users/${tel}`, false, getUserApiBaseUrl());
     if (!response.ok) {
         throw new Error("Unexpected error when checking user");
     }
@@ -40,17 +40,17 @@ export const isTelAlreadyUsed = async (tel: string): Promise<boolean> => {
 };
 
 export const loginByTel = async (tel: string): Promise<boolean> => {
-    const response = await callPostAPI("/login/tel", { tel }, true, USER_API_BASE_URL);
+    const response = await callPostAPI("/login/tel", { tel }, true, getUserApiBaseUrl());
     return response.ok;
 };
 
 export const logout = async (): Promise<boolean> => {
-    const response = await callPostAPI("/logout", {}, true, USER_API_BASE_URL);
+    const response = await callPostAPI("/logout", {}, true, getUserApiBaseUrl());
     return response.ok;
 };
 
 export const getMyProfile = async (): Promise<UserProfile> => {
-    const response = await callGetAPI("/users/profile", true, USER_API_BASE_URL);
+    const response = await callGetAPI("/users/profile", true, getUserApiBaseUrl());
     if (!response.ok) {
         throw new Error("Failed to fetch profile");
     }
@@ -58,7 +58,7 @@ export const getMyProfile = async (): Promise<UserProfile> => {
 };
 
 export const getMyOnboardingStatus = async (): Promise<{ is_first_registration: boolean }> => {
-    const response = await callGetAPI("/users/onboarding-status", true, USER_API_BASE_URL);
+    const response = await callGetAPI("/users/onboarding-status", true, getUserApiBaseUrl());
     if (!response.ok) {
         throw new Error("Failed to fetch onboarding status");
     }
@@ -66,7 +66,7 @@ export const getMyOnboardingStatus = async (): Promise<{ is_first_registration: 
 };
 
 export const getBanks = async (): Promise<BankOption[]> => {
-    const response = await callGetAPI("/banks", false, USER_API_BASE_URL);
+    const response = await callGetAPI("/banks", false, getUserApiBaseUrl());
     if (!response.ok) {
         throw new Error("Failed to fetch banks");
     }
@@ -90,7 +90,7 @@ export const updateMyProfile = async (payload: {
     bank_account_name: string;
     bank_account_number: string;
 }): Promise<UserProfile> => {
-    const response = await callPutAPI("/users/profile", payload, true, USER_API_BASE_URL);
+    const response = await callPutAPI("/users/profile", payload, true, getUserApiBaseUrl());
     if (!response.ok) {
         throw new Error("Failed to update profile");
     }

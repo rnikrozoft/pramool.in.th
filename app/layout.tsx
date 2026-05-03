@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Noto_Sans_Thai } from "next/font/google";
 import "./globals.css";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { UserProvider } from "./context/UserContext";
 import OnboardingGuard from "./components/OnboardingGuard";
+import RouteWarmup from "./components/RouteWarmup";
 
 const geistSans = Noto_Sans_Thai({
   weight: "500",
@@ -31,8 +33,15 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.className}`}>
         <UserProvider>
+          <RouteWarmup />
           <OnboardingGuard />
-          <Navbar />
+          <Suspense
+            fallback={
+              <header className="h-16 w-full border-b border-zinc-200 bg-white" aria-hidden />
+            }
+          >
+            <Navbar />
+          </Suspense>
           {children}
         </UserProvider>
         <Footer />

@@ -4,11 +4,12 @@ import Link from "next/link"
 import React, { memo, Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
-  listPublicAuctions,
   type AuctionListSort,
   type PublicAuctionListItem,
 } from "@/app/lib/api/auction"
-import { CORE_API_BASE_URL } from "@/app/lib/constants/common"
+import { listPublicAuctionsCached } from "@/app/lib/data/publicAuctionsCache"
+import { getCoreApiBaseUrl } from "@/app/lib/constants/common"
+import { AppPageShell, APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
 
 type SortOption = AuctionListSort
 
@@ -38,7 +39,7 @@ function coverImageUrl(path: string | undefined): string {
   const u = path?.trim() ?? ""
   if (!u) return "https://placehold.co/600x400?text=Pramool"
   if (u.startsWith("http://") || u.startsWith("https://")) return u
-  return `${CORE_API_BASE_URL}${u.startsWith("/") ? "" : "/"}${u}`
+  return `${getCoreApiBaseUrl()}${u.startsWith("/") ? "" : "/"}${u}`
 }
 
 function formatCountdown(endMs: number): string {
@@ -99,18 +100,28 @@ const AuctionCard = memo(function AuctionCard({
   item: PublicAuctionListItem
   imageLoading: "eager" | "lazy"
 }) {
+  const buyNow = Number(item.buy_now_price ?? 0)
   return (
-    <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <img
-        src={coverImageUrl(item.cover_image_url)}
-        alt={item.title}
-        className="h-40 w-full object-cover"
-        loading={imageLoading}
-        decoding="async"
-      />
+    <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+      <div className="relative">
+        <img
+          src={coverImageUrl(item.cover_image_url)}
+          alt={item.title}
+          className="h-40 w-full object-cover"
+          loading={imageLoading}
+          decoding="async"
+        />
+        {buyNow > 0 && (
+          <span className="absolute right-2 top-2 rounded-full bg-violet-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-md ring-2 ring-white/90">
+            ซื้อทันที {buyNow.toLocaleString()} ฿
+          </span>
+        )}
+      </div>
       <div className="space-y-2 p-3">
         <h2 className="line-clamp-1 text-sm font-semibold text-slate-900">{item.title}</h2>
-        <p className="text-xs text-slate-500">{item.auction_id} • {item.category}</p>
+        <p className="text-xs text-slate-500">
+          {item.auction_id} • {item.category.split("|").filter(Boolean).join(" · ")}
+        </p>
         <p className="text-[11px] text-slate-500">
           บิดแล้ว {Number(item.total_bids ?? 0).toLocaleString()} ครั้ง · ผู้ประมูล {Number(item.bidder_count ?? 0).toLocaleString()} คน
         </p>
@@ -212,7 +223,7 @@ function AuctionsPageInner() {
   }, [appliedText.keyword, category, sortBy, pathname, router])
 
   const loadList = useCallback(
-    async (options?: { signal?: AbortSignal }) => {
+    async (options?: { signal?: AbortSignal; bypassCache?: boolean }) => {
       const minNum = appliedText.minPrice.trim() === "" ? undefined : Number(appliedText.minPrice)
       const maxNum = appliedText.maxPrice.trim() === "" ? undefined : Number(appliedText.maxPrice)
       const minS = appliedText.minStartPrice.trim() === "" ? undefined : Number(appliedText.minStartPrice)
@@ -220,7 +231,7 @@ function AuctionsPageInner() {
       const minSt = appliedText.minBidStep.trim() === "" ? undefined : Number(appliedText.minBidStep)
       const maxSt = appliedText.maxBidStep.trim() === "" ? undefined : Number(appliedText.maxBidStep)
 
-      return listPublicAuctions(
+      return listPublicAuctionsCached(
         {
           q: appliedText.keyword.trim() || undefined,
           category: category === "ทั้งหมด" ? undefined : category,
@@ -236,7 +247,7 @@ function AuctionsPageInner() {
           limit: 100,
           offset: 0,
         },
-        { signal: options?.signal },
+        { signal: options?.signal, bypassCache: options?.bypassCache },
       )
     },
     [appliedText, category, sortBy],
@@ -267,7 +278,7 @@ function AuctionsPageInner() {
   useEffect(() => {
     const refresh = () => {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return
-      void loadList()
+      void loadList({ bypassCache: true })
         .then((res) => {
           setItems(res.items)
           setTotal(res.total)
@@ -369,7 +380,8 @@ function AuctionsPageInner() {
   )
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8">
+    <AppPageShell>
+    <main className={APP_PAGE_INNER_WIDE}>
       <div className="fixed inset-x-0 top-[65px] z-30 border-b border-slate-200 bg-white/95 backdrop-blur lg:hidden">
         <div className="mx-auto max-w-7xl px-4 py-2">
           <div className="grid grid-cols-2 gap-2">
@@ -490,12 +502,19 @@ function AuctionsPageInner() {
         </div>
       )}
     </main>
+    </AppPageShell>
   )
 }
 
 export default function AuctionsPage() {
   return (
-    <Suspense fallback={<div className="mx-auto max-w-7xl px-4 py-24 text-center text-slate-500">กำลังโหลด...</div>}>
+    <Suspense
+      fallback={
+        <AppPageShell>
+          <div className={`${APP_PAGE_INNER_WIDE} py-24 text-center text-slate-500`}>กำลังโหลด...</div>
+        </AppPageShell>
+      }
+    >
       <AuctionsPageInner />
     </Suspense>
   )

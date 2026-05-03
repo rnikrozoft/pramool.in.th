@@ -1,6 +1,6 @@
 import { callPostAPI } from "../utils/call-api";
 import { callGetAPI } from "../utils/call-api";
-import { WALLET_API_BASE_URL } from "../constants/common";
+import { getWalletApiBaseUrl } from "../constants/common";
 
 export type PromptPayTopupResponse = {
     charge_id: string;
@@ -9,7 +9,7 @@ export type PromptPayTopupResponse = {
 };
 
 export const createPromptPayTopup = async (amount: number): Promise<PromptPayTopupResponse> => {
-    const response = await callPostAPI("/wallet/topup", { amount }, true, WALLET_API_BASE_URL);
+    const response = await callPostAPI("/wallet/topup", { amount }, true, getWalletApiBaseUrl());
     if (!response.ok) {
         let msg = "สร้าง QR เติมเงินไม่สำเร็จ";
         try {
@@ -59,7 +59,7 @@ export const getCreditActivity = async (
     const response = await callGetAPI(
         `/wallet/transactions?limit=${limit}&offset=${offset}&filter=${encodeURIComponent(filter)}`,
         true,
-        WALLET_API_BASE_URL,
+        getWalletApiBaseUrl(),
     );
     if (!response.ok) {
         throw new Error("Failed to fetch credit activity");

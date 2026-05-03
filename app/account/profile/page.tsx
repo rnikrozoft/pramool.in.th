@@ -1,6 +1,8 @@
 "use client"
 
+import Link from "next/link"
 import React, { useContext, useEffect, useState } from "react"
+import { AppPageShell, APP_PAGE_INNER } from "@/app/components/AppPageShell"
 import { getBanks, getMyProfile, updateMyProfile } from "@/app/lib/api/user"
 import { UserContext } from "@/app/context/UserContext"
 import Swal from "sweetalert2"
@@ -36,6 +38,36 @@ type ProfileForm = {
 type ProfilePayload = Omit<ProfileForm, "bank_id"> & {
   tel: string
   bank_id: number
+}
+
+function Section({
+  step,
+  title,
+  description,
+  children,
+}: {
+  step: number
+  title: string
+  description?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm ring-1 ring-slate-100 sm:p-6">
+      <div className="mb-5 flex gap-3">
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-800"
+          aria-hidden
+        >
+          {step}
+        </span>
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+          {description ? <p className="mt-0.5 text-sm text-slate-500">{description}</p> : null}
+        </div>
+      </div>
+      {children}
+    </section>
+  )
 }
 
 export default function ProfilePage() {
@@ -372,32 +404,43 @@ export default function ProfilePage() {
     }
   }
 
-  return (
-    <main className="mx-auto max-w-7xl px-4 py-6 lg:py-8">
-      <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-white to-slate-50 p-5 shadow-sm">
-        <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Profile</p>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">โปรไฟล์ของฉัน</h1>
-        <p className="mt-1 text-sm text-slate-600">อัปเดตข้อมูลส่วนตัวและที่อยู่สำหรับใช้งานระบบประมูล</p>
-        <div className="mt-4 flex flex-wrap gap-2 text-xs">
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">1. ข้อมูลส่วนตัว</span>
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">2. ที่อยู่สำหรับติดต่อ</span>
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">3. ช่องทางติดต่อ</span>
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">4. ข้อมูลบัญชีธนาคาร</span>
-        </div>
-      </section>
+  const displayName =
+    `${form.first_name.trim()} ${form.last_name.trim()}`.trim() || "ยังไม่ระบุชื่อ"
 
-      {loading ? (
-        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-500">กำลังโหลดข้อมูล...</p>
+  return (
+    <AppPageShell>
+      <main className={APP_PAGE_INNER}>
+        <div className="mb-8 flex flex-col gap-4 border-b border-slate-200/80 pb-6">
+          <div>
+            <Link
+              href="/"
+              className="mb-2 inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-800"
+            >
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
+                <i className="fa-solid fa-house" aria-hidden />
+              </span>
+              กลับหน้าหลัก
+            </Link>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">โปรไฟล์ของฉัน</h1>
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
+              อัปเดตข้อมูลส่วนตัว ที่อยู่ และบัญชีธนาคาร
+            </p>
+          </div>
         </div>
-      ) : (
-        <form className="mt-6" onSubmit={handleSubmit}>
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-            <div className="space-y-6">
-              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-slate-900">1) ข้อมูลส่วนตัว</h3>
-                <p className="mt-1 text-sm text-slate-500">ข้อมูลพื้นฐานของบัญชีผู้ใช้งาน</p>
-                <div className="mt-5 space-y-4">
+
+        {loading ? (
+          <div className="rounded-2xl border border-slate-200/90 bg-white p-8 shadow-sm ring-1 ring-slate-100">
+            <p className="text-sm text-slate-500">กำลังโหลดข้อมูล...</p>
+          </div>
+        ) : (
+          <form
+            id="profile-form"
+            onSubmit={handleSubmit}
+            className="lg:grid lg:grid-cols-12 lg:gap-10 lg:items-stretch"
+          >
+            <div className="space-y-8 lg:col-span-7">
+              <Section step={1} title="ข้อมูลส่วนตัว" description="ข้อมูลพื้นฐานของบัญชีผู้ใช้งาน">
+                <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-sm font-medium text-slate-700">รหัสผู้ใช้</label>
@@ -429,12 +472,10 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 </div>
-              </section>
+              </Section>
 
-              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-slate-900">2) ที่อยู่สำหรับติดต่อ</h3>
-                <p className="mt-1 text-sm text-slate-500">ใช้สำหรับการจัดส่งและการติดต่อหลังการซื้อขาย</p>
-                <div className="mt-5 space-y-4">
+              <Section step={2} title="ที่อยู่สำหรับติดต่อ" description="ใช้สำหรับการจัดส่งและการติดต่อหลังการซื้อขาย">
+                <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-sm font-medium text-slate-700">ที่อยู่ 1</label>
@@ -516,23 +557,17 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 </div>
-              </section>
+              </Section>
 
-              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-slate-900">3) ช่องทางติดต่อ</h3>
-                <p className="mt-1 text-sm text-slate-500">เพิ่มช่องทางสำหรับผู้ซื้อหรือผู้ขายติดต่อกลับ</p>
-                <div className="mt-5">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Facebook</label>
-                    <input name="facebook" className="form-input" value={form.facebook} onChange={handleChange} />
-                  </div>
+              <Section step={3} title="ช่องทางติดต่อ" description="เพิ่มช่องทางสำหรับผู้ซื้อหรือผู้ขายติดต่อกลับ">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Facebook</label>
+                  <input name="facebook" className="form-input" value={form.facebook} onChange={handleChange} />
                 </div>
-              </section>
+              </Section>
 
-              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-slate-900">4) ข้อมูลบัญชีธนาคาร</h3>
-                <p className="mt-1 text-sm text-slate-500">ใช้สำหรับการรับเงินหลังการขายหรือปิดประมูล</p>
-                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <Section step={4} title="ข้อมูลบัญชีธนาคาร" description="ใช้สำหรับการรับเงินหลังการขายหรือปิดประมูล">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700">ชื่อธนาคาร</label>
                     <BankSelect
@@ -556,29 +591,70 @@ export default function ProfilePage() {
                     {errors.bank_account_number && <p className="mt-1 text-xs text-rose-600">{errors.bank_account_number}</p>}
                   </div>
                 </div>
-              </section>
+              </Section>
             </div>
 
-            <aside className="lg:sticky lg:top-24 lg:h-fit">
-              <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 className="text-base font-semibold text-slate-900">สรุปก่อนบันทึก</h3>
-                <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                  <li className="flex items-start gap-2"><span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400"></span><span>หากมีการแก้ไขข้อมูล จะต้องยืนยัน OTP ทุกครั้ง</span></li>
-                  <li className="flex items-start gap-2"><span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400"></span><span>ตรวจสอบเบอร์โทรศัพท์ให้ใช้งานได้จริง</span></li>
-                  <li className="flex items-start gap-2"><span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400"></span><span>ที่อยู่ควรถูกต้องเพื่อใช้จัดส่งสินค้า</span></li>
-                </ul>
+            <aside className="mt-10 flex flex-col lg:col-span-5 lg:mt-0">
+              <div className="lg:sticky lg:top-20 lg:z-10 lg:h-fit lg:w-full">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-md ring-1 ring-slate-100 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">สรุปก่อนบันทึก</h3>
+                  <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">ชื่อที่แสดง</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">{displayName}</p>
+                    {tel.trim() ? (
+                      <p className="mt-2 text-xs text-slate-600">
+                        <span className="text-slate-400">โทร </span>
+                        {tel.trim()}
+                      </p>
+                    ) : null}
+                  </div>
 
-                {errorMessage && <p className="mt-4 text-sm text-rose-600">{errorMessage}</p>}
-                {successMessage && <p className="mt-4 text-sm text-emerald-700">{successMessage}</p>}
+                  <ul className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-xs text-slate-600">
+                    <li className="flex gap-2">
+                      <span className="mt-0.5 shrink-0 text-emerald-600">
+                        <i className="fa-solid fa-circle-check" aria-hidden />
+                      </span>
+                      แก้ไขข้อมูลแล้วต้องยืนยัน OTP ทางเบอร์นี้ทุกครั้ง
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="mt-0.5 shrink-0 text-emerald-600">
+                        <i className="fa-solid fa-circle-check" aria-hidden />
+                      </span>
+                      ตรวจสอบเบอร์โทรให้รับ SMS ได้
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="mt-0.5 shrink-0 text-emerald-600">
+                        <i className="fa-solid fa-circle-check" aria-hidden />
+                      </span>
+                      ที่อยู่ใช้จัดส่งได้จริง
+                    </li>
+                  </ul>
 
-                <button type="submit" className="btn-primary mt-5 w-full py-3 text-base" disabled={saving}>
-                  {saving ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
-                </button>
+                  {errorMessage ? (
+                    <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                      {errorMessage}
+                    </div>
+                  ) : null}
+                  {successMessage ? (
+                    <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                      {successMessage}
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="submit"
+                    form="profile-form"
+                    className="btn-primary mt-5 w-full py-3 text-sm font-semibold shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={saving}
+                  >
+                    {saving ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
+                  </button>
+                </div>
               </div>
             </aside>
-          </div>
-        </form>
-      )}
-    </main>
+          </form>
+        )}
+      </main>
+    </AppPageShell>
   )
 }

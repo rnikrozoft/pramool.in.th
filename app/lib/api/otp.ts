@@ -1,9 +1,9 @@
 import { OTPRequest, OTPResponse, OTPTimeoutResponse, VerifyRequest } from "../../types/otp_type";
 import { callPostAPI } from "../utils/call-api";
-import { USER_API_BASE_URL } from "../constants/common";
+import { getUserApiBaseUrl } from "../constants/common";
 
 export const requestOTP = async (b: OTPRequest): Promise<OTPResponse> => {
-    const response = await callPostAPI("/otp/request", b, false, USER_API_BASE_URL);
+    const response = await callPostAPI("/otp/request", b, false, getUserApiBaseUrl());
     if (!response.ok) {
         let message = "Failed to request OTP";
         let bannedUntil: number | null = null;
@@ -27,12 +27,12 @@ export const requestOTP = async (b: OTPRequest): Promise<OTPResponse> => {
 };
 
 export const verifyOTP = async (b: VerifyRequest): Promise<boolean> => {
-    const response = await callPostAPI("/otp/verify", b, false, USER_API_BASE_URL);
+    const response = await callPostAPI("/otp/verify", b, false, getUserApiBaseUrl());
     return response.ok;
 };
 
 export const recordOTPTimeout = async (tel: string): Promise<OTPTimeoutResponse> => {
-    const response = await callPostAPI("/otp/timeout", { tel }, false, USER_API_BASE_URL);
+    const response = await callPostAPI("/otp/timeout", { tel }, false, getUserApiBaseUrl());
     if (!response.ok) {
         throw new Error("Failed to record OTP timeout");
     }

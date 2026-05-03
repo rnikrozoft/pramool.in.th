@@ -2,26 +2,29 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   closeAuctionEarly,
   confirmAuctionReceived,
+  deleteSellerAuction,
   getAuctionDetail,
   getAuctionWebSocketURL,
   markAuctionShipped,
   reopenSellerAuction,
   type AuctionDetail,
 } from '@/app/lib/api/auction'
-import { CORE_API_BASE_URL } from '@/app/lib/constants/common'
+import { getCoreApiBaseUrl } from '@/app/lib/constants/common'
 import { UserContext } from '@/app/context/UserContext'
 import { notifyCreditChanged } from '@/app/lib/creditSync'
+import { AppPageShell, APP_PAGE_INNER_PRODUCT, APP_PAGE_INNER_WIDE } from '@/app/components/AppPageShell'
 import Swal from 'sweetalert2'
 
 type Props = {}
 
 export default function Product({ }: Props) {
   const { user, setUser, refreshSession } = useContext(UserContext)
+  const router = useRouter()
   const params = useParams<{ id: string }>()
   const auctionID = String(params?.id || '')
   const [auction, setAuction] = useState<AuctionDetail | null>(null)
@@ -38,7 +41,7 @@ export default function Product({ }: Props) {
   const [countdown, setCountdown] = useState('00:00:00')
   /** False once clock passes auction.end_at — hide "ปิดประมูลก่อนหมดเวลา" before backend settles to closed. */
   const [beforeScheduledEnd, setBeforeScheduledEnd] = useState(true)
-  const [isWatching, setIsWatching] = useState(false)
+  const [isDeletingAuction, setIsDeletingAuction] = useState(false)
   const [isClosingEarly, setIsClosingEarly] = useState(false)
   const [isReopening, setIsReopening] = useState(false)
   const [isMarkingShipped, setIsMarkingShipped] = useState(false)
@@ -77,7 +80,7 @@ export default function Product({ }: Props) {
     const raw = auction.images.length > 0 ? auction.images : [auction.cover_image_url]
     return raw.map((url) => {
       if (url.startsWith('http://') || url.startsWith('https://')) return url
-      return `${CORE_API_BASE_URL}${url}`
+      return `${getCoreApiBaseUrl()}${url}`
     })
   }, [auction])
 
@@ -98,6 +101,7 @@ export default function Product({ }: Props) {
   const currentPrice = Number(auction?.current_bid ?? 0)
   const minIncrement = Number(auction?.bid_step ?? 100)
   const minRequiredBid = currentPrice + minIncrement
+  const buyNowPrice = Number(auction?.buy_now_price ?? 0)
   const userCredit = Number(user?.credit ?? 0)
   const hasEnoughCredit = userCredit >= minRequiredBid
   const atMaxBidForCredit = bidAmount >= userCredit
@@ -162,7 +166,7 @@ export default function Product({ }: Props) {
 
   useEffect(() => {
     if (!auction || auction.status !== 'closed' || !isOwnAuction) return
-    void refreshSession()
+    void refreshSession({ force: true, silent: true })
     notifyCreditChanged()
   }, [auction?.auction_id, auction?.status, isOwnAuction, refreshSession])
 
@@ -244,6 +248,7 @@ export default function Product({ }: Props) {
           end_at?: string
           reopen_eligible?: boolean
           allow_early_close?: boolean
+          auction_closed?: boolean
         }
         if (payload.type === 'auction_state') {
           auctionDetailFetchGen.current += 1
@@ -277,11 +282,18 @@ export default function Product({ }: Props) {
               return { ...prev, credit: Number(payload.remaining_credit) }
             })
           }
-          setHasHeldBidOnThisAuction(true)
-          void refreshSessionRef.current()
+          void refreshSessionRef.current?.({ force: true, silent: true })
           notifyCreditChanged()
           setIsBidSheetOpen(false)
           clearBidInFlightRef.current()
+          if (payload.auction_closed && auctionID) {
+            auctionDetailFetchGen.current += 1
+            void getAuctionDetail(auctionID).then((data) => {
+              setAuction(data)
+              setBidAmount(Number(data.current_bid) + Number(data.bid_step))
+              syncBeforeScheduledEndFromISO(data.end_at)
+            })
+          }
           return
         }
         if (payload.type === 'bid_update') {
@@ -305,7 +317,7 @@ export default function Product({ }: Props) {
             ])
           }
           if (bidderID && userIdRef.current && bidderID === userIdRef.current) {
-            void refreshSessionRef.current()
+            void refreshSessionRef.current?.({ force: true, silent: true })
             notifyCreditChanged()
           }
           setBidError('')
@@ -412,12 +424,39 @@ export default function Product({ }: Props) {
       setBidAmount(Number(updated.current_bid) + Number(updated.bid_step))
       syncBeforeScheduledEndFromISO(updated.end_at)
       notifyCreditChanged()
-      await refreshSessionRef.current?.()
+      await refreshSessionRef.current?.({ force: true })
       void Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'เปิดประมูลใหม่แล้ว', showConfirmButton: false, timer: 2000 })
     } catch (e) {
       setBidError(e instanceof Error ? e.message : 'ไม่สามารถเปิดประมูลใหม่ได้')
     } finally {
       setIsReopening(false)
+    }
+  }
+
+  const handleDeleteAuction = async () => {
+    if (!auctionID || !isOwnAuction || !auction?.reopen_eligible || isDeletingAuction) return
+    const result = await Swal.fire({
+      title: 'ยกเลิกและลบการประมูลนี้?',
+      html: '<p class="text-left text-sm text-slate-600">รายการจะถูกลบถาวรจากระบบ ไม่สามารถกู้คืนได้ — ใช้ได้เฉพาะเมื่อปิดประมูลแล้วและไม่มีผู้เสนอราคา</p>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'ลบรายการ',
+      cancelButtonText: 'ไม่ลบ',
+      confirmButtonColor: '#b91c1c',
+      focusCancel: true,
+    })
+    if (!result.isConfirmed) return
+    setIsDeletingAuction(true)
+    setBidError('')
+    try {
+      await deleteSellerAuction(auctionID)
+      void Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ลบรายการแล้ว', showConfirmButton: false, timer: 2000 })
+      router.push('/seller/auctions')
+    } catch (e) {
+      setBidError(e instanceof Error ? e.message : 'ลบรายการไม่สำเร็จ')
+      void Swal.fire({ icon: 'error', title: e instanceof Error ? e.message : 'ลบรายการไม่สำเร็จ' })
+    } finally {
+      setIsDeletingAuction(false)
     }
   }
 
@@ -470,7 +509,7 @@ export default function Product({ }: Props) {
       setAuction(updated)
       setBidAmount(Number(updated.current_bid) + Number(updated.bid_step))
       syncBeforeScheduledEndFromISO(updated.end_at)
-      await refreshSessionRef.current?.()
+      await refreshSessionRef.current?.({ force: true })
       void Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ยืนยันรับของแล้ว', showConfirmButton: false, timer: 2200 })
     } catch (e) {
       void Swal.fire({ icon: 'error', title: e instanceof Error ? e.message : 'ยืนยันไม่สำเร็จ' })
@@ -523,24 +562,29 @@ export default function Product({ }: Props) {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-7xl px-4 py-10 text-center text-slate-500">
-        กำลังโหลดข้อมูลรายการประมูล...
-      </main>
+      <AppPageShell>
+        <main className={`${APP_PAGE_INNER_WIDE} py-10 text-center text-slate-500`}>
+          กำลังโหลดข้อมูลรายการประมูล...
+        </main>
+      </AppPageShell>
     )
   }
 
   if (loadError || !auction) {
     return (
-      <main className="mx-auto max-w-7xl px-4 py-10">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-red-600">
-          {loadError || 'ไม่พบข้อมูลรายการประมูล'}
-        </div>
-      </main>
+      <AppPageShell>
+        <main className={`${APP_PAGE_INNER_WIDE} py-10`}>
+          <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-red-600">
+            {loadError || 'ไม่พบข้อมูลรายการประมูล'}
+          </div>
+        </main>
+      </AppPageShell>
     )
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-4 pb-28 lg:py-6 lg:pb-6">
+    <AppPageShell>
+    <main className={APP_PAGE_INNER_PRODUCT}>
       <nav aria-label="breadcrumb" className="hidden sm:block">
         <ol className="flex items-center gap-2 text-sm text-slate-500">
           <li><Link href="/" className="hover:text-slate-800">หน้าแรก</Link></li>
@@ -555,7 +599,7 @@ export default function Product({ }: Props) {
         <section className="lg:col-span-8">
           <div className="relative h-[240px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50 sm:h-[360px] lg:h-[460px]">
             <Image
-              src={imageList[activeImage] || `${CORE_API_BASE_URL}${auction.cover_image_url}`}
+              src={imageList[activeImage] || `${getCoreApiBaseUrl()}${auction.cover_image_url}`}
               width={1200}
               height={800}
               className="object-contain"
@@ -580,7 +624,15 @@ export default function Product({ }: Props) {
               <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">{auction.title}</h1>
               <div className="mt-2 flex flex-wrap gap-2 text-xs">
                 <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700">{auction.status}</span>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{auction.category}</span>
+                {auction.category
+                  .split("|")
+                  .map((c) => c.trim())
+                  .filter(Boolean)
+                  .map((c) => (
+                    <span key={c} className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
+                      {c}
+                    </span>
+                  ))}
                 <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{auction.condition}</span>
                 {user && (
                   <span className={`rounded-full px-2.5 py-1 ${wsStatus === 'connected' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
@@ -591,14 +643,24 @@ export default function Product({ }: Props) {
               {isOwnAuction && auction.reopen_eligible && (
                 <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
                   <p className="text-sky-900">รายการปิดแล้วและยังไม่มีผู้เสนอราคา — คุณสามารถเปิดประมูลรอบใหม่ได้ (ระบบจะหักมัดจำเท่าราคาเริ่มต้นจากเครดิต)</p>
-                  <button
-                    type="button"
-                    className="mt-2 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                    disabled={isReopening}
-                    onClick={handleReopenAuction}
-                  >
-                    {isReopening ? 'กำลังดำเนินการ...' : 'เปิดประมูลใหม่อีกครั้ง'}
-                  </button>
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                    <button
+                      type="button"
+                      className="w-full shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                      disabled={isReopening}
+                      onClick={handleReopenAuction}
+                    >
+                      {isReopening ? 'กำลังดำเนินการ...' : 'เปิดประมูลใหม่อีกครั้ง'}
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full shrink-0 rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                      disabled={isDeletingAuction || isReopening}
+                      onClick={() => void handleDeleteAuction()}
+                    >
+                      {isDeletingAuction ? 'กำลังลบ...' : 'ยกเลิกและลบการประมูลนี้'}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -666,6 +728,12 @@ export default function Product({ }: Props) {
                   <p className="text-xs text-slate-500">ราคาปัจจุบัน</p>
                   <p className="text-2xl font-bold text-emerald-700">{currentPrice.toLocaleString()} ฿</p>
                   <p className="mt-1 text-xs text-slate-500">ราคาเริ่มต้น {Number(auction.start_price).toLocaleString()} ฿</p>
+                  {auction.status === 'active' && buyNowPrice > 0 && (
+                    <p className="mt-1 text-xs font-medium text-violet-700">
+                      ปิดทันทีที่ {buyNowPrice.toLocaleString()} ฿
+                      {buyNowPrice > userCredit ? ' — เครดิตของคุณยังไม่ถึงยอดนี้' : ''}
+                    </p>
+                  )}
                 </div>
                 <div className="rounded-lg bg-amber-50 px-3 py-2 text-right">
                   <p className="text-[11px] text-amber-700">เหลือเวลา</p>
@@ -685,6 +753,20 @@ export default function Product({ }: Props) {
                   </button>
                 ))}
               </div>
+              {auction.status === 'active' &&
+                buyNowPrice > 0 &&
+                canBid &&
+                buyNowPrice >= minRequiredBid &&
+                buyNowPrice <= userCredit && (
+                  <button
+                    type="button"
+                    className="mt-3 w-full rounded-lg border border-violet-400 bg-violet-50 py-2.5 text-sm font-semibold text-violet-900 disabled:opacity-60"
+                    disabled={isPlacingBid}
+                    onClick={() => submitBid(buyNowPrice)}
+                  >
+                    {isPlacingBid ? 'กำลังเสนอราคา...' : `ปิดประมูลทันที ${buyNowPrice.toLocaleString()} ฿`}
+                  </button>
+                )}
               <button
                 type="button"
                 className={`mt-3 w-full py-3 text-base ${!canBid ? 'btn-outline cursor-not-allowed opacity-70' : 'btn-primary'}`}
@@ -707,14 +789,24 @@ export default function Product({ }: Props) {
                 </button>
               )}
               {isOwnAuction && auction.reopen_eligible && (
-                <button
-                  type="button"
-                  className="mt-2 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isReopening}
-                  onClick={handleReopenAuction}
-                >
-                  {isReopening ? 'กำลังดำเนินการ...' : 'เปิดประมูลใหม่อีกครั้ง'}
-                </button>
+                <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                  <button
+                    type="button"
+                    className="w-full shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    disabled={isReopening}
+                    onClick={handleReopenAuction}
+                  >
+                    {isReopening ? 'กำลังดำเนินการ...' : 'เปิดประมูลใหม่อีกครั้ง'}
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full shrink-0 rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    disabled={isDeletingAuction || isReopening}
+                    onClick={() => void handleDeleteAuction()}
+                  >
+                    {isDeletingAuction ? 'กำลังลบ...' : 'ยกเลิกและลบการประมูลนี้'}
+                  </button>
+                </div>
               )}
               {bidError && <p className="mt-2 text-xs text-rose-600">{bidError}</p>}
             </section>
@@ -779,6 +871,12 @@ export default function Product({ }: Props) {
               <p className="text-sm text-slate-500">ราคาปัจจุบัน</p>
               <h3 className="mt-1 text-3xl font-bold text-emerald-700">{currentPrice.toLocaleString()} ฿</h3>
               <p className="mt-1 text-xs text-slate-500">ราคาเริ่มต้น {Number(auction.start_price).toLocaleString()} ฿</p>
+              {auction.status === 'active' && buyNowPrice > 0 && (
+                <p className="mt-1 text-xs font-medium text-violet-700">
+                  ปิดทันทีที่ {buyNowPrice.toLocaleString()} ฿
+                  {buyNowPrice > userCredit ? ' — เครดิตของคุณยังไม่ถึงยอดนี้' : ''}
+                </p>
+              )}
               <p className="mt-1 text-xs text-slate-500">เหลือเวลา {countdown} ก่อนปิดประมูล</p>
               {isOwnAuction && (
                 <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700">
@@ -796,14 +894,24 @@ export default function Product({ }: Props) {
                 </button>
               )}
               {isOwnAuction && auction.reopen_eligible && (
-                <button
-                  type="button"
-                  className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isReopening}
-                  onClick={handleReopenAuction}
-                >
-                  {isReopening ? 'กำลังดำเนินการ...' : 'เปิดประมูลใหม่อีกครั้ง'}
-                </button>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                  <button
+                    type="button"
+                    className="w-full shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    disabled={isReopening}
+                    onClick={handleReopenAuction}
+                  >
+                    {isReopening ? 'กำลังดำเนินการ...' : 'เปิดประมูลใหม่อีกครั้ง'}
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full shrink-0 rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    disabled={isDeletingAuction || isReopening}
+                    onClick={() => void handleDeleteAuction()}
+                  >
+                    {isDeletingAuction ? 'กำลังลบ...' : 'ยกเลิกและลบการประมูลนี้'}
+                  </button>
+                </div>
               )}
 
               <div className="mt-4 space-y-2">
@@ -836,6 +944,20 @@ export default function Product({ }: Props) {
                   </button>
                 ))}
               </div>
+              {auction.status === 'active' &&
+                buyNowPrice > 0 &&
+                canBid &&
+                buyNowPrice >= minRequiredBid &&
+                buyNowPrice <= userCredit && (
+                  <button
+                    type="button"
+                    className="mt-3 w-full rounded-lg border border-violet-400 bg-violet-50 py-2.5 text-sm font-semibold text-violet-900 disabled:opacity-60"
+                    disabled={isPlacingBid}
+                    onClick={() => submitBid(buyNowPrice)}
+                  >
+                    {isPlacingBid ? 'กำลังเสนอราคา...' : `ปิดประมูลทันที ${buyNowPrice.toLocaleString()} ฿`}
+                  </button>
+                )}
 
               <button
                 className={`mt-4 w-full rounded-lg px-4 py-3 text-sm font-medium ${!canBid ? 'cursor-not-allowed bg-slate-300 text-slate-600' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
@@ -849,13 +971,6 @@ export default function Product({ }: Props) {
                 <p className="mt-2 text-xs text-amber-700">เครดิตของคุณไม่พอสำหรับราคาขั้นต่ำ {minRequiredBid.toLocaleString()} ฿</p>
               )}
               {bidError && <p className="mt-2 text-xs text-rose-600">{bidError}</p>}
-              <button
-                type="button"
-                className={`mt-2 w-full rounded-lg border px-4 py-2 text-sm ${isWatching ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-slate-300 bg-white text-slate-700'}`}
-                onClick={() => setIsWatching((prev) => !prev)}
-              >
-                {isWatching ? 'เลิกติดตามรายการนี้' : 'ติดตามรายการนี้'}
-              </button>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500">
@@ -946,5 +1061,6 @@ export default function Product({ }: Props) {
         </div>
       )}
     </main>
+    </AppPageShell>
   )
 }

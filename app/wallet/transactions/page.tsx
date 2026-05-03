@@ -6,6 +6,7 @@ import {
     CreditActivityItem,
     getCreditActivity,
 } from "@/app/lib/api/wallet"
+import { AppPageShell, APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
 
 function formatDate(iso: string): string {
     const date = new Date(iso)
@@ -149,7 +150,8 @@ export default function WalletTransactionsPage() {
     }
 
     return (
-        <main className="mx-auto max-w-7xl px-4 py-8">
+        <AppPageShell>
+        <main className={APP_PAGE_INNER_WIDE}>
             <div className="mb-6">
                 <h1 className="text-2xl font-semibold text-slate-900">ประวัติเครดิต</h1>
                 <p className="mt-1 text-sm text-slate-500">
@@ -300,5 +302,6 @@ export default function WalletTransactionsPage() {
                 </div>
             </div>
         </main>
+        </AppPageShell>
     )
 }

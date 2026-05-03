@@ -8,13 +8,14 @@ import {
   placeBidViaWebSocket,
   type MyActiveBidItem,
 } from "@/app/lib/api/auction"
-import { CORE_API_BASE_URL } from "@/app/lib/constants/common"
+import { getCoreApiBaseUrl } from "@/app/lib/constants/common"
 import { notifyCreditChanged } from "@/app/lib/creditSync"
+import { AppPageShell, APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
 
 function coverSrc(url: string): string {
   if (!url?.trim()) return "https://placehold.co/600x400?text=Auction"
   if (url.startsWith("http://") || url.startsWith("https://")) return url
-  return `${CORE_API_BASE_URL}${url}`
+  return `${getCoreApiBaseUrl()}${url}`
 }
 
 function formatCountdown(endAt: string): string {
@@ -168,19 +169,22 @@ export default function ActiveBidsPage() {
 
   if (sessionLoading || (loading && items.length === 0 && !listError)) {
     return (
-      <main className="mx-auto max-w-7xl px-4 py-8">
-        <p className="text-slate-600">กำลังโหลด…</p>
-      </main>
+      <AppPageShell>
+        <main className={APP_PAGE_INNER_WIDE}>
+          <p className="text-slate-600">กำลังโหลด…</p>
+        </main>
+      </AppPageShell>
     )
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8">
+    <AppPageShell>
+    <main className={APP_PAGE_INNER_WIDE}>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">รายการที่ฉันกำลังประมูล</h1>
           <p className="mt-1 text-sm text-slate-500">
-            ติดตามราคาและสถานะนำ/โดนแซง — นับถอยหลังอัปเดตทุกวินาที ราคาซิงก์ประมาณทุก 12 วินาทีเมื่อแท็บเปิดอยู่
+            ติดตามราคาและสถานะ
           </p>
         </div>
         <button
@@ -416,5 +420,6 @@ export default function ActiveBidsPage() {
         })}
       </div>
     </main>
+    </AppPageShell>
   )
 }
