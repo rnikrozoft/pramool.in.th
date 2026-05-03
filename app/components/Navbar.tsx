@@ -6,8 +6,9 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import React, { useContext, useEffect, useRef, useState } from 'react'
 import Swal from 'sweetalert2'
 import { UserContext } from '../context/UserContext'
+import { notifyCreditChanged } from '../lib/creditSync'
 import { logout } from '../lib/api/user'
-import { createPromptPayTopup, getTopupTransactions } from '../lib/api/wallet'
+import { createPromptPayTopup, getCreditActivity } from '../lib/api/wallet'
 
 export default function Navbar() {
     const [isOpen, setIsOpen] = useState(false)
@@ -37,7 +38,6 @@ export default function Navbar() {
         { href: '/account/profile', label: 'โปรไฟล์ของฉัน' },
         { href: '/account/kyc', label: 'การยืนยันตัวตน (KYC)' },
         { href: '/seller/auctions', label: 'รายการที่ฉันเปิดประมูล' },
-        { href: '/seller/earnings', label: 'รายได้' },
         { href: '/bids/active', label: 'รายการที่ฉันกำลังประมูล' },
         { href: '/bids/history', label: 'ประวัติการประมูล' },
         { href: '/wallet/transactions', label: 'ประวัติการเติมเงิน' },
@@ -113,11 +113,12 @@ export default function Navbar() {
             attempts += 1
             try {
                 await refreshSession()
-                const history = await getTopupTransactions(20, 0, "all")
+                const history = await getCreditActivity(20, 0, "topup")
                 const current = history.items.find((item) => item.charge_id === chargeID)
                 if (current) {
                     if (current.status === "successful" && current.paid && current.credited) {
                         setTopupStatus("paid")
+                        notifyCreditChanged()
                         window.clearInterval(interval)
                         return
                     }
@@ -147,6 +148,7 @@ export default function Navbar() {
         if (creditBalance < expectedCredit) return
 
         setTopupStatus("paid")
+        notifyCreditChanged()
     }, [creditBalance, expectedCredit, topupStatus])
 
     useEffect(() => {
@@ -207,10 +209,11 @@ export default function Navbar() {
                 setTopupStatus("pending")
                 setExpectedCredit(creditBalance + amount)
             })
-            .catch(() => {
+            .catch((e) => {
                 setTopupStatus("failed")
                 setExpectedCredit(null)
-                window.alert("สร้าง QR สำหรับ PromptPay ไม่สำเร็จ")
+                const msg = e instanceof Error ? e.message : "สร้าง QR สำหรับ PromptPay ไม่สำเร็จ"
+                void Swal.fire({ icon: "error", title: "เติมเงินไม่สำเร็จ", text: msg, confirmButtonText: "ตกลง" })
             })
             .finally(() => {
                 setIsTopupLoading(false)

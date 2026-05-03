@@ -1,4 +1,8 @@
-/** When unset, browser builds URL from current hostname so LAN access (e.g. 192.168.x.x:3000) hits APIs on the same host. */
+/**
+ * Base URLs for each backend process. The browser calls services directly (no pramool-api-gateway).
+ * Defaults match local dev: core :3001, wallet :3102, auction (public HTTP + WS) :3103.
+ * Override per service with NEXT_PUBLIC_* env vars if ports differ.
+ */
 function defaultApiOrigin(port: number): string {
   if (typeof window !== "undefined") {
     return `${window.location.protocol}//${window.location.hostname}:${port}`;
@@ -6,18 +10,21 @@ function defaultApiOrigin(port: number): string {
   return `http://localhost:${port}`;
 }
 
-/** REST + static uploads (pramool-core, port 3001 by default). */
+/** pramool-core — seller auctions, `/uploads`, and shared REST used by pages that prefix asset URLs. */
 export const CORE_API_BASE_URL =
   process.env.NEXT_PUBLIC_CORE_API_BASE_URL || defaultApiOrigin(3001);
 
-/** Public auction API + WebSocket (pramool-auction-service, port 3103 by default). */
-export const AUCTION_REALTIME_BASE_URL =
-  process.env.NEXT_PUBLIC_AUCTION_REALTIME_BASE_URL || defaultApiOrigin(3103);
+/** Same process as core today: login, users, OTP, banks, profile. */
+export const USER_API_BASE_URL =
+  process.env.NEXT_PUBLIC_USER_API_BASE_URL || defaultApiOrigin(3001);
 
-/** User/auth/profile/OTP/login — pramool-core (same host as CORE_API_BASE_URL). */
-export const USER_API_BASE_URL = process.env.NEXT_PUBLIC_USER_API_BASE_URL || CORE_API_BASE_URL;
-
+/** pramool-wallet-service */
 export const WALLET_API_BASE_URL =
   process.env.NEXT_PUBLIC_WALLET_API_BASE_URL || defaultApiOrigin(3102);
 
+/** pramool-auction-service — listing/detail/bids WS (not seller CRUD on core). */
+export const AUCTION_REALTIME_BASE_URL =
+  process.env.NEXT_PUBLIC_AUCTION_REALTIME_BASE_URL || defaultApiOrigin(3103);
+
+/** Default for `call-*` helpers when baseURL is omitted (core). */
 export const API_BASE_URL = CORE_API_BASE_URL;

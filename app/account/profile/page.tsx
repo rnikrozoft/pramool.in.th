@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useContext, useEffect, useState } from "react"
-import { getMyProfile, updateMyProfile } from "@/app/lib/api/user"
+import { getBanks, getMyProfile, updateMyProfile } from "@/app/lib/api/user"
 import { UserContext } from "@/app/context/UserContext"
 import Swal from "sweetalert2"
 import subDistricts from "@/app/data/sub-districts.json"
@@ -13,6 +13,7 @@ import {
   ProvinceSelect,
   DistrictSelect,
   SubDistrictSelect,
+  BankSelect,
 } from "@/app/components/LocationSelector"
 
 type ProfileForm = {
@@ -27,10 +28,14 @@ type ProfileForm = {
   province: string
   zip_code: string
   facebook: string
+  bank_id: number | null
+  bank_account_name: string
+  bank_account_number: string
 }
 
-type ProfilePayload = ProfileForm & {
+type ProfilePayload = Omit<ProfileForm, "bank_id"> & {
   tel: string
+  bank_id: number
 }
 
 export default function ProfilePage() {
@@ -46,6 +51,7 @@ export default function ProfilePage() {
   const [provinceId, setProvinceId] = useState<number | null>(null)
   const [districtId, setDistrictId] = useState<number | null>(null)
   const [subDistrictId, setSubDistrictId] = useState<number | null>(null)
+  const [banks, setBanks] = useState<Array<{ bank_id: number; name_th: string; name_en: string }>>([])
   const [initialPayload, setInitialPayload] = useState<ProfilePayload | null>(null)
   const [form, setForm] = useState<ProfileForm>({
     first_name: "",
@@ -59,6 +65,9 @@ export default function ProfilePage() {
     province: "",
     zip_code: "",
     facebook: "",
+    bank_id: null,
+    bank_account_name: "",
+    bank_account_number: "",
   })
 
   useEffect(() => {
@@ -70,6 +79,18 @@ export default function ProfilePage() {
       last_name: user.lastName || prev.last_name,
     }))
   }, [user])
+
+  useEffect(() => {
+    async function loadBanks() {
+      try {
+        const list = await getBanks()
+        setBanks(list)
+      } catch {
+        setBanks([])
+      }
+    }
+    void loadBanks()
+  }, [])
 
   useEffect(() => {
     async function loadProfile() {
@@ -90,6 +111,9 @@ export default function ProfilePage() {
           province: profile.province || "",
           zip_code: profile.zip_code || "",
           facebook: profile.facebook || "",
+          bank_id: Number(profile.bank_id || 0) || null,
+          bank_account_name: profile.bank_account_name || "",
+          bank_account_number: profile.bank_account_number || "",
         }))
         setZipcode(profile.zip_code || "")
 
@@ -121,6 +145,9 @@ export default function ProfilePage() {
           province: (profile.province || "").trim(),
           zip_code: (profile.zip_code || "").trim(),
           facebook: (profile.facebook || "").trim(),
+          bank_id: Number(profile.bank_id || 0),
+          bank_account_name: (profile.bank_account_name || "").trim(),
+          bank_account_number: (profile.bank_account_number || "").trim(),
         })
       } catch (error) {
         setErrorMessage("ไม่สามารถโหลดข้อมูลโปรไฟล์ได้")
@@ -147,6 +174,11 @@ export default function ProfilePage() {
     if (!provinceId) nextErrors.province = "กรุณาเลือกจังหวัด"
     if (!districtId) nextErrors.district = "กรุณาเลือกเขต/อำเภอ"
     if (!subDistrictId) nextErrors.sub_district = "กรุณาเลือกแขวง/ตำบล"
+    if (!form.bank_id) nextErrors.bank_id = "กรุณาเลือกธนาคาร"
+    if (!form.bank_account_name.trim()) nextErrors.bank_account_name = "กรุณากรอกชื่อบัญชีธนาคาร"
+    if (!/^\d{10,16}$/.test(form.bank_account_number.trim())) {
+      nextErrors.bank_account_number = "เลขบัญชีธนาคารต้องเป็นตัวเลข 10-16 หลัก"
+    }
     setErrors(nextErrors)
     return Object.keys(nextErrors).length === 0
   }
@@ -278,6 +310,9 @@ export default function ProfilePage() {
         province: provinceName.trim(),
         district: districtName.trim(),
         sub_district: subDistrictName.trim(),
+        bank_id: Number(form.bank_id || 0),
+        bank_account_name: form.bank_account_name.trim(),
+        bank_account_number: form.bank_account_number.trim(),
       }
 
       if (initialPayload) {
@@ -310,8 +345,26 @@ export default function ProfilePage() {
         province: nextPayload.province.trim(),
         zip_code: nextPayload.zip_code.trim(),
         facebook: nextPayload.facebook.trim(),
+        bank_id: Number(nextPayload.bank_id || 0),
+        bank_account_name: nextPayload.bank_account_name.trim(),
+        bank_account_number: nextPayload.bank_account_number.trim(),
       })
       setSuccessMessage("บันทึกข้อมูลโปรไฟล์เรียบร้อยแล้ว")
+      void Swal.fire({
+        toast: true,
+        position: "top-end",
+        icon: "success",
+        title: "บันทึกข้อมูลโปรไฟล์เรียบร้อยแล้ว",
+        showConfirmButton: false,
+        timer: 2200,
+        timerProgressBar: true,
+        showClass: {
+          popup: "swal2-toast-fade-in",
+        },
+        hideClass: {
+          popup: "swal2-toast-fade-out",
+        },
+      })
     } catch {
       setErrorMessage("บันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง")
     } finally {
@@ -320,146 +373,212 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="mx-auto mt-8 max-w-7xl px-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold text-slate-900">โปรไฟล์ของฉัน</h1>
-        <p className="mt-1 text-sm text-slate-500">อัปเดตข้อมูลส่วนตัวและที่อยู่สำหรับใช้งานระบบประมูล</p>
+    <main className="mx-auto max-w-7xl px-4 py-6 lg:py-8">
+      <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-white to-slate-50 p-5 shadow-sm">
+        <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Profile</p>
+        <h1 className="mt-1 text-2xl font-semibold text-slate-900">โปรไฟล์ของฉัน</h1>
+        <p className="mt-1 text-sm text-slate-600">อัปเดตข้อมูลส่วนตัวและที่อยู่สำหรับใช้งานระบบประมูล</p>
+        <div className="mt-4 flex flex-wrap gap-2 text-xs">
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">1. ข้อมูลส่วนตัว</span>
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">2. ที่อยู่สำหรับติดต่อ</span>
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">3. ช่องทางติดต่อ</span>
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">4. ข้อมูลบัญชีธนาคาร</span>
+        </div>
+      </section>
 
-        {loading ? (
-          <p className="mt-6 text-sm text-slate-500">กำลังโหลดข้อมูล...</p>
-        ) : (
-          <form className="mt-6 space-y-6" onSubmit={handleSubmit}>
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-900">ข้อมูลส่วนตัวและที่อยู่</h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">รหัสผู้ใช้</label>
-                    <input className="form-input bg-slate-50" value={userID} disabled />
+      {loading ? (
+        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-slate-500">กำลังโหลดข้อมูล...</p>
+        </div>
+      ) : (
+        <form className="mt-6" onSubmit={handleSubmit}>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <div className="space-y-6">
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-900">1) ข้อมูลส่วนตัว</h3>
+                <p className="mt-1 text-sm text-slate-500">ข้อมูลพื้นฐานของบัญชีผู้ใช้งาน</p>
+                <div className="mt-5 space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">รหัสผู้ใช้</label>
+                      <input className="form-input bg-slate-50" value={userID} disabled />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">เบอร์โทรศัพท์</label>
+                      <input
+                        className="form-input"
+                        value={tel}
+                        onChange={(event) => {
+                          setTel(event.target.value)
+                          setErrors((prev) => ({ ...prev, tel: "" }))
+                        }}
+                      />
+                      {errors.tel && <p className="mt-1 text-xs text-rose-600">{errors.tel}</p>}
+                    </div>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">เบอร์โทรศัพท์</label>
-                    <input
-                      className="form-input"
-                      value={tel}
-                      onChange={(event) => {
-                        setTel(event.target.value)
-                        setErrors((prev) => ({ ...prev, tel: "" }))
-                      }}
-                    />
-                    {errors.tel && <p className="mt-1 text-xs text-rose-600">{errors.tel}</p>}
-                  </div>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">ชื่อ</label>
-                    <input name="first_name" className="form-input" value={form.first_name} onChange={handleChange} />
-                    {errors.first_name && <p className="mt-1 text-xs text-rose-600">{errors.first_name}</p>}
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">นามสกุล</label>
-                    <input name="last_name" className="form-input" value={form.last_name} onChange={handleChange} />
-                    {errors.last_name && <p className="mt-1 text-xs text-rose-600">{errors.last_name}</p>}
-                  </div>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">ที่อยู่ 1</label>
-                  <input name="address_primary" className="form-input" value={form.address_primary} onChange={handleChange} />
-                  {errors.address_primary && <p className="mt-1 text-xs text-rose-600">{errors.address_primary}</p>}
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">ที่อยู่ 2</label>
-                  <input name="address" className="form-input" value={form.address} onChange={handleChange} />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">ซอย</label>
-                    <input name="soi" className="form-input" value={form.soi} onChange={handleChange} />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">ถนน</label>
-                    <input name="road" className="form-input" value={form.road} onChange={handleChange} />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">ชื่อ</label>
+                      <input name="first_name" className="form-input" value={form.first_name} onChange={handleChange} />
+                      {errors.first_name && <p className="mt-1 text-xs text-rose-600">{errors.first_name}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">นามสกุล</label>
+                      <input name="last_name" className="form-input" value={form.last_name} onChange={handleChange} />
+                      {errors.last_name && <p className="mt-1 text-xs text-rose-600">{errors.last_name}</p>}
+                    </div>
                   </div>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">หมายเลขไปรษณีย์</label>
-                    <ZipcodeInput
-                      value={zipcode}
-                      onChange={(zip) => {
-                        setZipcode(zip)
-                        setForm((prev) => ({ ...prev, zip_code: zip }))
-                        setErrors((prev) => ({ ...prev, zip_code: "" }))
-                        setProvinceId(null)
-                        setDistrictId(null)
-                        setSubDistrictId(null)
-                      }}
-                    />
-                    {errors.zip_code && <p className="mt-1 text-xs text-rose-600">{errors.zip_code}</p>}
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">จังหวัด</label>
-                    <ProvinceSelect
-                      zipcode={zipcode}
-                      value={provinceId}
-                      onChange={(id) => {
-                        setProvinceId(id || null)
-                        setDistrictId(null)
-                        setSubDistrictId(null)
-                        setErrors((prev) => ({ ...prev, province: "" }))
-                      }}
-                      disabled={!zipcode}
-                    />
-                    {errors.province && <p className="mt-1 text-xs text-rose-600">{errors.province}</p>}
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">เขต/อำเภอ</label>
-                    <DistrictSelect
-                      provinceId={provinceId}
-                      value={districtId}
-                      onChange={(id) => {
-                        setDistrictId(id || null)
-                        setSubDistrictId(null)
-                        setErrors((prev) => ({ ...prev, district: "" }))
-                      }}
-                      disabled={!provinceId}
-                    />
-                    {errors.district && <p className="mt-1 text-xs text-rose-600">{errors.district}</p>}
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">แขวง/ตำบล</label>
-                    <SubDistrictSelect
-                      districtId={districtId}
-                      value={subDistrictId}
-                      onChange={(id) => {
-                        setSubDistrictId(id || null)
-                        setErrors((prev) => ({ ...prev, sub_district: "" }))
-                      }}
-                      disabled={!districtId}
-                    />
-                    {errors.sub_district && <p className="mt-1 text-xs text-rose-600">{errors.sub_district}</p>}
-                  </div>
-                </div>
-              </div>
+              </section>
 
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-900">ข้อมูลติดต่อ</h3>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Facebook</label>
-                  <input name="facebook" className="form-input" value={form.facebook} onChange={handleChange} />
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-900">2) ที่อยู่สำหรับติดต่อ</h3>
+                <p className="mt-1 text-sm text-slate-500">ใช้สำหรับการจัดส่งและการติดต่อหลังการซื้อขาย</p>
+                <div className="mt-5 space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">ที่อยู่ 1</label>
+                      <input name="address_primary" className="form-input" value={form.address_primary} onChange={handleChange} />
+                      {errors.address_primary && <p className="mt-1 text-xs text-rose-600">{errors.address_primary}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">ที่อยู่ 2</label>
+                      <input name="address" className="form-input" value={form.address} onChange={handleChange} />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">ซอย</label>
+                      <input name="soi" className="form-input" value={form.soi} onChange={handleChange} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">ถนน</label>
+                      <input name="road" className="form-input" value={form.road} onChange={handleChange} />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">หมายเลขไปรษณีย์</label>
+                      <ZipcodeInput
+                        value={zipcode}
+                        onChange={(zip) => {
+                          setZipcode(zip)
+                          setForm((prev) => ({ ...prev, zip_code: zip }))
+                          setErrors((prev) => ({ ...prev, zip_code: "" }))
+                          setProvinceId(null)
+                          setDistrictId(null)
+                          setSubDistrictId(null)
+                        }}
+                      />
+                      {errors.zip_code && <p className="mt-1 text-xs text-rose-600">{errors.zip_code}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">จังหวัด</label>
+                      <ProvinceSelect
+                        zipcode={zipcode}
+                        value={provinceId}
+                        onChange={(id) => {
+                          setProvinceId(id || null)
+                          setDistrictId(null)
+                          setSubDistrictId(null)
+                          setErrors((prev) => ({ ...prev, province: "" }))
+                        }}
+                        disabled={!zipcode}
+                      />
+                      {errors.province && <p className="mt-1 text-xs text-rose-600">{errors.province}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">เขต/อำเภอ</label>
+                      <DistrictSelect
+                        provinceId={provinceId}
+                        value={districtId}
+                        onChange={(id) => {
+                          setDistrictId(id || null)
+                          setSubDistrictId(null)
+                          setErrors((prev) => ({ ...prev, district: "" }))
+                        }}
+                        disabled={!provinceId}
+                      />
+                      {errors.district && <p className="mt-1 text-xs text-rose-600">{errors.district}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">แขวง/ตำบล</label>
+                      <SubDistrictSelect
+                        districtId={districtId}
+                        value={subDistrictId}
+                        onChange={(id) => {
+                          setSubDistrictId(id || null)
+                          setErrors((prev) => ({ ...prev, sub_district: "" }))
+                        }}
+                        disabled={!districtId}
+                      />
+                      {errors.sub_district && <p className="mt-1 text-xs text-rose-600">{errors.sub_district}</p>}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </section>
+
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-900">3) ช่องทางติดต่อ</h3>
+                <p className="mt-1 text-sm text-slate-500">เพิ่มช่องทางสำหรับผู้ซื้อหรือผู้ขายติดต่อกลับ</p>
+                <div className="mt-5">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Facebook</label>
+                    <input name="facebook" className="form-input" value={form.facebook} onChange={handleChange} />
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-900">4) ข้อมูลบัญชีธนาคาร</h3>
+                <p className="mt-1 text-sm text-slate-500">ใช้สำหรับการรับเงินหลังการขายหรือปิดประมูล</p>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">ชื่อธนาคาร</label>
+                    <BankSelect
+                      banks={banks}
+                      value={form.bank_id}
+                      onChange={(id) => {
+                        setForm((prev) => ({ ...prev, bank_id: id }))
+                        setErrors((prev) => ({ ...prev, bank_id: "" }))
+                      }}
+                    />
+                    {errors.bank_id && <p className="mt-1 text-xs text-rose-600">{errors.bank_id}</p>}
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">ชื่อบัญชี</label>
+                    <input name="bank_account_name" className="form-input" value={form.bank_account_name} onChange={handleChange} />
+                    {errors.bank_account_name && <p className="mt-1 text-xs text-rose-600">{errors.bank_account_name}</p>}
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">เลขบัญชีธนาคาร</label>
+                    <input name="bank_account_number" inputMode="numeric" className="form-input" value={form.bank_account_number} onChange={handleChange} />
+                    {errors.bank_account_number && <p className="mt-1 text-xs text-rose-600">{errors.bank_account_number}</p>}
+                  </div>
+                </div>
+              </section>
             </div>
 
-            {errorMessage && <p className="text-sm text-rose-600">{errorMessage}</p>}
-            {successMessage && <p className="text-sm text-emerald-700">{successMessage}</p>}
+            <aside className="lg:sticky lg:top-24 lg:h-fit">
+              <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-base font-semibold text-slate-900">สรุปก่อนบันทึก</h3>
+                <ul className="mt-3 space-y-2 text-sm text-slate-600">
+                  <li className="flex items-start gap-2"><span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400"></span><span>หากมีการแก้ไขข้อมูล จะต้องยืนยัน OTP ทุกครั้ง</span></li>
+                  <li className="flex items-start gap-2"><span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400"></span><span>ตรวจสอบเบอร์โทรศัพท์ให้ใช้งานได้จริง</span></li>
+                  <li className="flex items-start gap-2"><span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400"></span><span>ที่อยู่ควรถูกต้องเพื่อใช้จัดส่งสินค้า</span></li>
+                </ul>
 
-            <button type="submit" className="btn-primary w-full lg:w-auto" disabled={saving}>
-              {saving ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
-            </button>
-          </form>
-        )}
-      </div>
+                {errorMessage && <p className="mt-4 text-sm text-rose-600">{errorMessage}</p>}
+                {successMessage && <p className="mt-4 text-sm text-emerald-700">{successMessage}</p>}
+
+                <button type="submit" className="btn-primary mt-5 w-full py-3 text-base" disabled={saving}>
+                  {saving ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
+                </button>
+              </div>
+            </aside>
+          </div>
+        </form>
+      )}
     </main>
   )
 }

@@ -3,9 +3,11 @@
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import React, { useEffect, useMemo, useRef, useState } from "react"
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react"
 import Swal from "sweetalert2"
 import { createSellerAuction } from "@/app/lib/api/auction"
+import { UserContext } from "@/app/context/UserContext"
+import { notifyCreditChanged } from "@/app/lib/creditSync"
 
 const categories = [
     "โทรศัพท์มือถือ",
@@ -23,6 +25,7 @@ type AuctionImage = {
 
 export default function NewSellerAuctionPage() {
     const router = useRouter()
+    const { refreshSession } = useContext(UserContext)
     const maxImages = 5
     const maxFileSizeMB = 5
     const maxFileSizeBytes = maxFileSizeMB * 1024 * 1024
@@ -33,14 +36,30 @@ export default function NewSellerAuctionPage() {
     const [bidStep, setBidStep] = useState("50")
     const [endAt, setEndAt] = useState("")
     const [condition, setCondition] = useState("มือสอง สภาพดี")
+    const [allowEarlyClose, setAllowEarlyClose] = useState(false)
     const [description, setDescription] = useState("")
     const [images, setImages] = useState<AuctionImage[]>([])
     const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
     const [saving, setSaving] = useState(false)
     const imagesRef = useRef<AuctionImage[]>([])
+    const minEndAt = useMemo(() => {
+        const d = new Date(Date.now() + 60_000)
+        const yyyy = d.getFullYear()
+        const mm = String(d.getMonth() + 1).padStart(2, "0")
+        const dd = String(d.getDate()).padStart(2, "0")
+        const hh = String(d.getHours()).padStart(2, "0")
+        const mi = String(d.getMinutes()).padStart(2, "0")
+        return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
+    }, [])
 
     const canSubmit = useMemo(() => {
-        return title.trim() !== "" && Number(startPrice) > 0 && Number(bidStep) > 0 && endAt.trim() !== "" && images.length > 0
+        return (
+            title.trim() !== "" &&
+            Number(startPrice) >= 100 &&
+            Number(bidStep) > 0 &&
+            endAt.trim() !== "" &&
+            images.length > 0
+        )
     }, [title, startPrice, bidStep, endAt, images.length])
 
     useEffect(() => {
@@ -130,6 +149,23 @@ export default function NewSellerAuctionPage() {
             })
             return
         }
+        if (Number(startPrice) < 100) {
+            Swal.fire({
+                icon: "error",
+                title: "ราคาเริ่มต้นต้องไม่น้อยกว่า 100 บาท",
+                confirmButtonText: "ตกลง",
+            })
+            return
+        }
+        if (endAtDate.getTime() <= Date.now()) {
+            Swal.fire({
+                icon: "error",
+                title: "เวลาปิดต้องมากกว่าเวลาปัจจุบัน",
+                text: "กรุณาเลือกเวลาปิดประมูลใหม่",
+                confirmButtonText: "ตกลง",
+            })
+            return
+        }
 
         setSaving(true)
         createSellerAuction({
@@ -140,9 +176,12 @@ export default function NewSellerAuctionPage() {
             startPrice: Number(startPrice),
             bidStep: Number(bidStep),
             endAtISO: endAtDate.toISOString(),
+            allowEarlyClose,
             images: images.map((img) => img.file),
         })
             .then(async () => {
+                await refreshSession()
+                notifyCreditChanged()
                 await Swal.fire({
                 icon: "success",
                 title: "สร้างรายการประมูลสำเร็จ",
@@ -152,11 +191,12 @@ export default function NewSellerAuctionPage() {
                 router.push("/seller/auctions")
                 router.refresh()
             })
-            .catch(() => {
-                Swal.fire({
+            .catch((e) => {
+                const text = e instanceof Error ? e.message : "โปรดลองใหม่อีกครั้ง"
+                void Swal.fire({
                     icon: "error",
                     title: "ไม่สามารถสร้างรายการประมูลได้",
-                    text: "โปรดลองใหม่อีกครั้ง",
+                    text,
                     confirmButtonText: "ตกลง",
                 })
             })
@@ -299,7 +339,7 @@ export default function NewSellerAuctionPage() {
                             <label className="mb-1 block text-sm font-medium text-slate-700">ราคาเริ่มต้น (บาท)</label>
                             <input
                                 type="number"
-                                min={1}
+                                min={100}
                                 className="form-input"
                                 value={startPrice}
                                 onChange={(e) => setStartPrice(e.target.value)}
@@ -323,9 +363,28 @@ export default function NewSellerAuctionPage() {
                                 type="datetime-local"
                                 className="form-input"
                                 value={endAt}
+                                min={minEndAt}
                                 onChange={(e) => setEndAt(e.target.value)}
                             />
                         </div>
+                    </div>
+                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <label className="flex cursor-pointer items-start gap-3">
+                            <input
+                                type="checkbox"
+                                className="mt-1 h-4 w-4"
+                                checked={allowEarlyClose}
+                                onChange={(e) => setAllowEarlyClose(e.target.checked)}
+                            />
+                            <span className="text-sm text-amber-800">
+                                <span className="font-medium">อนุญาตปิดประมูลก่อนหมดเวลา</span>
+                                <span className="mt-1 block text-amber-900/90">กดปิดแล้วเวลาปิดทันที โดยแยกยอดชัดเจน:</span>
+                                <ul className="mt-1.5 list-inside list-disc space-y-0.5 pl-0.5 text-amber-900/95">
+                                    <li>มีผู้เสนอราคา — <strong>70%</strong> ของราคาล่าสุดเป็นส่วนแบ่งผู้ขาย · มัดจำโพสต์ (เท่าราคาเริ่มต้น) → คืน <strong>เครดิต</strong></li>
+                                    <li>ยังไม่มีผู้เสนอราคา — คืนเข้า <strong>เครดิต</strong>ตามยอดที่เกี่ยวข้องกับรายการ</li>
+                                </ul>
+                            </span>
+                        </label>
                     </div>
                 </section>
 

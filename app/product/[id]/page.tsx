@@ -3,10 +3,20 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { getAuctionDetail, getAuctionWebSocketURL, type AuctionDetail } from '@/app/lib/api/auction'
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  closeAuctionEarly,
+  confirmAuctionReceived,
+  getAuctionDetail,
+  getAuctionWebSocketURL,
+  markAuctionShipped,
+  reopenSellerAuction,
+  type AuctionDetail,
+} from '@/app/lib/api/auction'
 import { CORE_API_BASE_URL } from '@/app/lib/constants/common'
 import { UserContext } from '@/app/context/UserContext'
+import { notifyCreditChanged } from '@/app/lib/creditSync'
+import Swal from 'sweetalert2'
 
 type Props = {}
 
@@ -26,16 +36,41 @@ export default function Product({ }: Props) {
   const [activeImage, setActiveImage] = useState(0)
   const [bidAmount, setBidAmount] = useState(0)
   const [countdown, setCountdown] = useState('00:00:00')
+  /** False once clock passes auction.end_at — hide "ปิดประมูลก่อนหมดเวลา" before backend settles to closed. */
+  const [beforeScheduledEnd, setBeforeScheduledEnd] = useState(true)
   const [isWatching, setIsWatching] = useState(false)
+  const [isClosingEarly, setIsClosingEarly] = useState(false)
+  const [isReopening, setIsReopening] = useState(false)
+  const [isMarkingShipped, setIsMarkingShipped] = useState(false)
+  const [isConfirmingReceived, setIsConfirmingReceived] = useState(false)
   const [isBidSheetOpen, setIsBidSheetOpen] = useState(false)
   const [isPlacingBid, setIsPlacingBid] = useState(false)
   const [bidError, setBidError] = useState('')
   const [wsStatus, setWSStatus] = useState<'disconnected' | 'connected'>('disconnected')
   const wsRef = useRef<WebSocket | null>(null)
+  const placingBidRef = useRef(false)
+  const bidInFlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const setUserRef = useRef(setUser)
   const refreshSessionRef = useRef(refreshSession)
+  const userIdRef = useRef<string | undefined>(undefined)
+  /** Bumps when detail is updated locally so stale in-flight GETs from the load effect cannot overwrite state. */
+  const auctionDetailFetchGen = useRef(0)
+  /** After natural end time, single GET to pick up settled status without full page refresh. */
+  const scheduledEndFetchDoneRef = useRef(false)
   setUserRef.current = setUser
   refreshSessionRef.current = refreshSession
+  userIdRef.current = user?.userId
+
+  const clearBidInFlight = useCallback(() => {
+    if (bidInFlightTimerRef.current) {
+      clearTimeout(bidInFlightTimerRef.current)
+      bidInFlightTimerRef.current = null
+    }
+    placingBidRef.current = false
+    setIsPlacingBid(false)
+  }, [])
+  const clearBidInFlightRef = useRef(clearBidInFlight)
+  clearBidInFlightRef.current = clearBidInFlight
 
   const imageList = useMemo(() => {
     if (!auction) return [] as string[]
@@ -51,27 +86,67 @@ export default function Product({ }: Props) {
     return new Date(auction.end_at)
   }, [auction?.end_at])
 
+  const syncBeforeScheduledEndFromISO = useCallback((iso: string | undefined) => {
+    if (!iso) {
+      setBeforeScheduledEnd(true)
+      return
+    }
+    const ms = new Date(iso).getTime()
+    setBeforeScheduledEnd(Number.isFinite(ms) && Date.now() < ms)
+  }, [])
+
   const currentPrice = Number(auction?.current_bid ?? 0)
   const minIncrement = Number(auction?.bid_step ?? 100)
   const minRequiredBid = currentPrice + minIncrement
-  const hasEnoughCredit = Number(user?.credit ?? 0) >= minRequiredBid
+  const userCredit = Number(user?.credit ?? 0)
+  const hasEnoughCredit = userCredit >= minRequiredBid
+  const atMaxBidForCredit = bidAmount >= userCredit
   const isOwnAuction = Boolean(user?.userId && auction?.seller_id && user.userId === auction.seller_id)
-  const canBid = Boolean(user && !isOwnAuction && auction?.status === 'active' && hasEnoughCredit)
+  const canBid = Boolean(
+    user &&
+      !isOwnAuction &&
+      auction?.status === 'active' &&
+      hasEnoughCredit,
+  )
+  const showEarlyCloseButton =
+    !!auction &&
+    isOwnAuction &&
+    auction.allow_early_close &&
+    auction.status === 'active' &&
+    beforeScheduledEnd
+
+  const winnerId = String(auction?.winner_id ?? '').trim()
+  const isWinner = Boolean(user?.userId && winnerId && user.userId === winnerId)
+  const pendingSellerPayout = Boolean(auction?.pending_seller_payout)
+  const showFulfillmentCard =
+    !!auction && auction.status === 'closed' && winnerId !== ''
+  const showMarkShippedButton =
+    showFulfillmentCard && isOwnAuction && pendingSellerPayout && !auction?.seller_shipped_at
+  const showConfirmReceivedButton =
+    showFulfillmentCard && isWinner && pendingSellerPayout && auction?.seller_shipped_at && !auction?.buyer_received_at
+
+  const bumpBidAmount = useCallback((inc: number) => {
+    setBidAmount((prev) => Math.min(prev + inc, userCredit))
+  }, [userCredit])
 
   useEffect(() => {
     if (!auctionID) return
     let cancelled = false
+    const gen = ++auctionDetailFetchGen.current
     setLoading(true)
     setLoadError('')
 
     getAuctionDetail(auctionID)
       .then((data) => {
         if (cancelled) return
+        if (gen !== auctionDetailFetchGen.current) return
         setAuction(data)
         setBidAmount(Number(data.current_bid) + Number(data.bid_step))
+        syncBeforeScheduledEndFromISO(data.end_at)
       })
       .catch(() => {
         if (cancelled) return
+        if (gen !== auctionDetailFetchGen.current) return
         setLoadError('ไม่สามารถโหลดข้อมูลรายการประมูลได้')
       })
       .finally(() => {
@@ -83,21 +158,53 @@ export default function Product({ }: Props) {
     return () => {
       cancelled = true
     }
-  }, [auctionID])
+  }, [auctionID, syncBeforeScheduledEndFromISO])
+
+  useEffect(() => {
+    if (!auction || auction.status !== 'closed' || !isOwnAuction) return
+    void refreshSession()
+    notifyCreditChanged()
+  }, [auction?.auction_id, auction?.status, isOwnAuction, refreshSession])
 
   useEffect(() => {
     if (!auction?.end_at) return
-    const timer = window.setInterval(() => {
-      const now = new Date().getTime()
+    scheduledEndFetchDoneRef.current = false
+
+    const tick = () => {
+      const now = Date.now()
       const distance = Math.max(endAt.getTime() - now, 0)
       const hours = Math.floor(distance / (1000 * 60 * 60))
       const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60))
       const seconds = Math.floor((distance % (1000 * 60)) / 1000)
       setCountdown(`${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`)
-    }, 1000)
+      const within = distance > 0
+      setBeforeScheduledEnd(within)
 
+      if (
+        !within &&
+        auction.status === 'active' &&
+        auctionID &&
+        !scheduledEndFetchDoneRef.current
+      ) {
+        scheduledEndFetchDoneRef.current = true
+        const gen = auctionDetailFetchGen.current
+        void getAuctionDetail(auctionID)
+          .then((data) => {
+            if (gen !== auctionDetailFetchGen.current) return
+            setAuction(data)
+            setBidAmount(Number(data.current_bid) + Number(data.bid_step))
+            syncBeforeScheduledEndFromISO(data.end_at)
+          })
+          .catch(() => {
+            scheduledEndFetchDoneRef.current = false
+          })
+      }
+    }
+
+    tick()
+    const timer = window.setInterval(tick, 1000)
     return () => window.clearInterval(timer)
-  }, [auction?.end_at, endAt])
+  }, [auction?.end_at, auction?.status, auctionID, endAt, syncBeforeScheduledEndFromISO])
 
   useEffect(() => {
     if (activeImage >= imageList.length) {
@@ -115,7 +222,13 @@ export default function Product({ }: Props) {
     wsRef.current = ws
 
     ws.onopen = () => setWSStatus('connected')
-    ws.onclose = () => setWSStatus('disconnected')
+    ws.onclose = () => {
+      setWSStatus('disconnected')
+      if (placingBidRef.current) {
+        clearBidInFlightRef.current()
+        setBidError('การเชื่อมต่อแบบเรียลไทม์ขาดหาย กรุณารีเฟรชหน้าหรือลองใหม่')
+      }
+    }
     ws.onerror = () => setWSStatus('disconnected')
     ws.onmessage = (event) => {
       try {
@@ -127,10 +240,34 @@ export default function Product({ }: Props) {
           total_bids?: number
           remaining_credit?: number
           message?: string
+          status?: string
+          end_at?: string
+          reopen_eligible?: boolean
+          allow_early_close?: boolean
+        }
+        if (payload.type === 'auction_state') {
+          auctionDetailFetchGen.current += 1
+          setAuction((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              status: typeof payload.status === 'string' ? payload.status : prev.status,
+              end_at: typeof payload.end_at === 'string' ? payload.end_at : prev.end_at,
+              current_bid: typeof payload.current_bid === 'number' ? payload.current_bid : prev.current_bid,
+              total_bids: typeof payload.total_bids === 'number' ? payload.total_bids : prev.total_bids,
+              reopen_eligible:
+                typeof payload.reopen_eligible === 'boolean' ? payload.reopen_eligible : prev.reopen_eligible,
+              allow_early_close:
+                typeof payload.allow_early_close === 'boolean' ? payload.allow_early_close : prev.allow_early_close,
+            }
+          })
+          setBidError('')
+          clearBidInFlightRef.current()
+          return
         }
         if (payload.type === 'error') {
           setBidError(payload.message || 'ไม่สามารถเสนอราคาได้')
-          setIsPlacingBid(false)
+          clearBidInFlightRef.current()
           return
         }
         if (payload.type === 'bid_ack') {
@@ -140,9 +277,11 @@ export default function Product({ }: Props) {
               return { ...prev, credit: Number(payload.remaining_credit) }
             })
           }
+          setHasHeldBidOnThisAuction(true)
           void refreshSessionRef.current()
+          notifyCreditChanged()
           setIsBidSheetOpen(false)
-          setIsPlacingBid(false)
+          clearBidInFlightRef.current()
           return
         }
         if (payload.type === 'bid_update') {
@@ -165,6 +304,10 @@ export default function Product({ }: Props) {
               ...prev.slice(0, 19),
             ])
           }
+          if (bidderID && userIdRef.current && bidderID === userIdRef.current) {
+            void refreshSessionRef.current()
+            notifyCreditChanged()
+          }
           setBidError('')
         }
       } catch {
@@ -173,6 +316,7 @@ export default function Product({ }: Props) {
     }
 
     return () => {
+      clearBidInFlightRef.current()
       wsRef.current = null
       ws.close()
     }
@@ -194,14 +338,187 @@ export default function Product({ }: Props) {
       setBidError(`ราคาต้องไม่น้อยกว่า ${minRequiredBid.toLocaleString()} ฿`)
       return
     }
+    if (amount > userCredit) {
+      setBidError(`ราคาที่เสนอต้องไม่เกินเครดิตของคุณ (${userCredit.toLocaleString()} ฿)`)
+      return
+    }
     const ws = wsRef.current
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       setBidError('ยังไม่เชื่อมต่อแบบเรียลไทม์ กรุณารอสักครู่หรือรีเฟรชหน้า')
       return
     }
+    if (placingBidRef.current) return
+    placingBidRef.current = true
     setIsPlacingBid(true)
     setBidError('')
+    if (bidInFlightTimerRef.current) clearTimeout(bidInFlightTimerRef.current)
+    bidInFlightTimerRef.current = setTimeout(() => {
+      bidInFlightTimerRef.current = null
+      if (!placingBidRef.current) return
+      placingBidRef.current = false
+      setIsPlacingBid(false)
+      setBidError('ไม่ได้รับยืนยันจากเซิร์ฟเวอร์ในเวลาที่กำหนด กรุณาลองใหม่')
+    }, 12_000)
     ws.send(JSON.stringify({ type: 'bid', amount }))
+  }
+
+  const toDatetimeLocalValue = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  const handleReopenAuction = async () => {
+    if (!auctionID || !isOwnAuction || !auction?.reopen_eligible || isReopening) return
+    const min = new Date(Date.now() + 60 * 60 * 1000)
+    const def = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    const result = await Swal.fire({
+      title: 'เปิดประมูลใหม่อีกครั้ง',
+      html: `<div class="swal-reopen-body">
+<p class="swal-reopen-desc">กำหนดเวลาปิดรอบใหม่ ระบบจะหักมัดจำเท่า<strong>ราคาเริ่มต้น</strong> (${Number(auction.start_price).toLocaleString()} ฿) จากเครดิต เหมือนตอนโพสต์ครั้งแรก</p>
+<label class="swal-reopen-label" for="swal-reopen-end">เวลาปิดประมูล</label>
+<input id="swal-reopen-end" type="datetime-local" class="swal-reopen-datetime" min="${toDatetimeLocalValue(min)}" value="${toDatetimeLocalValue(def)}" />
+</div>`,
+      showCancelButton: true,
+      confirmButtonText: 'เปิดประมูล',
+      cancelButtonText: 'ยกเลิก',
+      reverseButtons: true,
+      focusConfirm: false,
+      customClass: {
+        popup: 'swal-reopen-auction-popup',
+      },
+      preConfirm: () => {
+        const el = document.getElementById('swal-reopen-end') as HTMLInputElement | null
+        if (!el?.value) {
+          Swal.showValidationMessage('กรุณาเลือกวันเวลาปิดประมูล')
+          return false
+        }
+        const t = new Date(el.value)
+        if (Number.isNaN(t.getTime()) || t.getTime() <= Date.now()) {
+          Swal.showValidationMessage('เวลาปิดต้องอยู่ในอนาคต')
+          return false
+        }
+        return el.value
+      },
+    })
+    if (!result.isConfirmed || !result.value || typeof result.value !== 'string') return
+    const endAtISO = new Date(result.value).toISOString()
+    setIsReopening(true)
+    setBidError('')
+    try {
+      await reopenSellerAuction(auctionID, endAtISO)
+      auctionDetailFetchGen.current += 1
+      const updated = await getAuctionDetail(auctionID)
+      setAuction(updated)
+      setBidAmount(Number(updated.current_bid) + Number(updated.bid_step))
+      syncBeforeScheduledEndFromISO(updated.end_at)
+      notifyCreditChanged()
+      await refreshSessionRef.current?.()
+      void Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'เปิดประมูลใหม่แล้ว', showConfirmButton: false, timer: 2000 })
+    } catch (e) {
+      setBidError(e instanceof Error ? e.message : 'ไม่สามารถเปิดประมูลใหม่ได้')
+    } finally {
+      setIsReopening(false)
+    }
+  }
+
+  const handleMarkShipped = async () => {
+    if (!auctionID || !showMarkShippedButton || isMarkingShipped) return
+    const result = await Swal.fire({
+      title: 'บันทึกการจัดส่ง?',
+      text: 'ยืนยันว่าคุณส่งสินค้าให้ผู้ชนะแล้ว — ผู้ซื้อจะกดยืนยันรับของเมื่อได้รับ',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'ยืนยัน',
+      cancelButtonText: 'ยกเลิก',
+    })
+    if (!result.isConfirmed) return
+    setIsMarkingShipped(true)
+    setBidError('')
+    try {
+      await markAuctionShipped(auctionID)
+      auctionDetailFetchGen.current += 1
+      const updated = await getAuctionDetail(auctionID)
+      setAuction(updated)
+      setBidAmount(Number(updated.current_bid) + Number(updated.bid_step))
+      syncBeforeScheduledEndFromISO(updated.end_at)
+      void Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'บันทึกจัดส่งแล้ว', showConfirmButton: false, timer: 2200 })
+    } catch (e) {
+      void Swal.fire({ icon: 'error', title: e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ' })
+    } finally {
+      setIsMarkingShipped(false)
+    }
+  }
+
+  const handleConfirmReceived = async () => {
+    if (!auctionID || !showConfirmReceivedButton || isConfirmingReceived) return
+    const result = await Swal.fire({
+      title: 'ยืนยันรับสินค้า?',
+      text: 'ระบบจะโอนเครดิตให้ผู้ขายหลังยืนยัน — ตรวจสอบว่าได้รับสินค้าตรงตามที่ประมูลแล้ว',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'ได้รับสินค้าแล้ว',
+      cancelButtonText: 'ยกเลิก',
+    })
+    if (!result.isConfirmed) return
+    setIsConfirmingReceived(true)
+    setBidError('')
+    try {
+      await confirmAuctionReceived(auctionID)
+      notifyCreditChanged()
+      auctionDetailFetchGen.current += 1
+      const updated = await getAuctionDetail(auctionID)
+      setAuction(updated)
+      setBidAmount(Number(updated.current_bid) + Number(updated.bid_step))
+      syncBeforeScheduledEndFromISO(updated.end_at)
+      await refreshSessionRef.current?.()
+      void Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ยืนยันรับของแล้ว', showConfirmButton: false, timer: 2200 })
+    } catch (e) {
+      void Swal.fire({ icon: 'error', title: e instanceof Error ? e.message : 'ยืนยันไม่สำเร็จ' })
+    } finally {
+      setIsConfirmingReceived(false)
+    }
+  }
+
+  const handleCloseEarly = async () => {
+    if (!auctionID || !isOwnAuction || !auction?.allow_early_close || auction.status !== 'active' || isClosingEarly || !beforeScheduledEnd) return
+    const start = Number(auction.start_price ?? 0)
+    const last = Number(auction.current_bid ?? 0)
+    const hasBid = Number(auction.total_bids ?? 0) > 0
+    const earningEst = hasBid ? Math.floor((last * 70) / 100) : 0
+    const creditRefundEst = hasBid ? start : Math.max(last, start)
+    const fmt = (n: number) => n.toLocaleString('th-TH')
+    const detailHtml = hasBid
+      ? `<p class="swal2-early-close-detail text-left text-sm text-slate-600">เมื่อปิดแล้ว ระบบแยกยอดแบบนี้ (จากรายการนี้)</p>
+<ul class="swal2-early-close-list mt-2 list-inside list-disc space-y-1 text-left text-sm text-slate-800">
+<li><strong>ส่วนแบ่งผู้ขาย</strong> ≈ <strong>${fmt(earningEst)} ฿</strong> (70% ของราคาล่าสุด ${fmt(last)} ฿)</li>
+<li><strong>เครดิต</strong> คืนมัดจำโพสต์ ≈ <strong>${fmt(creditRefundEst)} ฿</strong> (ราคาเริ่มต้นที่หักตอนโพสต์)</li>
+</ul>
+<p class="mt-2 text-left text-xs text-slate-500">30% ที่เหลือเป็นค่าธรรมเนียม/ส่วนแบ่งแพลตฟอร์ม</p>`
+      : `<p class="text-left text-sm text-slate-600">ยังไม่มีผู้เสนอราคา — ระบบจะคืนเข้า<strong>เครดิต</strong>ประมาณ <strong>${fmt(creditRefundEst)} ฿</strong> (ตามราคาที่แสดงในรายการ)</p>`
+    const result = await Swal.fire({
+      title: 'ปิดประมูลก่อนหมดเวลา?',
+      html: `${detailHtml}<p class="mt-3 text-left text-xs text-slate-500">ตัวเลขอาจเปลี่ยนหากมีการบิดช่วงวินาทีสุดท้าย — ยืนยันหรือไม่</p>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'ปิดประมูล',
+      cancelButtonText: 'ยกเลิก',
+      focusCancel: true,
+    })
+    if (!result.isConfirmed) return
+    setIsClosingEarly(true)
+    try {
+      await closeAuctionEarly(auctionID)
+      auctionDetailFetchGen.current += 1
+      const updated = await getAuctionDetail(auctionID)
+      setAuction(updated)
+      setBidAmount(Number(updated.current_bid) + Number(updated.bid_step))
+      syncBeforeScheduledEndFromISO(updated.end_at)
+      setBidError('')
+    } catch {
+      setBidError('ไม่สามารถปิดประมูลก่อนหมดเวลาได้ กรุณาลองใหม่')
+    } finally {
+      setIsClosingEarly(false)
+    }
   }
 
   if (loading) {
@@ -271,6 +588,76 @@ export default function Product({ }: Props) {
                   </span>
                 )}
               </div>
+              {isOwnAuction && auction.reopen_eligible && (
+                <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
+                  <p className="text-sky-900">รายการปิดแล้วและยังไม่มีผู้เสนอราคา — คุณสามารถเปิดประมูลรอบใหม่ได้ (ระบบจะหักมัดจำเท่าราคาเริ่มต้นจากเครดิต)</p>
+                  <button
+                    type="button"
+                    className="mt-2 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    disabled={isReopening}
+                    onClick={handleReopenAuction}
+                  >
+                    {isReopening ? 'กำลังดำเนินการ...' : 'เปิดประมูลใหม่อีกครั้ง'}
+                  </button>
+                </div>
+              )}
+
+              {showFulfillmentCard && (isOwnAuction || isWinner) && (
+                <div className="mt-3 rounded-lg border border-teal-200 bg-teal-50/90 p-4 text-sm text-teal-950">
+                  <h3 className="font-semibold text-teal-900">การจัดส่งหลังปิดประมูล</h3>
+                  <p className="mt-1 text-xs text-teal-800/90">
+                    เครดิตจะโอนให้ผู้ขายเมื่อผู้ชนะกดยืนยันรับสินค้า หรือเมื่อครบกำหนดปลดอัตโนมัติหลังบันทึกจัดส่ง (ถ้าระบบเปิดใช้)
+                  </p>
+                  {pendingSellerPayout && auction.seller_shipped_at && auction.escrow_auto_confirm_at && (
+                    <p className="mt-2 rounded-md border border-amber-200/80 bg-amber-50/90 px-2 py-1.5 text-xs text-amber-950">
+                      หากไม่กดยืนยันรับของ ระบบจะโอนให้ผู้ขายอัตโนมัติภายใน {auction.escrow_auto_confirm_days ?? '—'} วัน
+                      นับจากวันที่บันทึกจัดส่ง (ประมาณ{' '}
+                      {new Date(auction.escrow_auto_confirm_at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })})
+                    </p>
+                  )}
+                  {pendingSellerPayout && isOwnAuction && (
+                    <p className="mt-2 text-xs text-teal-900">
+                      {auction.seller_shipped_at
+                        ? `บันทึกจัดส่งแล้ว — รอผู้ซื้อยืนยันรับของ (${new Date(auction.seller_shipped_at).toLocaleString('th-TH')})`
+                        : 'รอคุณบันทึกว่าจัดส่งสินค้าแล้ว'}
+                    </p>
+                  )}
+                  {pendingSellerPayout && isWinner && (
+                    <p className="mt-2 text-xs text-teal-900">
+                      {!auction.seller_shipped_at
+                        ? 'รอผู้ขายบันทึกการจัดส่ง'
+                        : 'ผู้ขายจัดส่งแล้ว — กรุณายืนยันเมื่อได้รับสินค้า'}
+                    </p>
+                  )}
+                  {!pendingSellerPayout && winnerId && (
+                    <p className="mt-2 text-xs font-medium text-teal-900">
+                      {auction.buyer_received_at
+                        ? `เสร็จสิ้น — ยืนยันรับของแล้ว (${new Date(auction.buyer_received_at).toLocaleString('th-TH')})`
+                        : 'การโอนเงินให้ผู้ขายเสร็จแล้ว'}
+                    </p>
+                  )}
+                  {showMarkShippedButton && (
+                    <button
+                      type="button"
+                      className="mt-3 w-full rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                      disabled={isMarkingShipped}
+                      onClick={() => void handleMarkShipped()}
+                    >
+                      {isMarkingShipped ? 'กำลังบันทึก...' : 'บันทึกว่าจัดส่งแล้ว'}
+                    </button>
+                  )}
+                  {showConfirmReceivedButton && (
+                    <button
+                      type="button"
+                      className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                      disabled={isConfirmingReceived}
+                      onClick={() => void handleConfirmReceived()}
+                    >
+                      {isConfirmingReceived ? 'กำลังยืนยัน...' : 'ยืนยันว่าได้รับสินค้าแล้ว'}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <section className="rounded-xl border border-slate-200 bg-white p-4 lg:hidden">
@@ -290,8 +677,9 @@ export default function Product({ }: Props) {
                   <button
                     key={`mobile-inc-${inc}`}
                     type="button"
-                    className="rounded-md border border-slate-300 px-2 py-2 text-xs text-slate-700 active:scale-[0.98]"
-                    onClick={() => setBidAmount(minRequiredBid + (inc - minIncrement))}
+                    className="rounded-md border border-slate-300 px-2 py-2 text-xs text-slate-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => bumpBidAmount(inc)}
+                    disabled={!canBid || atMaxBidForCredit}
                   >
                     +{inc.toLocaleString()}
                   </button>
@@ -308,6 +696,26 @@ export default function Product({ }: Props) {
               >
                 {isOwnAuction ? 'สินค้าของคุณเอง ไม่สามารถประมูลได้' : !user ? 'กรุณาเข้าสู่ระบบเพื่อประมูล' : !hasEnoughCredit ? 'เครดิตไม่พอ' : `บิดทันที ${bidAmount.toLocaleString()} ฿`}
               </button>
+              {showEarlyCloseButton && (
+                <button
+                  type="button"
+                  className="mt-2 w-full rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isClosingEarly}
+                  onClick={handleCloseEarly}
+                >
+                  {isClosingEarly ? 'กำลังปิดประมูล...' : 'ปิดประมูลก่อนหมดเวลา'}
+                </button>
+              )}
+              {isOwnAuction && auction.reopen_eligible && (
+                <button
+                  type="button"
+                  className="mt-2 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isReopening}
+                  onClick={handleReopenAuction}
+                >
+                  {isReopening ? 'กำลังดำเนินการ...' : 'เปิดประมูลใหม่อีกครั้ง'}
+                </button>
+              )}
               {bidError && <p className="mt-2 text-xs text-rose-600">{bidError}</p>}
             </section>
 
@@ -377,6 +785,26 @@ export default function Product({ }: Props) {
                   รายการนี้เป็นสินค้าของคุณเอง จึงไม่สามารถเสนอราคาได้
                 </p>
               )}
+              {showEarlyCloseButton && (
+                <button
+                  type="button"
+                  className="mt-3 w-full rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isClosingEarly}
+                  onClick={handleCloseEarly}
+                >
+                  {isClosingEarly ? 'กำลังปิดประมูล...' : 'ปิดประมูลก่อนหมดเวลา'}
+                </button>
+              )}
+              {isOwnAuction && auction.reopen_eligible && (
+                <button
+                  type="button"
+                  className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isReopening}
+                  onClick={handleReopenAuction}
+                >
+                  {isReopening ? 'กำลังดำเนินการ...' : 'เปิดประมูลใหม่อีกครั้ง'}
+                </button>
+              )}
 
               <div className="mt-4 space-y-2">
                 <label className="text-sm text-slate-600">ราคาที่ต้องการเสนอ</label>
@@ -400,9 +828,9 @@ export default function Product({ }: Props) {
                   <button
                     key={inc}
                     type="button"
-                    className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
-                    onClick={() => setBidAmount(currentPrice + inc)}
-                    disabled={!canBid}
+                    className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => bumpBidAmount(inc)}
+                    disabled={!canBid || atMaxBidForCredit}
                   >
                     +{inc.toLocaleString()}
                   </button>
@@ -494,9 +922,9 @@ export default function Product({ }: Props) {
                 <button
                   key={`sheet-inc-${inc}`}
                   type="button"
-                  className="rounded-md border border-slate-300 px-2 py-2 text-xs text-slate-700 active:scale-[0.98]"
-                  onClick={() => setBidAmount(minRequiredBid + (inc - minIncrement))}
-                  disabled={!canBid}
+                  className="rounded-md border border-slate-300 px-2 py-2 text-xs text-slate-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => bumpBidAmount(inc)}
+                  disabled={!canBid || atMaxBidForCredit}
                 >
                   +{inc.toLocaleString()}
                 </button>

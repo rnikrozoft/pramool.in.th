@@ -11,39 +11,58 @@ export type PromptPayTopupResponse = {
 export const createPromptPayTopup = async (amount: number): Promise<PromptPayTopupResponse> => {
     const response = await callPostAPI("/wallet/topup", { amount }, true, WALLET_API_BASE_URL);
     if (!response.ok) {
-        throw new Error("Failed to create PromptPay topup");
+        let msg = "สร้าง QR เติมเงินไม่สำเร็จ";
+        try {
+            const data = (await response.json()) as { message?: string };
+            if (data?.message) msg = data.message;
+        } catch {
+            /* ignore */
+        }
+        throw new Error(msg);
     }
     return await response.json();
 };
 
-export type TopupTransaction = {
-    charge_id: string;
-    amount: number;
-    status: string;
-    paid: boolean;
-    credited: boolean;
+/** One row from GET /wallet/transactions (PromptPay + auction credit ledger). */
+export type CreditActivityItem = {
+    entry_type: string;
     created_at: string;
-    updated_at: string;
+    updated_at?: string;
+    /** Omise Charge ID (เช่น chrg_...) — ใช้ตรวจใน Omise Dashboard / แจ้งซัพพอร์ต */
+    charge_id?: string;
+    topup_amount?: number;
+    status?: string;
+    paid?: boolean;
+    credited?: boolean;
+    bid_tx_id?: number;
+    auction_id?: string;
+    auction_title?: string;
+    ledger_amount?: number;
+    bid_amount?: number;
+    note?: string;
 };
 
-export type TopupStatusFilter = "all" | "successful" | "pending" | "failed";
+export type ActivityFilter = "all" | "topup" | "auction";
 
-export type TopupHistoryResponse = {
-    items: TopupTransaction[];
+export type CreditActivityResponse = {
+    items: CreditActivityItem[];
     total: number;
     limit: number;
     offset: number;
 };
 
-export const getTopupTransactions = async (
+export const getCreditActivity = async (
     limit: number,
     offset: number,
-    status: TopupStatusFilter = "all",
-): Promise<TopupHistoryResponse> => {
-    const statusQuery = status !== "all" ? `&status=${encodeURIComponent(status)}` : "";
-    const response = await callGetAPI(`/wallet/transactions?limit=${limit}&offset=${offset}${statusQuery}`, true, WALLET_API_BASE_URL);
+    filter: ActivityFilter = "all",
+): Promise<CreditActivityResponse> => {
+    const response = await callGetAPI(
+        `/wallet/transactions?limit=${limit}&offset=${offset}&filter=${encodeURIComponent(filter)}`,
+        true,
+        WALLET_API_BASE_URL,
+    );
     if (!response.ok) {
-        throw new Error("Failed to fetch topup transactions");
+        throw new Error("Failed to fetch credit activity");
     }
     const data = await response.json();
     return {

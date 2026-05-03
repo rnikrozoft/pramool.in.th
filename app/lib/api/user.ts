@@ -17,7 +17,17 @@ export type UserProfile = {
     province: string;
     zip_code: string;
     facebook: string;
+    bank_id: number;
+    bank_account_name: string;
+    bank_account_number: string;
     credit: number;
+};
+
+export type BankOption = {
+    bank_id: number;
+    bank_code: string;
+    name_th: string;
+    name_en: string;
 };
 
 export const isTelAlreadyUsed = async (tel: string): Promise<boolean> => {
@@ -55,6 +65,14 @@ export const getMyOnboardingStatus = async (): Promise<{ is_first_registration: 
     return await response.json();
 };
 
+export const getBanks = async (): Promise<BankOption[]> => {
+    const response = await callGetAPI("/banks", false, USER_API_BASE_URL);
+    if (!response.ok) {
+        throw new Error("Failed to fetch banks");
+    }
+    return await response.json();
+};
+
 export const updateMyProfile = async (payload: {
     tel: string;
     first_name: string;
@@ -68,6 +86,9 @@ export const updateMyProfile = async (payload: {
     province: string;
     zip_code: string;
     facebook: string;
+    bank_id: number;
+    bank_account_name: string;
+    bank_account_number: string;
 }): Promise<UserProfile> => {
     const response = await callPutAPI("/users/profile", payload, true, USER_API_BASE_URL);
     if (!response.ok) {

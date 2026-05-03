@@ -32,7 +32,7 @@ const footerMenus = [
 
 export default function Footer() {
   return (
-    <div className="mt-12 border-t border-slate-200 bg-slate-50">
+    <div className="relative z-0 mt-12 border-t border-slate-200 bg-slate-50">
       <footer className="mx-auto max-w-7xl px-4 py-10">
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
           {footerMenus.map((section) => (

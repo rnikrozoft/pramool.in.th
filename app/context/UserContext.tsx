@@ -1,6 +1,7 @@
 "use client"
 
-import React, { createContext, useState, useEffect, ReactNode } from "react"
+import React, { createContext, useState, useEffect, useCallback, ReactNode } from "react"
+import { onCreditChangedFromOtherTab } from "../lib/creditSync"
 import { callGetAPI } from "../lib/utils/call-api"
 
 interface User {
@@ -8,6 +9,9 @@ interface User {
     firstName: string
     lastName: string
     credit: number
+    /** จาก GET /users — ใช้เมื่อมีฟีเจอร์ถอนเงิน */
+    withdrawalBlocked?: boolean
+    withdrawalBlockReason?: string
 }
 
 interface UserContextType {
@@ -28,7 +32,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null)
     const [loading, setLoading] = useState(true)
 
-    async function refreshSession() {
+    const refreshSession = useCallback(async () => {
         try {
             const res = await callGetAPI("/users", true)
             if (res.ok) {
@@ -38,6 +42,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
                     firstName: data.first_name,
                     lastName: data.last_name,
                     credit: Number(data.credit ?? 0),
+                    withdrawalBlocked: Boolean(data.withdrawal_blocked),
+                    withdrawalBlockReason: typeof data.withdrawal_block_reason === "string" ? data.withdrawal_block_reason : undefined,
                 };
                 setUser(user);
             } else {
@@ -48,11 +54,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
 
     useEffect(() => {
-        refreshSession()
-    }, [])
+        void refreshSession()
+    }, [refreshSession])
+
+    useEffect(() => {
+        return onCreditChangedFromOtherTab(() => {
+            void refreshSession()
+        })
+    }, [refreshSession])
 
     return (
         <UserContext.Provider value={{ user, setUser, loading, refreshSession }}>

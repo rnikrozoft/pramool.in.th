@@ -32,3 +32,138 @@
     @apply inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100;
   }
 }
+
+@keyframes swal2-toast-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes swal2-toast-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.swal2-toast-fade-in {
+  animation: swal2-toast-fade-in 140ms ease-out both !important;
+}
+
+.swal2-toast-fade-out {
+  animation: swal2-toast-fade-out 140ms ease-in both !important;
+}
+
+/* Reopen auction modal — align widths, spacing, native datetime input */
+.swal2-popup.swal-reopen-auction-popup {
+  width: min(calc(100vw - 2rem), 26rem) !important;
+  padding: 1.25rem 1.25rem 1rem !important;
+  border-radius: 0.75rem !important;
+}
+
+.swal-reopen-auction-popup .swal2-title {
+  margin: 0 0 0.25rem 0 !important;
+  padding: 0 !important;
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+  color: rgb(15 23 42) !important;
+  line-height: 1.35 !important;
+}
+
+.swal-reopen-auction-popup .swal2-html-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  text-align: left !important;
+}
+
+.swal-reopen-auction-popup .swal-reopen-body {
+  width: 100%;
+  text-align: left;
+}
+
+.swal-reopen-auction-popup .swal-reopen-desc {
+  margin: 0 0 1rem 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: rgb(71 85 105);
+}
+
+.swal-reopen-auction-popup .swal-reopen-label {
+  display: block;
+  margin: 0 0 0.375rem 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: rgb(100 116 139);
+}
+
+.swal-reopen-auction-popup .swal-reopen-datetime {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25;
+  color: rgb(15 23 42);
+  background: rgb(255 255 255);
+  border: 1px solid rgb(203 213 225);
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.swal-reopen-auction-popup .swal-reopen-datetime:focus {
+  outline: none;
+  border-color: rgb(59 130 246);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.2);
+}
+
+.swal-reopen-auction-popup .swal2-actions {
+  width: 100% !important;
+  margin: 1.25rem 0 0 0 !important;
+  padding: 0 !important;
+  gap: 0.5rem !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  justify-content: stretch !important;
+}
+
+.swal-reopen-auction-popup .swal2-styled {
+  flex: 1 1 0 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0.65rem 1rem !important;
+  border-radius: 0.5rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.swal-reopen-auction-popup .swal2-confirm {
+  background: rgb(5 150 105) !important;
+  color: #fff !important;
+}
+
+.swal-reopen-auction-popup .swal2-confirm:focus {
+  box-shadow: 0 0 0 3px rgb(5 150 105 / 0.35) !important;
+}
+
+.swal-reopen-auction-popup .swal2-cancel {
+  background: rgb(255 255 255) !important;
+  color: rgb(51 65 85) !important;
+  border: 1px solid rgb(203 213 225) !important;
+}
+
+.swal-reopen-auction-popup .swal2-validation-message {
+  margin-top: 0.75rem !important;
+  font-size: 0.8125rem !important;
+}

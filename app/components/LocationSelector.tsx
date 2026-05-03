@@ -222,3 +222,25 @@ export function SubDistrictSelect({
         />
     )
 }
+
+export function BankSelect({
+    banks,
+    value,
+    onChange,
+    disabled,
+}: {
+    banks: Array<{ bank_id: number; name_th: string }>
+    value: number | null
+    onChange: (value: number | null) => void
+    disabled?: boolean
+}) {
+    return (
+        <SearchableSelect
+            options={banks.map((bank) => ({ id: bank.bank_id, label: bank.name_th }))}
+            value={value}
+            onChange={onChange}
+            placeholder="-- เลือกธนาคาร --"
+            disabled={disabled || banks.length === 0}
+        />
+    )
+}

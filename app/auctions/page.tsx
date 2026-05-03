@@ -1,93 +1,375 @@
 "use client"
 
 import Link from "next/link"
-import React, { useEffect, useMemo, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import React, { memo, Suspense, useCallback, useEffect, useMemo, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import {
+  listPublicAuctions,
+  type AuctionListSort,
+  type PublicAuctionListItem,
+} from "@/app/lib/api/auction"
+import { CORE_API_BASE_URL } from "@/app/lib/constants/common"
 
-type AuctionListItem = {
-  id: string
-  title: string
-  category: string
-  image: string
-  currentBid: number
-  bidStep: number
-  endAt: string
+type SortOption = AuctionListSort
+
+const SORT_VALUES: SortOption[] = [
+  "most_bids",
+  "most_bidders",
+  "newest",
+  "avg_price_asc",
+  "ending_soon",
+  "price_asc",
+  "price_desc",
+]
+
+function parseSortParam(v: string | null): SortOption {
+  if (!v) return "newest"
+  return SORT_VALUES.includes(v as SortOption) ? (v as SortOption) : "newest"
 }
-
-type SortOption = "newest" | "price_asc" | "price_desc" | "ending_soon"
 
 const categories = ["ทั้งหมด", "เครื่องใช้ไฟฟ้า", "โทรศัพท์มือถือ", "แท็บเล็ต", "คอมพิวเตอร์", "กล้องถ่ายรูป", "แฟชั่น", "ของสะสม", "อื่นๆ"]
 
-const mockAuctions: AuctionListItem[] = [
-  { id: "AUC-20260429-001", title: "iPhone 16 Pro Max 256GB", category: "โทรศัพท์มือถือ", image: "https://placehold.co/600x400?text=iPhone", currentBid: 38200, bidStep: 100, endAt: "2026-04-30T18:00:00+07:00" },
-  { id: "AUC-20260429-002", title: "Sony A7 IV + Lens Kit", category: "กล้องถ่ายรูป", image: "https://placehold.co/600x400?text=Camera", currentBid: 50300, bidStep: 200, endAt: "2026-04-30T20:30:00+07:00" },
-  { id: "AUC-20260429-003", title: "MacBook Pro M3 14-inch", category: "คอมพิวเตอร์", image: "https://placehold.co/600x400?text=MacBook", currentBid: 54100, bidStep: 500, endAt: "2026-05-01T11:00:00+07:00" },
-  { id: "AUC-20260429-004", title: "Nintendo Switch OLED", category: "เครื่องใช้ไฟฟ้า", image: "https://placehold.co/600x400?text=Switch", currentBid: 9700, bidStep: 100, endAt: "2026-04-30T22:00:00+07:00" },
-  { id: "AUC-20260429-005", title: "Rolex Datejust (มือสอง)", category: "ของสะสม", image: "https://placehold.co/600x400?text=Watch", currentBid: 145000, bidStep: 1000, endAt: "2026-05-01T09:30:00+07:00" },
-]
+/** ดึงซ้ำเบาๆ — ลดโหลด backend + หยุดเมื่อแท็บซ่อน */
+const POLL_MS = 90_000
+/** รวมคีย์พิมพ์/ตัวเลขเป็นคำขอเดียว — ลดจำนวน API ระหว่างพิมพ์ */
+const FILTER_DEBOUNCE_MS = 450
 
-export default function AuctionsPage() {
+function coverImageUrl(path: string | undefined): string {
+  const u = path?.trim() ?? ""
+  if (!u) return "https://placehold.co/600x400?text=Pramool"
+  if (u.startsWith("http://") || u.startsWith("https://")) return u
+  return `${CORE_API_BASE_URL}${u.startsWith("/") ? "" : "/"}${u}`
+}
+
+function formatCountdown(endMs: number): string {
+  const now = Date.now()
+  if (!Number.isFinite(endMs) || endMs <= now) return "ปิดแล้ว"
+  let sec = Math.floor((endMs - now) / 1000)
+  const days = Math.floor(sec / 86400)
+  sec %= 86400
+  const hours = Math.floor(sec / 3600)
+  sec %= 3600
+  const minutes = Math.floor(sec / 60)
+  const seconds = sec % 60
+  if (days > 0) return `เหลือ ${days} วัน ${hours} ชม. ${minutes} นาที`
+  if (hours > 0) return `เหลือ ${hours} ชม. ${minutes} นาที ${seconds} วินาที`
+  if (minutes > 0) return `เหลือ ${minutes} นาที ${seconds} วินาที`
+  return `เหลือ ${seconds} วินาที`
+}
+
+type AppliedTextFilters = {
+  keyword: string
+  minPrice: string
+  maxPrice: string
+  minStartPrice: string
+  maxStartPrice: string
+  minBidStep: string
+  maxBidStep: string
+  endFrom: string
+  endTo: string
+}
+
+function AuctionEndCountdown({ endAt }: { endAt: string }) {
+  const endMs = useMemo(() => new Date(endAt).getTime(), [endAt])
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick((x) => x + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+  const line = formatCountdown(endMs)
+  const absolute = useMemo(() => {
+    try {
+      return new Date(endAt).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "medium" })
+    } catch {
+      return endAt
+    }
+  }, [endAt])
+  return (
+    <div className="space-y-0.5">
+      <p className="font-medium text-amber-800 tabular-nums">{line}</p>
+      <p className="text-[11px] text-slate-400">ปิด {absolute}</p>
+    </div>
+  )
+}
+
+const AuctionCard = memo(function AuctionCard({
+  item,
+  imageLoading,
+}: {
+  item: PublicAuctionListItem
+  imageLoading: "eager" | "lazy"
+}) {
+  return (
+    <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <img
+        src={coverImageUrl(item.cover_image_url)}
+        alt={item.title}
+        className="h-40 w-full object-cover"
+        loading={imageLoading}
+        decoding="async"
+      />
+      <div className="space-y-2 p-3">
+        <h2 className="line-clamp-1 text-sm font-semibold text-slate-900">{item.title}</h2>
+        <p className="text-xs text-slate-500">{item.auction_id} • {item.category}</p>
+        <p className="text-[11px] text-slate-500">
+          บิดแล้ว {Number(item.total_bids ?? 0).toLocaleString()} ครั้ง · ผู้ประมูล {Number(item.bidder_count ?? 0).toLocaleString()} คน
+        </p>
+        <div className="rounded-md bg-slate-50 p-2 text-xs">
+          <p className="text-slate-500">ราคาเปิด</p>
+          <p className="text-sm font-medium text-slate-800">{Number(item.start_price ?? 0).toLocaleString()} ฿</p>
+          <p className="mt-2 text-slate-500">ราคาปัจจุบัน</p>
+          <p className="text-sm font-semibold text-emerald-700">{Number(item.current_bid ?? 0).toLocaleString()} ฿</p>
+          <p className="mt-1 text-slate-500">บิดขั้นต่ำครั้งละ {Number(item.bid_step ?? 0).toLocaleString()} ฿</p>
+        </div>
+        <div className="flex flex-col gap-1 text-xs text-slate-600">
+          <AuctionEndCountdown endAt={item.end_at} />
+        </div>
+        <Link href={`/product/${item.auction_id}`} className="btn-outline mt-1 w-full">
+          ดูรายละเอียด
+        </Link>
+      </div>
+    </article>
+  )
+})
+
+function AuctionsPageInner() {
   const params = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const initialKeyword = params.get("q") || ""
   const initialCategory = params.get("category") || "ทั้งหมด"
+  const initialSort = parseSortParam(params.get("sort"))
 
   const [keyword, setKeyword] = useState(initialKeyword)
   const [category, setCategory] = useState(initialCategory)
   const [minPrice, setMinPrice] = useState("")
   const [maxPrice, setMaxPrice] = useState("")
-  const [sortBy, setSortBy] = useState<SortOption>("newest")
+  const [minStartPrice, setMinStartPrice] = useState("")
+  const [maxStartPrice, setMaxStartPrice] = useState("")
+  const [minBidStep, setMinBidStep] = useState("")
+  const [maxBidStep, setMaxBidStep] = useState("")
+  const [endFrom, setEndFrom] = useState("")
+  const [endTo, setEndTo] = useState("")
+  const [sortBy, setSortBy] = useState<SortOption>(initialSort)
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
+  const [items, setItems] = useState<PublicAuctionListItem[]>([])
+  const [total, setTotal] = useState(0)
+  const [listLoading, setListLoading] = useState(true)
+  const [listError, setListError] = useState("")
+
+  const [appliedText, setAppliedText] = useState<AppliedTextFilters>(() => ({
+    keyword: initialKeyword,
+    minPrice: "",
+    maxPrice: "",
+    minStartPrice: "",
+    maxStartPrice: "",
+    minBidStep: "",
+    maxBidStep: "",
+    endFrom: "",
+    endTo: "",
+  }))
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      setAppliedText({
+        keyword,
+        minPrice,
+        maxPrice,
+        minStartPrice,
+        maxStartPrice,
+        minBidStep,
+        maxBidStep,
+        endFrom,
+        endTo,
+      })
+    }, FILTER_DEBOUNCE_MS)
+    return () => window.clearTimeout(id)
+  }, [keyword, minPrice, maxPrice, minStartPrice, maxStartPrice, minBidStep, maxBidStep, endFrom, endTo])
 
   const clearFilters = () => {
+    setKeyword("")
     setCategory("ทั้งหมด")
     setMinPrice("")
     setMaxPrice("")
+    setMinStartPrice("")
+    setMaxStartPrice("")
+    setMinBidStep("")
+    setMaxBidStep("")
+    setEndFrom("")
+    setEndTo("")
   }
 
   useEffect(() => {
-    setKeyword(initialKeyword)
-    setCategory(initialCategory)
-  }, [initialKeyword, initialCategory])
+    const sp = new URLSearchParams()
+    if (appliedText.keyword.trim()) sp.set("q", appliedText.keyword.trim())
+    if (category !== "ทั้งหมด") sp.set("category", category)
+    if (sortBy !== "newest") sp.set("sort", sortBy)
+    const qs = sp.toString()
+    const next = qs ? `${pathname}?${qs}` : pathname
+    const cur = `${window.location.pathname}${window.location.search}`
+    if (next === cur) return
+    router.replace(next, { scroll: false })
+  }, [appliedText.keyword, category, sortBy, pathname, router])
 
-  const filtered = useMemo(() => {
-    return mockAuctions.filter((item) => {
-      if (category !== "ทั้งหมด" && item.category !== category) return false
-      if (keyword.trim() && !item.title.toLowerCase().includes(keyword.trim().toLowerCase())) return false
-      if (minPrice && item.currentBid < Number(minPrice)) return false
-      if (maxPrice && item.currentBid > Number(maxPrice)) return false
-      return true
-    })
-  }, [category, keyword, minPrice, maxPrice])
+  const loadList = useCallback(
+    async (options?: { signal?: AbortSignal }) => {
+      const minNum = appliedText.minPrice.trim() === "" ? undefined : Number(appliedText.minPrice)
+      const maxNum = appliedText.maxPrice.trim() === "" ? undefined : Number(appliedText.maxPrice)
+      const minS = appliedText.minStartPrice.trim() === "" ? undefined : Number(appliedText.minStartPrice)
+      const maxS = appliedText.maxStartPrice.trim() === "" ? undefined : Number(appliedText.maxStartPrice)
+      const minSt = appliedText.minBidStep.trim() === "" ? undefined : Number(appliedText.minBidStep)
+      const maxSt = appliedText.maxBidStep.trim() === "" ? undefined : Number(appliedText.maxBidStep)
 
-  const visibleItems = useMemo(() => {
-    const items = [...filtered]
-    if (sortBy === "price_asc") {
-      items.sort((a, b) => a.currentBid - b.currentBid)
-    } else if (sortBy === "price_desc") {
-      items.sort((a, b) => b.currentBid - a.currentBid)
-    } else if (sortBy === "ending_soon") {
-      items.sort((a, b) => new Date(a.endAt).getTime() - new Date(b.endAt).getTime())
-    } else {
-      items.sort((a, b) => b.id.localeCompare(a.id))
+      return listPublicAuctions(
+        {
+          q: appliedText.keyword.trim() || undefined,
+          category: category === "ทั้งหมด" ? undefined : category,
+          min_price: minNum !== undefined && !Number.isNaN(minNum) ? minNum : undefined,
+          max_price: maxNum !== undefined && !Number.isNaN(maxNum) ? maxNum : undefined,
+          min_start_price: minS !== undefined && !Number.isNaN(minS) ? minS : undefined,
+          max_start_price: maxS !== undefined && !Number.isNaN(maxS) ? maxS : undefined,
+          min_bid_step: minSt !== undefined && !Number.isNaN(minSt) ? minSt : undefined,
+          max_bid_step: maxSt !== undefined && !Number.isNaN(maxSt) ? maxSt : undefined,
+          end_from: appliedText.endFrom.trim() || undefined,
+          end_to: appliedText.endTo.trim() || undefined,
+          sort: sortBy,
+          limit: 100,
+          offset: 0,
+        },
+        { signal: options?.signal },
+      )
+    },
+    [appliedText, category, sortBy],
+  )
+
+  useEffect(() => {
+    const ac = new AbortController()
+    setListLoading(true)
+    setListError("")
+    void loadList({ signal: ac.signal })
+      .then((res) => {
+        setItems(res.items)
+        setTotal(res.total)
+      })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === "AbortError") return
+        setListError("ไม่สามารถโหลดรายการประมูลได้")
+        setItems([])
+        setTotal(0)
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setListLoading(false)
+      })
+
+    return () => ac.abort()
+  }, [loadList])
+
+  useEffect(() => {
+    const refresh = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+      void loadList()
+        .then((res) => {
+          setItems(res.items)
+          setTotal(res.total)
+          setListError("")
+        })
+        .catch(() => {
+          /* silent */
+        })
     }
-    return items
-  }, [filtered, sortBy])
+
+    const id = window.setInterval(refresh, POLL_MS)
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refresh()
+    }
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
+  }, [loadList])
+
+  const sortOptions: { value: SortOption; label: string }[] = [
+    { value: "most_bids", label: "บิดบ่อย (จำนวนครั้ง)" },
+    { value: "most_bidders", label: "ผู้ประมูลเยอะ" },
+    { value: "newest", label: "โพสต์ล่าสุด" },
+    { value: "avg_price_asc", label: "ราคาเริ่ม+ปัจจุบันเฉลี่ยต่ำสุด" },
+    { value: "ending_soon", label: "ใกล้ปิดประมูล" },
+    { value: "price_asc", label: "ราคาปัจจุบันต่ำ → สูง" },
+    { value: "price_desc", label: "ราคาปัจจุบันสูง → ต่ำ" },
+  ]
 
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: string; label: string; onRemove: () => void }> = []
     if (keyword.trim()) chips.push({ key: "keyword", label: `ค้นหา: ${keyword.trim()}`, onRemove: () => setKeyword("") })
     if (category !== "ทั้งหมด") chips.push({ key: "category", label: `หมวดหมู่: ${category}`, onRemove: () => setCategory("ทั้งหมด") })
-    if (minPrice) chips.push({ key: "minPrice", label: `ขั้นต่ำ: ${Number(minPrice).toLocaleString()} ฿`, onRemove: () => setMinPrice("") })
-    if (maxPrice) chips.push({ key: "maxPrice", label: `สูงสุด: ${Number(maxPrice).toLocaleString()} ฿`, onRemove: () => setMaxPrice("") })
+    if (minPrice) chips.push({ key: "minPrice", label: `ราคาปัจจุบันต่ำสุด: ${Number(minPrice).toLocaleString()} ฿`, onRemove: () => setMinPrice("") })
+    if (maxPrice) chips.push({ key: "maxPrice", label: `ราคาปัจจุบันสูงสุด: ${Number(maxPrice).toLocaleString()} ฿`, onRemove: () => setMaxPrice("") })
+    if (minStartPrice) chips.push({ key: "minStartPrice", label: `ราคาเปิดต่ำสุด: ${Number(minStartPrice).toLocaleString()} ฿`, onRemove: () => setMinStartPrice("") })
+    if (maxStartPrice) chips.push({ key: "maxStartPrice", label: `ราคาเปิดสูงสุด: ${Number(maxStartPrice).toLocaleString()} ฿`, onRemove: () => setMaxStartPrice("") })
+    if (minBidStep) chips.push({ key: "minBidStep", label: `ขั้นบิดต่ำสุด: ${Number(minBidStep).toLocaleString()} ฿`, onRemove: () => setMinBidStep("") })
+    if (maxBidStep) chips.push({ key: "maxBidStep", label: `ขั้นบิดสูงสุด: ${Number(maxBidStep).toLocaleString()} ฿`, onRemove: () => setMaxBidStep("") })
+    if (endFrom) chips.push({ key: "endFrom", label: `ปิดไม่ก่อน ${endFrom}`, onRemove: () => setEndFrom("") })
+    if (endTo) chips.push({ key: "endTo", label: `ปิดไม่หลัง ${endTo}`, onRemove: () => setEndTo("") })
     return chips
-  }, [keyword, category, minPrice, maxPrice])
+  }, [keyword, category, minPrice, maxPrice, minStartPrice, maxStartPrice, minBidStep, maxBidStep, endFrom, endTo])
+
+  const filterFields = (
+    <>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-600">คำค้นหา</label>
+        <input
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="ชื่อหรือเลขห้องประมูล"
+          className="form-input"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-600">หมวดหมู่</label>
+        <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)}>
+          {categories.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-600">ราคาปัจจุบัน (ชนะอยู่) ต่ำสุด</label>
+        <input value={minPrice} onChange={(e) => setMinPrice(e.target.value)} placeholder="เช่น 500" type="number" className="form-input" />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-600">ราคาปัจจุบัน สูงสุด</label>
+        <input value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} placeholder="เช่น 50000" type="number" className="form-input" />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-600">ราคาเปิดต่ำสุด</label>
+        <input value={minStartPrice} onChange={(e) => setMinStartPrice(e.target.value)} placeholder="เช่น 100" type="number" className="form-input" />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-600">ราคาเปิดสูงสุด</label>
+        <input value={maxStartPrice} onChange={(e) => setMaxStartPrice(e.target.value)} type="number" className="form-input" />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-600">ขั้นบิดขั้นต่ำ (ต่อครั้ง) ต่ำสุด</label>
+        <input value={minBidStep} onChange={(e) => setMinBidStep(e.target.value)} placeholder="เช่น 50" type="number" className="form-input" />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-600">ขั้นบิดขั้นต่ำ สูงสุด</label>
+        <input value={maxBidStep} onChange={(e) => setMaxBidStep(e.target.value)} type="number" className="form-input" />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-600">ปิดประมูล ไม่ก่อนวันที่</label>
+        <input value={endFrom} onChange={(e) => setEndFrom(e.target.value)} type="date" className="form-input" />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-600">ปิดประมูล ไม่หลังวันที่</label>
+        <input value={endTo} onChange={(e) => setEndTo(e.target.value)} type="date" className="form-input" />
+      </div>
+    </>
+  )
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8">
-      <div className="mb-6 pt-16 lg:ml-[17.5rem] lg:pt-0">
-        <h1 className="text-2xl font-semibold text-slate-900">สินค้าประมูล</h1>
-        <p className="mt-1 text-sm text-slate-500">ค้นหารายการที่สนใจ แล้วกรองตามหมวดหมู่และช่วงราคา</p>
-      </div>
       <div className="fixed inset-x-0 top-[65px] z-30 border-b border-slate-200 bg-white/95 backdrop-blur lg:hidden">
         <div className="mx-auto max-w-7xl px-4 py-2">
           <div className="grid grid-cols-2 gap-2">
@@ -99,154 +381,103 @@ export default function AuctionsPage() {
               ตัวกรอง
             </button>
             <select className="form-select text-sm" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOption)}>
-              <option value="newest">ล่าสุด</option>
-              <option value="ending_soon">ใกล้ปิดประมูล</option>
-              <option value="price_asc">ราคาต่ำไปสูง</option>
-              <option value="price_desc">ราคาสูงไปต่ำ</option>
+              {sortOptions.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
           </div>
         </div>
       </div>
-      {activeFilterChips.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2 lg:hidden">
-          {activeFilterChips.map((chip) => (
-            <button
-              key={chip.key}
-              type="button"
-              onClick={chip.onRemove}
-              className="rounded-full border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
-            >
-              {chip.label} x
-            </button>
-          ))}
-        </div>
-      )}
-      <section className="relative min-h-[60vh]">
-        <aside className="hidden lg:fixed lg:top-24 lg:left-[max(1rem,calc((100vw-80rem)/2+1rem))] lg:z-20 lg:block lg:w-64">
+
+      <section className="relative lg:flex lg:flex-row lg:items-start lg:gap-6">
+        <aside className="hidden lg:sticky lg:top-24 lg:z-10 lg:block lg:w-64 lg:flex-shrink-0 lg:self-start">
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="mb-3 text-sm font-semibold text-slate-900">ตัวกรองการค้นหา</h2>
             <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">หมวดหมู่</label>
-                <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)}>
-                  {categories.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">ราคาต่ำสุด</label>
-                <input
-                  value={minPrice}
-                  onChange={(e) => setMinPrice(e.target.value)}
-                  placeholder="เช่น 1000"
-                  type="number"
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">ราคาสูงสุด</label>
-                <input
-                  value={maxPrice}
-                  onChange={(e) => setMaxPrice(e.target.value)}
-                  placeholder="เช่น 50000"
-                  type="number"
-                  className="form-input"
-                />
-              </div>
-              <button
-                type="button"
-                className="btn-outline w-full"
-                onClick={clearFilters}
-              >
+              {filterFields}
+              <button type="button" className="btn-outline w-full" onClick={clearFilters}>
                 ล้างตัวกรอง
               </button>
             </div>
           </div>
         </aside>
-        <div className="lg:ml-[17.5rem]">
-          <div className="mb-3 flex items-center justify-between gap-2 text-sm text-slate-500">
-            <span>ผลการค้นหา {visibleItems.length} รายการ</span>
-            <select className="form-select hidden w-48 text-sm lg:block" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOption)}>
-              <option value="newest">เรียง: ล่าสุด</option>
-              <option value="ending_soon">เรียง: ใกล้ปิดประมูล</option>
-              <option value="price_asc">เรียง: ราคาต่ำไปสูง</option>
-              <option value="price_desc">เรียง: ราคาสูงไปต่ำ</option>
+
+        <div className="min-w-0 flex-1">
+          <div className="mb-6 pt-16 lg:pt-0">
+            <h1 className="text-2xl font-semibold text-slate-900">สินค้าประมูล</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              กรองจากแถบซ้าย — รายการรีเฟรชอัตโนมัติเมื่อแท็บเปิดอยู่ (ประมาณทุก {POLL_MS / 1000} วินาที)
+            </p>
+          </div>
+
+          {activeFilterChips.length > 0 && (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {activeFilterChips.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={chip.onRemove}
+                  className="rounded-full border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                >
+                  {chip.label} ×
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+            <span>
+              {listLoading ? "กำลังโหลด..." : `ผลการค้นหา ${total.toLocaleString()} รายการ`}
+            </span>
+            <select className="form-select hidden max-w-xs text-sm lg:block" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOption)}>
+              {sortOptions.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
           </div>
-          {visibleItems.length === 0 ? (
+
+          {listError && (
+            <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              {listError}
+            </div>
+          )}
+
+          {listLoading ? (
+            <div className="flex min-h-[280px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500">
+              กำลังโหลดรายการประมูล...
+            </div>
+          ) : listError ? null : items.length === 0 ? (
             <div className="flex min-h-[360px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
               <div>
                 <p className="text-base font-medium text-slate-800">ไม่พบรายการที่ตรงกับตัวกรอง</p>
-                <p className="mt-1 text-sm text-slate-500">ลองเปลี่ยนคำค้นหา หมวดหมู่ หรือช่วงราคา แล้วค้นหาอีกครั้ง</p>
+                <p className="mt-1 text-sm text-slate-500">ลองเปลี่ยนตัวกรองแล้วค้นหาอีกครั้ง</p>
               </div>
             </div>
           ) : (
             <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {visibleItems.map((item) => (
-                <article key={item.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <img src={item.image} alt={item.title} className="h-40 w-full object-cover" />
-                  <div className="space-y-2 p-3">
-                    <h2 className="line-clamp-1 text-sm font-semibold text-slate-900">{item.title}</h2>
-                    <p className="text-xs text-slate-500">{item.id} • {item.category}</p>
-                    <div className="rounded-md bg-slate-50 p-2 text-xs">
-                      <p className="text-slate-500">ราคาปัจจุบัน</p>
-                      <p className="text-sm font-semibold text-emerald-700">{item.currentBid.toLocaleString()} ฿</p>
-                      <p className="mt-1 text-slate-500">บิดขั้นต่ำครั้งละ {item.bidStep.toLocaleString()} ฿</p>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>ปิดประมูล {new Date(item.endAt).toLocaleString("th-TH")}</span>
-                    </div>
-                    <Link href={`/product/${item.id}`} className="btn-outline mt-1 w-full">
-                      ดูรายละเอียด
-                    </Link>
-                  </div>
-                </article>
+              {items.map((item, index) => (
+                <AuctionCard
+                  key={item.auction_id}
+                  item={item}
+                  imageLoading={index < 6 ? "eager" : "lazy"}
+                />
               ))}
             </section>
           )}
         </div>
       </section>
+
       {isMobileFilterOpen && (
         <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setIsMobileFilterOpen(false)}>
           <div
-            className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-white p-4 shadow-2xl"
+            className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-base font-semibold text-slate-900">ตัวกรองการค้นหา</h2>
               <button type="button" className="text-sm text-slate-500" onClick={() => setIsMobileFilterOpen(false)}>ปิด</button>
             </div>
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">หมวดหมู่</label>
-                <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)}>
-                  {categories.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">ราคาต่ำสุด</label>
-                <input
-                  value={minPrice}
-                  onChange={(e) => setMinPrice(e.target.value)}
-                  placeholder="เช่น 1000"
-                  type="number"
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">ราคาสูงสุด</label>
-                <input
-                  value={maxPrice}
-                  onChange={(e) => setMaxPrice(e.target.value)}
-                  placeholder="เช่น 50000"
-                  type="number"
-                  className="form-input"
-                />
-              </div>
-            </div>
+            <div className="space-y-3">{filterFields}</div>
             <div className="mt-4 grid grid-cols-2 gap-2">
               <button type="button" className="btn-outline w-full" onClick={clearFilters}>
                 ล้างทั้งหมด
@@ -259,5 +490,13 @@ export default function AuctionsPage() {
         </div>
       )}
     </main>
+  )
+}
+
+export default function AuctionsPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-7xl px-4 py-24 text-center text-slate-500">กำลังโหลด...</div>}>
+      <AuctionsPageInner />
+    </Suspense>
   )
 }
