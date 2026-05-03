@@ -1,4 +1,6 @@
+import { maybeInvalidateSessionFromResponse } from "../authSessionSync";
 import { getAuctionRealtimeBaseUrl } from "../constants/common";
+import { tryRefreshAccessToken } from "../refreshAccessToken";
 import { callGetAPI, callPostAPI } from "../utils/call-api";
 
 export type CreateAuctionPayload = {
@@ -77,11 +79,13 @@ export async function createSellerAuction(payload: CreateAuctionPayload): Promis
         formData.append("images", file);
     });
 
-    const response = await fetch(`${getAuctionRealtimeBaseUrl()}/seller/auctions`, {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-    });
+    const auctionUrl = `${getAuctionRealtimeBaseUrl()}/seller/auctions`;
+    const reqInit: RequestInit = { method: "POST", credentials: "include", body: formData };
+    let response = await fetch(auctionUrl, reqInit);
+    if (response.status === 401 && (await tryRefreshAccessToken())) {
+        response = await fetch(auctionUrl, reqInit);
+    }
+    maybeInvalidateSessionFromResponse("/seller/auctions", true, response.status);
     if (!response.ok) {
         let msg = "สร้างประมูลไม่สำเร็จ";
         try {
@@ -175,10 +179,13 @@ export async function reopenSellerAuction(auctionID: string, endAtISO: string): 
 
 /** ลบรายการที่ปิดแล้วและไม่มีผู้บิด — เฉพาะผู้ขายเจ้าของรายการ */
 export async function deleteSellerAuction(auctionID: string): Promise<void> {
-    const response = await fetch(
-        `${getAuctionRealtimeBaseUrl()}/seller/auctions/${encodeURIComponent(auctionID)}`,
-        { method: "DELETE", credentials: "include" },
-    );
+    const delUrl = `${getAuctionRealtimeBaseUrl()}/seller/auctions/${encodeURIComponent(auctionID)}`;
+    const delInit: RequestInit = { method: "DELETE", credentials: "include" };
+    let response = await fetch(delUrl, delInit);
+    if (response.status === 401 && (await tryRefreshAccessToken())) {
+        response = await fetch(delUrl, delInit);
+    }
+    maybeInvalidateSessionFromResponse(`/seller/auctions/${encodeURIComponent(auctionID)}`, true, response.status);
     if (!response.ok) {
         let msg = "ลบรายการไม่สำเร็จ";
         try {

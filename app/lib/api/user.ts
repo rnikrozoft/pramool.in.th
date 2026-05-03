@@ -49,6 +49,12 @@ export const logout = async (): Promise<boolean> => {
     return response.ok;
 };
 
+/** Issue new access + refresh cookies (POST /auth/refresh). Used by call-api 401 recovery; can call manually. */
+export const refreshSessionTokens = async (): Promise<boolean> => {
+    const response = await callPostAPI("/auth/refresh", {}, true, getUserApiBaseUrl());
+    return response.ok;
+};
+
 export const getMyProfile = async (): Promise<UserProfile> => {
     const response = await callGetAPI("/users/profile", true, getUserApiBaseUrl());
     if (!response.ok) {

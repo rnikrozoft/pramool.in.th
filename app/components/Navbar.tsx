@@ -39,7 +39,7 @@ export default function Navbar() {
 
     const navItems = [
         { href: '/', label: 'หน้าแรก' },
-        { href: '/auctions', label: 'สินค้าประมูล' },
+        { href: '/auctions', label: 'รายการสินค้า' },
     ]
     const userMenuItems = [
         { href: '/account/profile', label: 'โปรไฟล์ของฉัน' },

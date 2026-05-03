@@ -416,10 +416,10 @@ function AuctionsPageInner() {
 
         <div className="min-w-0 flex-1">
           <div className="mb-6 pt-16 lg:pt-0">
-            <h1 className="text-2xl font-semibold text-slate-900">สินค้าประมูล</h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <h1 className="text-2xl font-semibold text-slate-900">รายการสินค้า</h1>
+            {/* <p className="mt-1 text-sm text-slate-500">
               กรองจากแถบซ้าย — รายการรีเฟรชอัตโนมัติเมื่อแท็บเปิดอยู่ (ประมาณทุก {POLL_MS / 1000} วินาที)
-            </p>
+            </p> */}
           </div>
 
           {activeFilterChips.length > 0 && (

@@ -5,7 +5,7 @@ const footerMenus = [
     title: "เมนูหลัก",
     items: [
       { label: "หน้าแรก", href: "/" },
-      { label: "สินค้าประมูล", href: "/auctions" },
+      { label: "รายการสินค้า", href: "/auctions" },
       { label: "วิธีใช้งาน", href: "/how-it-works" },
       { label: "แจ้งเตือน", href: "/notifications" },
     ],
