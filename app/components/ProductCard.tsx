@@ -52,7 +52,7 @@ export default function ProductCard({ item }: Props) {
                 <Image
                     src={item.image}
                     alt={item.image}
-                    className='h-[310px] w-full rounded-lg border border-slate-200 object-cover'
+                    className="h-[310px] w-full rounded-2xl border border-violet-100 object-cover shadow-sm"
                     width={250}
                     height={310}
                 />
@@ -62,23 +62,23 @@ export default function ProductCard({ item }: Props) {
                     <button
                         type="button"
                         onClick={() => setIsModalOpen(true)}
-                        className="rounded-full bg-rose-500 px-2.5 py-1 text-xs font-semibold text-white shadow"
+                        className="rounded-full bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white shadow-md"
                     >
                         <i className="fas fa-undo"></i>
                     </button>
                     <BackModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
-                    <span className="rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-slate-700 shadow">
+                    <span className="rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-brand-800 shadow-sm ring-1 ring-violet-100">
                         <i className="fas fa-eye"></i> 99+
                     </span>
                 </div>
             </div>
             <div className="mt-2 space-y-1" data-countdown={item.countdown}>
-                <p className="text-sm text-slate-800">{item.name}</p>
+                <p className="text-sm font-medium text-slate-800">{item.name}</p>
                 <div className="flex items-center justify-between text-sm">
-                    <strong className='text-emerald-600'>{item.price}</strong>
+                    <strong className="font-display text-brand-700">{item.price}</strong>
                     {timeLeft > 0 ? formatTimeLeft(timeLeft) : "หมดเวลาแล้ว"}
                 </div>
-                <div className="text-amber-400">
+                <div className="text-accent-500">
                     <i className="fa-solid fa-star"></i>
                     <i className="fa-solid fa-star"></i>
                     <i className="fa-solid fa-star"></i>

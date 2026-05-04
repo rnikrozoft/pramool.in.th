@@ -6,7 +6,7 @@ import {
     CreditActivityItem,
     getCreditActivity,
 } from "@/app/lib/api/wallet"
-import { AppPageShell, APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
+import { AppPageShell, APP_PAGE_INNER } from "@/app/components/AppPageShell"
 
 function formatDate(iso: string): string {
     const date = new Date(iso)
@@ -151,13 +151,11 @@ export default function WalletTransactionsPage() {
 
     return (
         <AppPageShell>
-        <main className={APP_PAGE_INNER_WIDE}>
+        <main className={APP_PAGE_INNER}>
             <div className="mb-6">
                 <h1 className="text-2xl font-semibold text-slate-900">ประวัติเครดิต</h1>
                 <p className="mt-1 text-sm text-slate-500">
-                    เติมเงิน PromptPay, การประมูล, การคืนมัดจำ และการคืนมัดจำประกาศเมื่อปิดรายการ — รายการเติมเงินจะมี{" "}
-                    <span className="font-medium text-slate-700">รหัส Omise (Charge ID)</span> ใช้แจ้งทีมงานหรือตรวจใน Omise Dashboard
-                    เมื่อมีปัญหา
+                    เติมเงิน PromptPay, การประมูล, การคืนมัดจำ และการคืนมัดจำประกาศเมื่อปิดรายการ
                 </p>
             </div>
 

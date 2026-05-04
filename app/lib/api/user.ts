@@ -39,9 +39,46 @@ export const isTelAlreadyUsed = async (tel: string): Promise<boolean> => {
     return data.ok;
 };
 
-export const loginByTel = async (tel: string): Promise<boolean> => {
-    const response = await callPostAPI("/login/tel", { tel }, true, getUserApiBaseUrl());
-    return response.ok;
+export type SignupPayload = {
+    first_name: string;
+    last_name: string;
+    tel: string;
+    email: string;
+    password: string;
+    confirm_password: string;
+};
+
+export const signup = async (payload: SignupPayload): Promise<Response> => {
+    return callPostAPI("/auth/signup", payload, true, getUserApiBaseUrl());
+};
+
+/** Login with Thai mobile number or email (POST /login/tel). */
+export const login = async (
+    loginField: string,
+    password?: string,
+): Promise<{ ok: boolean; message?: string }> => {
+    const login = loginField.trim();
+    const body: { login: string; password?: string } = { login };
+    if (password !== undefined && password !== "") {
+        body.password = password;
+    }
+    const response = await callPostAPI("/login/tel", body, true, getUserApiBaseUrl());
+    if (response.ok) {
+        return { ok: true };
+    }
+    let message: string | undefined;
+    try {
+        const data = (await response.json()) as { message?: string };
+        if (data.message) message = data.message;
+    } catch {
+        /* ignore */
+    }
+    return { ok: false, message };
+};
+
+/** @deprecated Use `login` — kept for call sites that only pass a phone string. */
+export const loginByTel = async (tel: string, password?: string): Promise<{ ok: boolean; message?: string }> => {
+    return login(tel, password);
 };
 
 export const logout = async (): Promise<boolean> => {

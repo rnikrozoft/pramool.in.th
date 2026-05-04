@@ -24,11 +24,18 @@ export type SellerAuctionItem = {
     category: string;
     status: string;
     start_price: number;
+    bid_step?: number;
     current_bid: number;
     total_bids: number;
     end_at: string;
     cover_image_url: string;
     buy_now_price?: number;
+    allow_early_close?: boolean;
+    reopen_eligible?: boolean;
+    pending_seller_payout?: boolean;
+    seller_shipped_at?: string;
+    /** RFC3339 — ช่วงหน่วงไม่รับบิดหลังผู้ขายกดปิดก่อนเวลา */
+    bidding_paused_until?: string;
 };
 
 export type AuctionDetail = {
@@ -60,6 +67,8 @@ export type AuctionDetail = {
     escrow_auto_confirm_at?: string;
     /** 0 = ไม่กำหนด — ถ้าเสนอราคา >= ยอดนี้ รายการจะปิดทันที */
     buy_now_price?: number;
+    /** RFC3339 — ถ้ามีและยังไม่ถึงเวลา ระบบไม่รับบิด */
+    bidding_paused_until?: string;
 };
 
 export async function createSellerAuction(payload: CreateAuctionPayload): Promise<{ auction_id: string }> {
@@ -99,13 +108,44 @@ export async function createSellerAuction(payload: CreateAuctionPayload): Promis
     return await response.json();
 }
 
-export async function getMySellerAuctions(): Promise<SellerAuctionItem[]> {
-    const response = await callGetAPI("/seller/auctions", true, getAuctionRealtimeBaseUrl());
+export type SellerAuctionListScope = "all" | "active" | "closed";
+
+export type SellerAuctionListResponse = {
+    items: SellerAuctionItem[];
+    total: number;
+    all_count: number;
+    active_count: number;
+    limit: number;
+    offset: number;
+    scope: string;
+};
+
+/** ดึงรายการประมูลของผู้ขาย — รองรับ pagination และ scope ตามแท็บ */
+export async function getMySellerAuctions(params?: {
+    limit?: number;
+    offset?: number;
+    scope?: SellerAuctionListScope;
+}): Promise<SellerAuctionListResponse> {
+    const sp = new URLSearchParams();
+    if (params?.limit != null && params.limit > 0) sp.set("limit", String(params.limit));
+    if (params?.offset != null && params.offset > 0) sp.set("offset", String(params.offset));
+    if (params?.scope && params.scope !== "all") sp.set("scope", params.scope);
+    const q = sp.toString();
+    const path = q ? `/seller/auctions?${q}` : "/seller/auctions";
+    const response = await callGetAPI(path, true, getAuctionRealtimeBaseUrl());
     if (!response.ok) {
         throw new Error("Failed to fetch seller auctions");
     }
-    const data = await response.json();
-    return Array.isArray(data.items) ? data.items : [];
+    const data = (await response.json()) as Partial<SellerAuctionListResponse>;
+    return {
+        items: Array.isArray(data.items) ? data.items : [],
+        total: Number(data.total ?? 0),
+        all_count: Number(data.all_count ?? 0),
+        active_count: Number(data.active_count ?? 0),
+        limit: Number(data.limit ?? 10),
+        offset: Number(data.offset ?? 0),
+        scope: String(data.scope ?? "all"),
+    };
 }
 
 export async function getAuctionDetail(auctionID: string): Promise<AuctionDetail> {
@@ -262,12 +302,20 @@ export type MyActiveBidItem = {
     title: string;
     category: string;
     cover_image_url: string;
+    /** ราคาเปิดประมูล */
+    start_price?: number;
     current_bid: number;
     bid_step: number;
     my_held_amount: number;
     next_minimum_bid: number;
     is_leading: boolean;
     end_at: string;
+    /** ผู้ขายเปิดให้ปิดประมูลก่อนเวลาตามเงื่อนไขได้ */
+    allow_early_close?: boolean;
+    /** ประมูลปิดแล้ว ผู้ขายส่งของแล้ว รอผู้ชนะกดยืนยันรับของ */
+    can_confirm_received?: boolean;
+    /** RFC3339 — ช่วงหน่วงไม่รับบิด */
+    bidding_paused_until?: string;
 };
 
 export async function getMyActiveBids(): Promise<MyActiveBidItem[]> {
@@ -325,6 +373,8 @@ export type PublicAuctionListItem = {
     end_at: string;
     cover_image_url: string;
     buy_now_price?: number;
+    /** ผู้ขายเปิดให้ปิดประมูลก่อนเวลาได้ */
+    allow_early_close?: boolean;
 };
 
 export type AuctionListSort =

@@ -17,6 +17,7 @@ import {
   SubDistrictSelect,
   BankSelect,
 } from "@/app/components/LocationSelector"
+import { FormStepSection } from "@/app/components/FormStepSection"
 
 type ProfileForm = {
   first_name: string
@@ -38,36 +39,6 @@ type ProfileForm = {
 type ProfilePayload = Omit<ProfileForm, "bank_id"> & {
   tel: string
   bank_id: number
-}
-
-function Section({
-  step,
-  title,
-  description,
-  children,
-}: {
-  step: number
-  title: string
-  description?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm ring-1 ring-slate-100 sm:p-6">
-      <div className="mb-5 flex gap-3">
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-800"
-          aria-hidden
-        >
-          {step}
-        </span>
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-          {description ? <p className="mt-0.5 text-sm text-slate-500">{description}</p> : null}
-        </div>
-      </div>
-      {children}
-    </section>
-  )
 }
 
 export default function ProfilePage() {
@@ -283,7 +254,7 @@ export default function ProfilePage() {
           bar.style.bottom = "8px"
           bar.style.height = "3px"
           bar.style.width = "auto"
-          bar.style.background = "#2563eb"
+          bar.style.background = "#6d28d9"
           bar.style.borderRadius = "9999px"
           bar.style.transformOrigin = "left center"
           bar.style.transition = "transform 10s linear"
@@ -439,7 +410,7 @@ export default function ProfilePage() {
             className="lg:grid lg:grid-cols-12 lg:gap-10 lg:items-stretch"
           >
             <div className="space-y-8 lg:col-span-7">
-              <Section step={1} title="ข้อมูลส่วนตัว" description="ข้อมูลพื้นฐานของบัญชีผู้ใช้งาน">
+              <FormStepSection step={1} title="ข้อมูลส่วนตัว" description="ข้อมูลพื้นฐานของบัญชีผู้ใช้งาน">
                 <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
@@ -472,9 +443,9 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 </div>
-              </Section>
+              </FormStepSection>
 
-              <Section step={2} title="ที่อยู่สำหรับติดต่อ" description="ใช้สำหรับการจัดส่งและการติดต่อหลังการซื้อขาย">
+              <FormStepSection step={2} title="ที่อยู่สำหรับติดต่อ" description="ใช้สำหรับการจัดส่งและการติดต่อหลังการซื้อขาย">
                 <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
@@ -557,16 +528,16 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 </div>
-              </Section>
+              </FormStepSection>
 
-              <Section step={3} title="ช่องทางติดต่อ" description="เพิ่มช่องทางสำหรับผู้ซื้อหรือผู้ขายติดต่อกลับ">
+              <FormStepSection step={3} title="ช่องทางติดต่อ" description="เพิ่มช่องทางสำหรับผู้ซื้อหรือผู้ขายติดต่อกลับ">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Facebook</label>
                   <input name="facebook" className="form-input" value={form.facebook} onChange={handleChange} />
                 </div>
-              </Section>
+              </FormStepSection>
 
-              <Section step={4} title="ข้อมูลบัญชีธนาคาร" description="ใช้สำหรับการรับเงินหลังการขายหรือปิดประมูล">
+              <FormStepSection step={4} title="ข้อมูลบัญชีธนาคาร" description="ใช้สำหรับการรับเงินหลังการขายหรือปิดประมูล">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700">ชื่อธนาคาร</label>
@@ -591,7 +562,7 @@ export default function ProfilePage() {
                     {errors.bank_account_number && <p className="mt-1 text-xs text-rose-600">{errors.bank_account_number}</p>}
                   </div>
                 </div>
-              </Section>
+              </FormStepSection>
             </div>
 
             <aside className="mt-10 flex flex-col lg:col-span-5 lg:mt-0">

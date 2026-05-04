@@ -1,197 +1,355 @@
-'use client'
+"use client"
 
-import Image from 'next/image'
-import React, { useState, useContext } from 'react'
-import { getMyOnboardingStatus, loginByTel } from '../lib/api/user'
-import Swal from 'sweetalert2'
-import { notify } from '../lib/utils/notify'
-import { useRouter } from 'next/navigation'
-import { recordOTPTimeout, requestOTP, verifyOTP } from '../lib/api/otp'
-import { VerifyRequest } from '../types/otp_type'
-import { UserContext } from '../context/UserContext'
+import Image from "next/image"
+import Link from "next/link"
+import React, { useContext, useState } from "react"
+import { useRouter } from "next/navigation"
+import { UserContext } from "../context/UserContext"
+import { signup } from "../lib/api/user"
+import { runPostAuthRedirect } from "../lib/postAuthRedirect"
+import { notify } from "../lib/utils/notify"
+import { userFacingMessage } from "../lib/utils/userFacingMessage"
 
+const features = [
+  {
+    icon: "fa-shield-halved",
+    title: "ปลอดภัย 100%",
+    desc: "มาตรฐานความปลอดภัยระดับสากล ข้อมูลและธุรกรรมได้รับการปกป้อง",
+  },
+  {
+    icon: "fa-gavel",
+    title: "ประมูลง่าย",
+    desc: "ใช้งานสะดวก ลุ้นของที่ต้องการได้ทุกที่ทุกเวลา",
+  },
+  {
+    icon: "fa-users",
+    title: "ชุมชนผู้ใช้งานจริง",
+    desc: "ไว้วางใจจากผู้ใช้งานกว่า 50,000 คน",
+  },
+]
 
-type Props = {}
+/** Optional field: empty is OK; non-empty must look like a normal email address. */
+function isValidEmailFormat(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+}
 
-export default function Page({ }: Props) {
-    const router = useRouter()
-    const { refreshSession } = useContext(UserContext)
-    const [tel, setTel] = useState('')
+export default function RegisterPage() {
+  const router = useRouter()
+  const { refreshSession } = useContext(UserContext)
+  const [firstName, setFirstName] = useState("")
+  const [lastName, setLastName] = useState("")
+  const [email, setEmail] = useState("")
+  const [tel, setTel] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [acceptTerms, setAcceptTerms] = useState(false)
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setTel(e.target.value)
+  const handleSocial = (provider: string) => {
+    notify("info", `การสมัครด้วย ${provider} จะเปิดให้ใช้งานเร็วๆ นี้`)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!acceptTerms) {
+      notify("error", "กรุณายอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัว")
+      return
     }
 
-    const promptOTP = async (tel: string, token: string) => {
-        const result = await Swal.fire({
-            title: 'ยืนยัน OTP',
-            text: `กรุณากรอก OTP ที่ส่งไปยังเบอร์โทรศัพท์ ${tel}`,
-            input: 'text',
-            inputPlaceholder: 'กรอก OTP 4 หลัก',
-            inputAttributes: {
-                maxlength: '4',
-                inputmode: 'numeric',
-                autocapitalize: 'off',
-                autocorrect: 'off',
-            },
-            showCancelButton: true,
-            confirmButtonText: 'ยืนยัน',
-            cancelButtonText: 'ยกเลิก',
-            width: 460,
-            buttonsStyling: false,
-            customClass: {
-                popup: "rounded-2xl",
-                title: "text-2xl font-semibold text-slate-900",
-                htmlContainer: "text-sm text-slate-500",
-                actions: "gap-2",
-                confirmButton: "btn-primary min-w-[110px]",
-                cancelButton: "btn-outline min-w-[110px]",
-                input: "form-input",
-            },
-            timer: 10000,
-            inputValidator: value => {
-                if (!value) return 'กรุณากรอก OTP'
-                if (!/^\d{4}$/.test(value)) return 'OTP ต้องเป็นตัวเลข 4 หลัก'
-                return null
-            },
-            didOpen: () => {
-                const otpInput = Swal.getInput()
-                if (otpInput) {
-                    otpInput.style.width = "calc(100% - 24px)"
-                    otpInput.style.maxWidth = "calc(100% - 24px)"
-                    otpInput.style.margin = "8px auto 0"
-                    otpInput.style.boxSizing = "border-box"
-                }
-
-                const popup = Swal.getPopup()
-                if (popup) {
-                    popup.style.position = "relative"
-                    popup.style.overflow = "hidden"
-                    const bar = document.createElement("div")
-                    bar.style.position = "absolute"
-                    bar.style.left = "12px"
-                    bar.style.right = "12px"
-                    bar.style.bottom = "8px"
-                    bar.style.height = "3px"
-                    bar.style.width = "auto"
-                    bar.style.background = "#2563eb"
-                    bar.style.borderRadius = "9999px"
-                    bar.style.transformOrigin = "left center"
-                    bar.style.transition = "transform 10s linear"
-                    popup.appendChild(bar)
-                    requestAnimationFrame(() => {
-                        bar.style.transform = "scaleX(0)"
-                    })
-                }
-            },
-        })
-
-        return result
+    const t = tel.trim()
+    if (!firstName.trim() || !lastName.trim()) {
+      notify("error", "กรุณากรอกชื่อและนามสกุล")
+      return
+    }
+    if (!t) {
+      notify("error", "กรุณากรอกหมายเลขโทรศัพท์")
+      return
+    }
+    if (password.length < 8) {
+      notify("error", "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร")
+      return
+    }
+    if (password !== confirmPassword) {
+      notify("error", "รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน")
+      return
     }
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
+    const emailTrim = email.trim()
+    if (emailTrim !== "" && !isValidEmailFormat(emailTrim)) {
+      notify("error", "รูปแบบอีเมลไม่ถูกต้อง")
+      return
+    }
 
-        if (!tel) {
-            notify('error', 'กรุณากรอกหมายเลขโทรศัพท์')
-            return
-        }
-
+    try {
+      const res = await signup({
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        tel: t,
+        email: emailTrim,
+        password,
+        confirm_password: confirmPassword,
+      })
+      if (!res.ok) {
+        let raw = ""
         try {
-            const otpRes = await requestOTP({ tel })
-            const result = await promptOTP(tel, otpRes.token)
-            if (result.dismiss === Swal.DismissReason.timer || result.dismiss === Swal.DismissReason.cancel) {
-                const timeoutResult = await recordOTPTimeout(tel)
-                if (timeoutResult.status === "banned") {
-                    notify('error', 'คุณยืนยัน OTP ไม่สำเร็จครบ 2 ครั้ง ระบบระงับเบอร์นี้ 5 นาที')
-                    return
-                }
-                if (result.dismiss === Swal.DismissReason.cancel) {
-                    notify('error', 'คุณยกเลิกการยืนยัน OTP')
-                } else {
-                    notify('error', 'หมดเวลาใส่ OTP กรุณาลองใหม่อีกครั้ง')
-                }
-                return
-            }
-            if (result.isConfirmed) {
-                const verifyReq: VerifyRequest = {
-                    token: otpRes.token,
-                    pin: result.value!,
-                }
-                const isValidOTP = await verifyOTP(verifyReq)
-
-                if (isValidOTP) {
-                    const loginSuccess = await loginByTel(tel)
-                    if (!loginSuccess) {
-                        notify('error', 'ไม่สามารถเข้าสู่ระบบอัตโนมัติได้')
-                        return
-                    }
-
-                    await refreshSession()
-                    notify('success', 'ยืนยันสำเร็จ').then(() => {
-                        getMyOnboardingStatus()
-                            .then((status) => {
-                                if (!status.is_first_registration) {
-                                    router.push('/')
-                                    return
-                                }
-                                localStorage.setItem("phone", tel)
-                                router.push('/register/address')
-                            })
-                            .catch(() => {
-                                // If onboarding status endpoint fails, keep onboarding-friendly behavior.
-                                localStorage.setItem("phone", tel)
-                                router.push('/register/address')
-                            })
-                    });
-                } else {
-                    notify('error', 'รหัส OTP ไม่ถูกต้อง', 1)
-                }
-            }
-        } catch (error) {
-            const message = error instanceof Error ? error.message : ""
-            if (message.includes("tel is temporarily banned")) {
-                const bannedUntilPart = message.split("|")[1]
-                const bannedUntil = Number(bannedUntilPart)
-                if (!Number.isNaN(bannedUntil) && bannedUntil > 0) {
-                    const remainingSeconds = Math.ceil(bannedUntil - Date.now() / 1000)
-                    notify('error', `เบอร์นี้ถูกระงับชั่วคราว กรุณาลองใหม่ใน ${Math.max(remainingSeconds, 1)} วินาที`)
-                    return
-                }
-            }
-            notify('error')
+          const data = (await res.json()) as { message?: string }
+          if (data.message) raw = data.message
+        } catch {
+          /* ignore */
         }
-    }
+        notify(
+          "error",
+          userFacingMessage(raw, "สมัครสมาชิกไม่สำเร็จ กรุณาตรวจสอบข้อมูลแล้วลองใหม่"),
+        )
+        return
+      }
 
-    return (
-        <div className="mx-auto mt-8 grid max-w-7xl items-center gap-6 px-4 lg:grid-cols-2">
-            <div className="hidden items-center justify-center lg:flex">
-                <Image width={500} height={500} src="./undraw_sign-up_qamz.svg" alt="Sign up illustration" />
+      await refreshSession()
+      notify("success", "สมัครสมาชิกสำเร็จ").then(() => {
+        void runPostAuthRedirect(router, { phoneForOnboarding: t })
+      })
+    } catch {
+      notify("error")
+    }
+  }
+
+  return (
+    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-violet-50/80 via-white to-violet-50/40 pb-16 pt-8 sm:pt-10">
+      <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10 xl:px-14 2xl:px-16">
+        <div className="grid items-start gap-12 lg:grid-cols-2 lg:gap-16 xl:gap-20">
+          <div className="order-2 flex flex-col justify-center lg:order-1">
+            <h1 className="font-display text-3xl font-bold leading-tight text-brand-700 md:text-4xl lg:text-[2.75rem]">
+              สมัครสมาชิก
+            </h1>
+            <p className="font-display mt-2 text-xl font-semibold text-slate-800 md:text-2xl">
+              เริ่มต้นประมูลง่าย ได้ของชัวร์
+            </p>
+            <p className="mt-4 max-w-lg text-sm leading-relaxed text-slate-600 md:text-base">
+              เข้าร่วมชุมชนผู้ซื้อและผู้ขายที่โปร่งใส ค้นหาสินค้าคุณภาพและลุ้นราคาที่เหมาะกับคุณ
+            </p>
+            <ul className="mt-10 space-y-6">
+              {features.map((f) => (
+                <li key={f.title} className="flex gap-4">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-600 ring-2 ring-brand-100/80">
+                    <i className={`fa-solid ${f.icon}`} aria-hidden />
+                  </span>
+                  <div>
+                    <p className="font-display font-bold text-slate-900">{f.title}</p>
+                    <p className="mt-0.5 text-sm text-slate-600">{f.desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="relative mt-10 flex justify-center lg:justify-start">
+              <Image
+                src="/9db16efa-b384-4eda-ada1-55a5946e5e8e.png"
+                alt="Pramool — ประมูลออนไลน์"
+                width={560}
+                height={420}
+                className="h-auto w-full max-w-md drop-shadow-2xl"
+                priority
+              />
             </div>
-            <div className="h-fit w-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h4 className="text-center text-2xl font-semibold">สมัครสมาชิก</h4>
-                <form className="mt-6 space-y-4" noValidate onSubmit={handleSubmit}>
-                    <div>
-                        <label className="mb-1 block text-sm font-medium">หมายเลขโทรศัพท์</label>
-                        <input
-                            type="tel"
-                            className="form-input"
-                            required
-                            name="tel"
-                            value={tel}
-                            onChange={handleChange}
-                            pattern="\d*"
-                            inputMode="numeric"
-                        />
-                        <p className="mt-2 text-xs text-slate-500">
-                            โปรดระบุหมายเลขโทรศัพท์ เพื่อรับรหัส OTP (One-Time Password) สำหรับการยืนยันตัวตน
-                        </p>
-                    </div>
-                    <button className="btn-primary w-full py-3 text-base" type="submit">
-                        ส่ง OTP
-                    </button>
-                </form>
+          </div>
+
+          <div className="order-1 lg:order-2">
+            <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8">
+              <div className="text-center sm:text-left">
+                <h2 className="font-display text-xl font-bold text-slate-900 sm:text-2xl">สร้างบัญชีใหม่</h2>
+                <p className="mt-1 text-sm text-slate-600">กรอกข้อมูลเพื่อสมัครสมาชิก</p>
+              </div>
+
+              <form className="mt-8 space-y-4" noValidate onSubmit={handleSubmit}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="reg-first" className="mb-1.5 block text-sm font-medium text-slate-700">
+                      ชื่อ <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="reg-first"
+                      type="text"
+                      autoComplete="given-name"
+                      className="form-input"
+                      placeholder="ชื่อ"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="reg-last" className="mb-1.5 block text-sm font-medium text-slate-700">
+                      นามสกุล <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="reg-last"
+                      type="text"
+                      autoComplete="family-name"
+                      className="form-input"
+                      placeholder="นามสกุล"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                    />
+                  </div>
                 </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="reg-email" className="mb-1.5 block text-sm font-medium text-slate-700">
+                      อีเมล
+                    </label>
+                    <input
+                      id="reg-email"
+                      type="email"
+                      autoComplete="email"
+                      className="form-input"
+                      placeholder="you@example.com (ไม่บังคับ)"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="reg-tel" className="mb-1.5 block text-sm font-medium text-slate-700">
+                      หมายเลขโทรศัพท์ <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="reg-tel"
+                      type="tel"
+                      name="tel"
+                      required
+                      className="form-input"
+                      placeholder="08xxxxxxxx"
+                      value={tel}
+                      onChange={(e) => setTel(e.target.value)}
+                      inputMode="numeric"
+                      pattern="\d*"
+                      autoComplete="tel"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="reg-password" className="mb-1.5 block text-sm font-medium text-slate-700">
+                    รหัสผ่าน <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="reg-password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      className="form-input pr-11"
+                      placeholder="อย่างน้อย 8 ตัวอักษร"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                      onClick={() => setShowPassword((v) => !v)}
+                    >
+                      <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`} aria-hidden />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="reg-confirm" className="mb-1.5 block text-sm font-medium text-slate-700">
+                    ยืนยันรหัสผ่าน <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="reg-confirm"
+                      type={showConfirmPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      className="form-input pr-11"
+                      placeholder="ยืนยันรหัสผ่าน"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      aria-label={showConfirmPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                      onClick={() => setShowConfirmPassword((v) => !v)}
+                    >
+                      <i className={`fa-solid ${showConfirmPassword ? "fa-eye-slash" : "fa-eye"}`} aria-hidden />
+                    </button>
+                  </div>
+                </div>
+
+                <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30"
+                    checked={acceptTerms}
+                    onChange={(e) => setAcceptTerms(e.target.checked)}
+                  />
+                  <span>
+                    ฉันยอมรับ{" "}
+                    <Link href="#" className="font-medium text-brand-600 underline hover:text-brand-700">
+                      ข้อกำหนดการใช้งาน
+                    </Link>{" "}
+                    และ{" "}
+                    <Link href="#" className="font-medium text-brand-600 underline hover:text-brand-700">
+                      นโยบายความเป็นส่วนตัว
+                    </Link>{" "}
+                    <span className="text-red-500">*</span>
+                  </span>
+                </label>
+
+                <button
+                  type="submit"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-600/20 transition hover:bg-brand-700"
+                >
+                  <i className="fa-solid fa-user-plus text-base shrink-0" aria-hidden />
+                  สมัครสมาชิก
+                </button>
+              </form>
+
+              <div className="relative my-8">
+                <div className="absolute inset-0 flex items-center" aria-hidden>
+                  <div className="w-full border-t border-slate-200" />
+                </div>
+                <div className="relative flex justify-center text-xs font-medium text-slate-500">
+                  <span className="bg-white px-3">หรือสมัครด้วย</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleSocial("Google")}
+                  className="flex flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  <i className="fa-brands fa-google shrink-0 text-lg text-red-500" aria-hidden />
+                  Google
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSocial("Facebook")}
+                  className="flex flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  <i className="fa-brands fa-facebook shrink-0 text-lg text-[#1877F2]" aria-hidden />
+                  Facebook
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSocial("Apple")}
+                  className="flex flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  <i className="fa-brands fa-apple shrink-0 text-xl text-slate-900" aria-hidden />
+                  Apple
+                </button>
+              </div>
+
+              <p className="mt-8 text-center text-sm text-slate-600">
+                มีบัญชีอยู่แล้ว?{" "}
+                <Link href="/login" className="font-semibold text-brand-600 hover:text-brand-700 hover:underline">
+                  เข้าสู่ระบบ
+                </Link>
+              </p>
+            </div>
+          </div>
         </div>
-    )
+      </div>
+    </div>
+  )
 }

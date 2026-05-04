@@ -19,6 +19,8 @@ import { UserContext } from '@/app/context/UserContext'
 import { notifyCreditChanged } from '@/app/lib/creditSync'
 import { AppPageShell, APP_PAGE_INNER_PRODUCT, APP_PAGE_INNER_WIDE } from '@/app/components/AppPageShell'
 import Swal from 'sweetalert2'
+import { isAuctionBiddingPausedUntil } from '@/app/lib/auctionRealtime'
+import { userFacingErrorMessage, userFacingMessage } from '@/app/lib/utils/userFacingMessage'
 
 type Props = {}
 
@@ -106,11 +108,15 @@ export default function Product({ }: Props) {
   const hasEnoughCredit = userCredit >= minRequiredBid
   const atMaxBidForCredit = bidAmount >= userCredit
   const isOwnAuction = Boolean(user?.userId && auction?.seller_id && user.userId === auction.seller_id)
+  const biddingPaused = Boolean(
+    auction && isAuctionBiddingPausedUntil(auction.bidding_paused_until, Date.now()),
+  )
   const canBid = Boolean(
     user &&
       !isOwnAuction &&
       auction?.status === 'active' &&
-      hasEnoughCredit,
+      hasEnoughCredit &&
+      !biddingPaused,
   )
   const showEarlyCloseButton =
     !!auction &&
@@ -249,6 +255,27 @@ export default function Product({ }: Props) {
           reopen_eligible?: boolean
           allow_early_close?: boolean
           auction_closed?: boolean
+          bidding_paused_until?: string
+        }
+        const mergeBiddingPaused = (
+          prevPause: string | undefined,
+          p: { bidding_paused_until?: string; status?: string },
+        ): string | undefined => {
+          if (typeof p.bidding_paused_until === 'string') return p.bidding_paused_until
+          if (p.status === 'closed') return undefined
+          return prevPause
+        }
+        if (payload.type === 'snapshot') {
+          setAuction((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              current_bid: typeof payload.current_bid === 'number' ? payload.current_bid : prev.current_bid,
+              total_bids: typeof payload.total_bids === 'number' ? payload.total_bids : prev.total_bids,
+              bidding_paused_until: mergeBiddingPaused(prev.bidding_paused_until, payload),
+            }
+          })
+          return
         }
         if (payload.type === 'auction_state') {
           auctionDetailFetchGen.current += 1
@@ -264,6 +291,7 @@ export default function Product({ }: Props) {
                 typeof payload.reopen_eligible === 'boolean' ? payload.reopen_eligible : prev.reopen_eligible,
               allow_early_close:
                 typeof payload.allow_early_close === 'boolean' ? payload.allow_early_close : prev.allow_early_close,
+              bidding_paused_until: mergeBiddingPaused(prev.bidding_paused_until, payload),
             }
           })
           setBidError('')
@@ -271,7 +299,12 @@ export default function Product({ }: Props) {
           return
         }
         if (payload.type === 'error') {
-          setBidError(payload.message || 'ไม่สามารถเสนอราคาได้')
+          setBidError(
+            userFacingMessage(
+              typeof payload.message === 'string' ? payload.message : '',
+              'ไม่สามารถเสนอราคาได้ กรุณาลองใหม่',
+            ),
+          )
           clearBidInFlightRef.current()
           return
         }
@@ -339,6 +372,13 @@ export default function Product({ }: Props) {
     if (!canBid) {
       if (!user) {
         setBidError('กรุณาเข้าสู่ระบบก่อนเสนอราคา')
+      } else if (biddingPaused) {
+        setBidError(
+          userFacingMessage(
+            'bidding paused: seller is closing this auction',
+            'ผู้ขายกำลังปิดประมูลชั่วคราว ไม่สามารถเสนอราคาได้ในขณะนี้',
+          ),
+        )
       } else if (!hasEnoughCredit) {
         setBidError('เครดิตไม่เพียงพอสำหรับการเสนอราคานี้')
       } else {
@@ -427,7 +467,7 @@ export default function Product({ }: Props) {
       await refreshSessionRef.current?.({ force: true })
       void Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'เปิดประมูลใหม่แล้ว', showConfirmButton: false, timer: 2000 })
     } catch (e) {
-      setBidError(e instanceof Error ? e.message : 'ไม่สามารถเปิดประมูลใหม่ได้')
+      setBidError(userFacingErrorMessage(e, 'ไม่สามารถเปิดประมูลใหม่ได้ กรุณาลองใหม่'))
     } finally {
       setIsReopening(false)
     }
@@ -453,8 +493,9 @@ export default function Product({ }: Props) {
       void Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ลบรายการแล้ว', showConfirmButton: false, timer: 2000 })
       router.push('/seller/auctions')
     } catch (e) {
-      setBidError(e instanceof Error ? e.message : 'ลบรายการไม่สำเร็จ')
-      void Swal.fire({ icon: 'error', title: e instanceof Error ? e.message : 'ลบรายการไม่สำเร็จ' })
+      const msg = userFacingErrorMessage(e, 'ลบรายการไม่สำเร็จ กรุณาลองใหม่')
+      setBidError(msg)
+      void Swal.fire({ icon: 'error', title: msg })
     } finally {
       setIsDeletingAuction(false)
     }
@@ -482,7 +523,10 @@ export default function Product({ }: Props) {
       syncBeforeScheduledEndFromISO(updated.end_at)
       void Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'บันทึกจัดส่งแล้ว', showConfirmButton: false, timer: 2200 })
     } catch (e) {
-      void Swal.fire({ icon: 'error', title: e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ' })
+      void Swal.fire({
+        icon: 'error',
+        title: userFacingErrorMessage(e, 'บันทึกการจัดส่งไม่สำเร็จ กรุณาลองใหม่'),
+      })
     } finally {
       setIsMarkingShipped(false)
     }
@@ -512,7 +556,10 @@ export default function Product({ }: Props) {
       await refreshSessionRef.current?.({ force: true })
       void Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ยืนยันรับของแล้ว', showConfirmButton: false, timer: 2200 })
     } catch (e) {
-      void Swal.fire({ icon: 'error', title: e instanceof Error ? e.message : 'ยืนยันไม่สำเร็จ' })
+      void Swal.fire({
+        icon: 'error',
+        title: userFacingErrorMessage(e, 'ยืนยันรับของไม่สำเร็จ กรุณาลองใหม่'),
+      })
     } finally {
       setIsConfirmingReceived(false)
     }
@@ -640,6 +687,12 @@ export default function Product({ }: Props) {
                   </span>
                 )}
               </div>
+              {!isOwnAuction && auction.status === 'active' && biddingPaused && (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                  ผู้ขายกำลังปิดประมูลชั่วคราว — ระบบไม่รับการเสนอราคาชั่วครู่ กรุณารอสักครู่
+                </div>
+              )}
+
               {isOwnAuction && auction.reopen_eligible && (
                 <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
                   <p className="text-sky-900">รายการปิดแล้วและยังไม่มีผู้เสนอราคา — คุณสามารถเปิดประมูลรอบใหม่ได้ (ระบบจะหักมัดจำเท่าราคาเริ่มต้นจากเครดิต)</p>

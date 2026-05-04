@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useCountdownTimer from './OTPCountdown';
 import { callPostAPI } from '../lib/utils/call-api';
+import { userFacingMessage } from '../lib/utils/userFacingMessage';
 
 interface OTPFormProps {
     token: string;
@@ -33,7 +34,7 @@ export default function OTPForm({ token, setShowPinModal }: OTPFormProps) {
         setError(null);
 
         if (pin.length !== OTP_LENGTH) {
-            setError(`Please enter a ${OTP_LENGTH}-digit OTP.`);
+            setError(`กรุณากรอก OTP ให้ครบ ${OTP_LENGTH} หลัก`);
             return;
         }
 
@@ -44,11 +45,16 @@ export default function OTPForm({ token, setShowPinModal }: OTPFormProps) {
                 return;
             }
 
-            const errorData = await response.json();
-            setError(errorData.message || 'OTP verification failed. Please try again.');
+            const errorData = await response.json() as { message?: string };
+            setError(
+                userFacingMessage(
+                    errorData.message,
+                    "รหัส OTP ไม่ถูกต้องหรือหมดอายุ กรุณาลองใหม่",
+                ),
+            );
         } catch (err) {
             console.error('An error occurred during OTP verification:', err);
-            setError('An unexpected error occurred. Please try again later.');
+            setError('ยืนยัน OTP ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
         }
     };
 

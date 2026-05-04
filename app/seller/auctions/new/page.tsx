@@ -10,6 +10,7 @@ import { UserContext } from "@/app/context/UserContext"
 import { notifyCreditChanged } from "@/app/lib/creditSync"
 import { AppPageShell, APP_PAGE_INNER_SELLER_NEW } from "@/app/components/AppPageShell"
 import { CategoryMultiSelect } from "./CategoryMultiSelect"
+import { userFacingErrorMessage } from "@/app/lib/utils/userFacingMessage"
 
 /** ต้องตรงกับ sellerCategoryWhitelist ใน auction-service */
 const CATEGORY_OPTIONS = [
@@ -203,8 +204,8 @@ export default function NewSellerAuctionPage() {
         if (files.length > remain) {
             Swal.fire({
                 icon: "info",
-                title: `ระบบเพิ่มได้อีก ${remain} รูป`,
-                text: `เลือกมา ${files.length} รูป แต่เพิ่มได้สูงสุด ${maxImages} รูป`,
+                title: `ไม่สามารถเพิ่มข้อมูลรูปภาพได้`,
+                text: `รองรับรูปภาพจำนวนสูงสุด 5 รูป`,
                 confirmButtonText: "ตกลง",
             })
         }
@@ -225,10 +226,9 @@ export default function NewSellerAuctionPage() {
 
     const feeTermsHtml = `
 <div class="swal-fee-terms text-left text-sm text-slate-700 space-y-3">
-  <p><strong>มัดจำประกาศ:</strong> เมื่อเผยแพร่สำเร็จ ระบบจะหักเครดิตเป็นจำนวนเท่า<strong>ราคาเริ่มต้น</strong>ที่คุณตั้งไว้ (คืนตามเงื่อนไขเมื่อปิดรายการ เช่น ไม่มีผู้บิด)</p>
-  <p><strong>ค่าธรรมเนียมและส่วนแบ่งเมื่อประมูลปิดปกติ (ครบเวลา):</strong> จากราคาปิดสุดท้าย ผู้ขายได้ประมาณ <strong>75%</strong> ที่เหลือประมาณ <strong>25%</strong> เป็นค่าธรรมเนียม/ส่วนแบ่งแพลตฟอร์ม</p>
-  <p><strong>กรณีผู้ขายปิดประมูลก่อนหมดเวลา</strong> (ถ้าคุณเปิดใช้ตัวเลือกนี้): จากราคาปิด ผู้ขายได้ประมาณ <strong>70%</strong> ค่าธรรมเนียมรวมประมาณ <strong>30%</strong> — สัดส่วนอาจปรับตามนโยบายระบบ</p>
-  <p class="text-xs text-slate-500">ตัวเลขเป็นแนวทางจากสูตรระบบปัจจุบัน — ยอดจริงขึ้นกับราคาปิดและสถานะรายการในขณะปิดประมูล</p>
+  <p><strong>มัดจำประกาศ:</strong> เมื่อเผยแพร่สำเร็จ ระบบจะหักเครดิตเป็นจำนวนเท่า<strong>ราคาเริ่มต้น</strong>ที่คุณตั้งไว้ (คืนเต็มจำนวนเมื่อไม่มีผู้เสนอราคา)</p>
+  <p><strong>ค่าธรรมเนียมเมื่อจบการประมูลตามเวลาที่กำหนด:</strong> จากราคาปิดสุดท้าย <strong>25%</strong> จะเป็นค่าธรรมเนียม/ส่วนแบ่งแพลตฟอร์ม</p>
+  <p><strong>กรณีที่คุณปิดประมูลก่อนหมดเวลา</strong> (ถ้าคุณเปิดใช้ตัวเลือกนี้): จากราคาปิดสุดท้าย <strong>30%</strong> จะเป็นค่าธรรมเนียม/ส่วนแบ่งแพลตฟอร์ม — สัดส่วนอาจปรับตามนโยบายระบบ</p>
 </div>`
 
     const handleSubmit = async (event: React.FormEvent) => {
@@ -267,7 +267,7 @@ export default function NewSellerAuctionPage() {
         if (!Number.isFinite(st) || st < 1) {
             void Swal.fire({
                 icon: "error",
-                title: "ขั้นต่ำการบิดต้องเป็นจำนวนเต็มบาทอย่างน้อย 1 บาท",
+                title: "ขั้นต่างการเสนอราคาต้องเป็นจำนวนเต็มบาทอย่างน้อย 1 บาท",
                 confirmButtonText: "ตกลง",
             })
             return
@@ -295,7 +295,7 @@ export default function NewSellerAuctionPage() {
             void Swal.fire({
                 icon: "error",
                 title: "ราคาปิดประมูลทันทีต่ำเกินไป",
-                text: `ต้องอย่างน้อย ${(sp + st).toLocaleString()} บาท (ราคาเริ่มต้น + ขั้นต่ำการบิด)`,
+                text: `ต้องอย่างน้อย ${(sp + st).toLocaleString()} บาท (ราคาเริ่มต้น + ขั้นต่างการเสนอราคา)`,
                 confirmButtonText: "ตกลง",
             })
             return
@@ -305,13 +305,17 @@ export default function NewSellerAuctionPage() {
             title: "ข้อกำหนด ค่าธรรมเนียม และการหักเงิน",
             html: feeTermsHtml,
             icon: "info",
+            iconColor: "#047857",
             showCancelButton: true,
             confirmButtonText: "รับทราบ — ยืนยันเผยแพร่",
             cancelButtonText: "ย้อนกลับ",
             reverseButtons: true,
             focusCancel: false,
             width: "34rem",
-            customClass: { htmlContainer: "swal-fee-html text-left" },
+            customClass: {
+                popup: "swal-fee-terms-popup",
+                htmlContainer: "swal-fee-html text-left",
+            },
         })
         if (!agreed.isConfirmed) return
 
@@ -334,13 +338,16 @@ export default function NewSellerAuctionPage() {
             await Swal.fire({
                 icon: "success",
                 title: "สร้างรายการประมูลสำเร็จ",
-                text: "ระบบบันทึกโพสต์ลงฐานข้อมูลเรียบร้อยแล้ว",
+                text: "โพสต์ของคุณพร้อมแสดงในระบบแล้ว",
                 confirmButtonText: "ตกลง",
             })
             router.push("/seller/auctions")
             router.refresh()
         } catch (e) {
-            const text = e instanceof Error ? e.message : "โปรดลองใหม่อีกครั้ง"
+            const text = userFacingErrorMessage(
+                e,
+                "สร้างรายการไม่สำเร็จ กรุณาตรวจสอบข้อมูลหรือเครดิตแล้วลองใหม่",
+            )
             void Swal.fire({
                 icon: "error",
                 title: "ไม่สามารถสร้างรายการประมูลได้",
@@ -604,8 +611,7 @@ export default function NewSellerAuctionPage() {
                         {/* คอลัมน์ต้องยืดสูงเท่าแถว grid sticky ถึงจะยึดขอบบน viewport ได้ */}
                         <div className="lg:sticky lg:top-20 lg:z-10 lg:h-fit lg:w-full">
                             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-md ring-1 ring-slate-100 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto">
-                                <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">สรุปก่อนเผยแพร่</h3>
-                                <div className="mt-4 flex gap-3">
+                                <div className="flex gap-3">
                                     <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200">
                                         {images[0] ? (
                                             <Image src={images[0].previewUrl} alt="" fill className="object-cover" unoptimized />

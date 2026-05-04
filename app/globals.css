@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 .overflow-hidden-scroll::-webkit-scrollbar {
   display: none;
 }
@@ -13,23 +19,27 @@
 
 @layer components {
   .form-input {
-    @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200;
+    @apply block w-full rounded-2xl border border-violet-100 bg-white px-4 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20;
   }
 
   .form-select {
-    @apply block w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 pr-10 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-slate-100;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%2364758b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    @apply block w-full appearance-none rounded-2xl border border-violet-100 bg-white px-4 py-2.5 pr-10 text-sm shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:cursor-not-allowed disabled:bg-surface-muted;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%237c3aed' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-position: right 0.75rem center;
     background-repeat: no-repeat;
     background-size: 14px 14px;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-brand transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .btn-outline {
-    @apply inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100;
+    @apply inline-flex items-center justify-center rounded-full border-2 border-brand-600 bg-white px-5 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .card-elevated {
+    @apply rounded-3xl border border-violet-100/80 bg-white shadow-soft;
   }
 }
 
@@ -59,19 +69,341 @@
   animation: swal2-toast-fade-out 140ms ease-in both !important;
 }
 
-/* Reopen auction modal — align widths, spacing, native datetime input */
+/* SweetAlert2 — site-wide dialog + toast (per-call confirmButtonColor still wins via inline style) */
+.swal2-popup:not(.swal2-toast) {
+  border-radius: 1rem !important;
+  border: 1px solid rgb(226 232 240) !important;
+  box-shadow:
+    0 4px 24px rgba(109, 40, 217, 0.08),
+    0 1px 2px rgb(0 0 0 / 0.06) !important;
+  padding: 1.5rem 1.25rem 1.25rem !important;
+  color: rgb(15 23 42) !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-title {
+  color: rgb(15 23 42) !important;
+  font-weight: 700 !important;
+  font-size: 1.125rem !important;
+  line-height: 1.35 !important;
+  padding: 0 0 0.25rem !important;
+  margin: 0 !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-html-container,
+.swal2-popup:not(.swal2-toast) .swal2-content {
+  color: rgb(51 65 85) !important;
+  font-size: 0.875rem !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-icon {
+  margin: 0.5rem auto 1rem auto !important;
+  width: 3.25rem !important;
+  height: 3.25rem !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-info {
+  border-color: rgb(167 243 208) !important;
+  color: rgb(6 95 70) !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-success {
+  border-color: rgb(167 243 208) !important;
+  color: rgb(5 150 105) !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-error {
+  border-color: rgb(254 205 211) !important;
+  color: rgb(190 18 60) !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-warning {
+  border-color: rgb(253 230 138) !important;
+  color: rgb(180 83 9) !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-question {
+  border-color: rgb(221 214 254) !important;
+  color: rgb(109 40 217) !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-actions {
+  margin-top: 1.25rem !important;
+  gap: 0.5rem !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-styled {
+  border-radius: 9999px !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  padding: 0.65rem 1.15rem !important;
+  box-shadow: none !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-confirm.swal2-styled:focus {
+  box-shadow: 0 0 0 3px rgb(109 40 217 / 0.35) !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-cancel.swal2-styled:focus {
+  box-shadow: 0 0 0 3px rgb(148 163 184 / 0.35) !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-validation-message {
+  background: rgb(255 241 242) !important;
+  color: rgb(136 19 55) !important;
+  border-radius: 0.5rem !important;
+  margin-top: 0.75rem !important;
+}
+
+.swal2-popup:not(.swal2-toast) .swal2-input,
+.swal2-popup:not(.swal2-toast) input.swal2-input {
+  border-radius: 1rem !important;
+  border: 1px solid rgb(237 233 254) !important;
+}
+
+.swal2-popup.swal2-toast {
+  border-radius: 0.75rem !important;
+  border: 1px solid rgb(237 233 254) !important;
+  box-shadow: 0 4px 20px rgba(109, 40, 217, 0.1) !important;
+  padding: 0.75rem 1rem !important;
+}
+
+.swal2-popup.swal2-toast .swal2-title {
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  color: rgb(15 23 42) !important;
+}
+
+.swal2-popup.swal2-toast .swal2-timer-progress-bar {
+  background: rgb(109 40 217) !important;
+}
+
+/* เติมเครดิต — ฟอร์มใน SweetAlert (จัดซ้าย, ช่องกรอกชัด, ปุ่มกดได้ชัด) */
+.swal2-popup.swal-topup-credit-popup {
+  padding: 1.35rem 1.35rem 1.15rem !important;
+}
+
+.swal2-popup.swal-topup-credit-popup .swal2-title {
+  text-align: left !important;
+  margin: 0 0 0.75rem 0 !important;
+  padding: 0 2.25rem 0 0 !important;
+}
+
+.swal2-popup.swal-topup-credit-popup .swal2-html-container.swal-topup-credit-html,
+.swal2-popup.swal-topup-credit-popup .swal2-html-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: left !important;
+  overflow: visible !important;
+}
+
+.swal2-popup.swal-topup-credit-popup .swal2-close.swal-topup-close {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  border-radius: 9999px !important;
+  box-shadow: none !important;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease !important;
+}
+
+.swal2-popup.swal-topup-credit-popup .swal2-close.swal-topup-close:hover {
+  background: rgb(245 243 255) !important;
+  color: rgb(91 33 182) !important;
+}
+
+.swal-topup-credit {
+  text-align: left;
+  color: rgb(30 41 59);
+}
+
+.swal-topup-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(51 65 85);
+}
+
+.swal-topup-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: rgb(15 23 42);
+  background: rgb(255 255 255);
+  border: 1px solid rgb(221 214 254);
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.swal-topup-input:hover {
+  border-color: rgb(196 181 253);
+}
+
+.swal-topup-input:focus {
+  border-color: rgb(109 40 217);
+  box-shadow: 0 0 0 3px rgb(109 40 217 / 0.2);
+}
+
+.swal-topup-hint {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: rgb(100 116 139);
+}
+
+.swal-topup-presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
+.swal-topup-preset {
+  cursor: pointer;
+  margin: 0;
+  padding: 0.55rem 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: rgb(91 33 182);
+  background: rgb(255 255 255);
+  border: 2px solid rgb(139 92 246);
+  border-radius: 9999px;
+  box-shadow: 0 1px 3px rgb(109 40 217 / 0.14);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.swal-topup-preset:hover {
+  background: rgb(245 243 255);
+  border-color: rgb(109 40 217);
+  box-shadow: 0 4px 12px rgb(109 40 217 / 0.22);
+}
+
+.swal-topup-preset:active {
+  transform: scale(0.97);
+}
+
+.swal-topup-submit {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 1rem 0 0 0;
+  padding: 0.7rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  background: rgb(109 40 217);
+  border: none;
+  border-radius: 9999px;
+  box-shadow: 0 4px 14px rgb(109 40 217 / 0.4);
+  transition:
+    background 0.15s ease,
+    transform 0.12s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.swal-topup-submit:hover:not(:disabled) {
+  background: rgb(91 33 182);
+  box-shadow: 0 5px 18px rgb(109 40 217 / 0.45);
+}
+
+.swal-topup-submit:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.swal-topup-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  box-shadow: none;
+}
+
+.swal-topup-err {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.875rem;
+  color: rgb(185 28 28);
+}
+
+/* ขั้นแสดง QR — ข้อความใต้รูปจัดกึ่งกลาง */
+.swal-topup-credit.swal-topup-credit--qr {
+  text-align: center !important;
+}
+
+.swal-topup-credit--qr .swal-topup-qr-lead {
+  text-align: center !important;
+}
+
+.swal-topup-qr-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.swal-topup-qr-img {
+  width: 13rem;
+  height: 13rem;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid rgb(237 233 254);
+  border-radius: 1rem;
+}
+
+.swal-topup-qr-meta,
+.swal-topup-qr-foot {
+  margin: 0.5rem auto 0 auto;
+  max-width: 22rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: rgb(100 116 139);
+  text-align: center;
+  word-break: break-word;
+}
+
+.swal-topup-status {
+  margin: 0.65rem auto 0 auto;
+  max-width: 22rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  text-align: center;
+  word-break: break-word;
+}
+
+.swal-topup-status--ok {
+  color: rgb(91 33 182);
+  font-weight: 600;
+}
+
+.swal-topup-status--bad {
+  color: rgb(185 28 28);
+}
+
+.swal-topup-status--pending {
+  color: rgb(180 83 9);
+  font-size: 0.75rem;
+}
+
+/* Reopen auction — layout + brand-outline cancel */
 .swal2-popup.swal-reopen-auction-popup {
   width: min(calc(100vw - 2rem), 26rem) !important;
   padding: 1.25rem 1.25rem 1rem !important;
-  border-radius: 0.75rem !important;
 }
 
 .swal-reopen-auction-popup .swal2-title {
   margin: 0 0 0.25rem 0 !important;
   padding: 0 !important;
-  font-size: 1.125rem !important;
-  font-weight: 600 !important;
-  color: rgb(15 23 42) !important;
   line-height: 1.35 !important;
 }
 
@@ -91,7 +423,7 @@
   margin: 0 0 1rem 0;
   font-size: 0.875rem;
   line-height: 1.55;
-  color: rgb(71 85 105);
+  color: rgb(100 116 139);
 }
 
 .swal-reopen-auction-popup .swal-reopen-label {
@@ -115,15 +447,15 @@
   line-height: 1.25;
   color: rgb(15 23 42);
   background: rgb(255 255 255);
-  border: 1px solid rgb(203 213 225);
-  border-radius: 0.5rem;
+  border: 1px solid rgb(221 214 254);
+  border-radius: 0.75rem;
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
 
 .swal-reopen-auction-popup .swal-reopen-datetime:focus {
   outline: none;
-  border-color: rgb(59 130 246);
-  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.2);
+  border-color: rgb(109 40 217);
+  box-shadow: 0 0 0 3px rgb(109 40 217 / 0.2);
 }
 
 .swal-reopen-auction-popup .swal2-actions {
@@ -141,29 +473,48 @@
   width: auto !important;
   min-width: 0 !important;
   margin: 0 !important;
-  padding: 0.65rem 1rem !important;
-  border-radius: 0.5rem !important;
-  font-size: 0.875rem !important;
-  font-weight: 600 !important;
-  box-shadow: none !important;
-}
-
-.swal-reopen-auction-popup .swal2-confirm {
-  background: rgb(5 150 105) !important;
-  color: #fff !important;
-}
-
-.swal-reopen-auction-popup .swal2-confirm:focus {
-  box-shadow: 0 0 0 3px rgb(5 150 105 / 0.35) !important;
 }
 
 .swal-reopen-auction-popup .swal2-cancel {
   background: rgb(255 255 255) !important;
-  color: rgb(51 65 85) !important;
-  border: 1px solid rgb(203 213 225) !important;
+  color: rgb(91 33 182) !important;
+  border: 2px solid rgb(196 181 253) !important;
 }
 
 .swal-reopen-auction-popup .swal2-validation-message {
   margin-top: 0.75rem !important;
   font-size: 0.8125rem !important;
+}
+
+/* โพสต์ประมูลใหม่ — ยืนยันข้อกำหนดค่าธรรมเนียม (กว้างขึ้น + เนื้อหา) */
+.swal2-popup.swal-fee-terms-popup {
+  width: min(calc(100vw - 2rem), 34rem) !important;
+}
+
+.swal-fee-terms-popup .swal2-html-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  text-align: left !important;
+}
+
+.swal-fee-terms-popup .swal-fee-terms strong {
+  color: rgb(15 23 42);
+}
+
+.swal-fee-terms-popup .swal2-actions {
+  width: 100% !important;
+  margin: 1.25rem 0 0 0 !important;
+  padding: 0 !important;
+  gap: 0.5rem !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  justify-content: stretch !important;
+}
+
+.swal-fee-terms-popup .swal2-styled {
+  flex: 1 1 0 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  margin: 0 !important;
 }

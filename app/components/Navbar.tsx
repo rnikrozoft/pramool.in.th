@@ -1,36 +1,39 @@
 "use client"
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import React, { useContext, useEffect, useRef, useState } from 'react'
-import Swal from 'sweetalert2'
 import { UserContext } from '../context/UserContext'
-import { notifyCreditChanged } from '../lib/creditSync'
 import { logout } from '../lib/api/user'
-import { createPromptPayTopup, getCreditActivity } from '../lib/api/wallet'
+import type { PublicAuctionListItem } from '../lib/api/auction'
+import { listPublicAuctionsCached } from '../lib/data/publicAuctionsCache'
+import { openTopupCreditSwal } from '../lib/utils/topupCreditSwal'
 
 export default function Navbar() {
+    type SearchSuggestion = Pick<PublicAuctionListItem, "auction_id" | "title" | "current_bid" | "cover_image_url">
     const [isOpen, setIsOpen] = useState(false)
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
     const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false)
     const [isLoggingOut, setIsLoggingOut] = useState(false)
-    const [isTopupModalOpen, setIsTopupModalOpen] = useState(false)
-    const [topupAmount, setTopupAmount] = useState("100")
-    const [isTopupLoading, setIsTopupLoading] = useState(false)
-    const [qrCodeURL, setQrCodeURL] = useState("")
-    const [chargeID, setChargeID] = useState("")
-    const [topupStatus, setTopupStatus] = useState<"idle" | "pending" | "paid" | "failed">("idle")
-    const [expectedCredit, setExpectedCredit] = useState<number | null>(null)
     const pathname = usePathname()
     const searchParams = useSearchParams()
     const router = useRouter()
     const { user, loading, setUser, refreshSession } = useContext(UserContext)
     const creditBalance = Number(user?.credit ?? 0)
+    const creditBalanceRef = useRef(creditBalance)
+    useEffect(() => {
+        creditBalanceRef.current = creditBalance
+    }, [creditBalance])
     const categoryMenuTimeoutRef = useRef<NodeJS.Timeout | null>(null)
     const mobileNavRef = useRef<HTMLElement | null>(null)
     const userMenuRef = useRef<HTMLDivElement | null>(null)
     const [searchKeyword, setSearchKeyword] = useState("")
+    const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestion[]>([])
+    const [searchLoading, setSearchLoading] = useState(false)
+    const [isSearchOpen, setIsSearchOpen] = useState(false)
+    const searchFetchSeqRef = useRef(0)
+    const mobileSearchWrapRef = useRef<HTMLDivElement | null>(null)
+    const desktopSearchWrapRef = useRef<HTMLDivElement | null>(null)
     /** Avoid auth UI hydration mismatch: server and first client paint must match; session resolves only on client. */
     const [clientReady, setClientReady] = useState(false)
     useEffect(() => {
@@ -42,22 +45,14 @@ export default function Navbar() {
         { href: '/auctions', label: 'รายการสินค้า' },
     ]
     const userMenuItems = [
-        { href: '/account/profile', label: 'โปรไฟล์ของฉัน' },
-        { href: '/account/kyc', label: 'การยืนยันตัวตน (KYC)' },
+        { href: '/notifications', label: 'การแจ้งเตือน' },
         { href: '/seller/auctions', label: 'รายการที่ฉันเปิดประมูล' },
         { href: '/bids/active', label: 'รายการที่ฉันกำลังประมูล' },
         { href: '/bids/history', label: 'ประวัติการประมูล' },
-        { href: '/wallet/transactions', label: 'ประวัติการเติมเงิน' },
-        { href: '/notifications', label: 'การแจ้งเตือน' },
+        { href: '/wallet/transactions', label: 'ประวัติเครดิต' },
+        { href: '/account/profile', label: 'โปรไฟล์ของฉัน' },
+        { href: '/account/kyc', label: 'การยืนยันตัวตน (KYC)' },
     ]
-
-    const resetTopupState = () => {
-        setIsTopupModalOpen(false)
-        setQrCodeURL("")
-        setChargeID("")
-        setExpectedCredit(null)
-        setTopupStatus("idle")
-    }
 
     useEffect(() => {
         setIsOpen(false)
@@ -68,6 +63,7 @@ export default function Navbar() {
     useEffect(() => {
         const currentQ = searchParams.get("q") || ""
         setSearchKeyword(currentQ)
+        setIsSearchOpen(false)
     }, [searchParams])
 
     useEffect(() => {
@@ -80,7 +76,7 @@ export default function Navbar() {
 
     /** ปิด dropdown / เมนูมือถือเมื่อคลิกหรือแตะนอกพื้นที่เมนู */
     useEffect(() => {
-        if (!isUserMenuOpen && !isOpen) return
+        if (!isUserMenuOpen && !isOpen && !isSearchOpen) return
 
         const handleOutside = (e: MouseEvent | TouchEvent) => {
             const target = e.target
@@ -91,6 +87,13 @@ export default function Navbar() {
             if (isOpen && mobileNavRef.current && !mobileNavRef.current.contains(target)) {
                 setIsOpen(false)
             }
+            if (
+                isSearchOpen &&
+                !(mobileSearchWrapRef.current?.contains(target) ?? false) &&
+                !(desktopSearchWrapRef.current?.contains(target) ?? false)
+            ) {
+                setIsSearchOpen(false)
+            }
         }
 
         document.addEventListener("mousedown", handleOutside)
@@ -99,7 +102,7 @@ export default function Navbar() {
             document.removeEventListener("mousedown", handleOutside)
             document.removeEventListener("touchstart", handleOutside)
         }
-    }, [isUserMenuOpen, isOpen])
+    }, [isUserMenuOpen, isOpen, isSearchOpen])
 
     const openCategoryMenu = () => {
         if (categoryMenuTimeoutRef.current) {
@@ -118,11 +121,92 @@ export default function Navbar() {
     const handleSearchSubmit = (event: React.FormEvent) => {
         event.preventDefault()
         const q = searchKeyword.trim()
+        setIsSearchOpen(false)
         if (!q) {
             router.push("/auctions")
             return
         }
         router.push(`/auctions?q=${encodeURIComponent(q)}`)
+    }
+
+    const handleSearchSuggestionPick = (auctionID: string) => {
+        setIsSearchOpen(false)
+        router.push(`/product/${encodeURIComponent(auctionID)}`)
+    }
+
+    useEffect(() => {
+        const q = searchKeyword.trim()
+        if (q.length < 2) {
+            setSearchLoading(false)
+            setSearchSuggestions([])
+            setIsSearchOpen(false)
+            return
+        }
+        const seq = ++searchFetchSeqRef.current
+        const timer = setTimeout(() => {
+            setSearchLoading(true)
+            void listPublicAuctionsCached({ q, sort: "newest", limit: 6, offset: 0 })
+                .then((res) => {
+                    if (seq !== searchFetchSeqRef.current) return
+                    setSearchSuggestions(
+                        res.items.map((it) => ({
+                            auction_id: it.auction_id,
+                            title: it.title,
+                            current_bid: it.current_bid,
+                            cover_image_url: it.cover_image_url,
+                        })),
+                    )
+                    setIsSearchOpen(true)
+                })
+                .catch(() => {
+                    if (seq !== searchFetchSeqRef.current) return
+                    setSearchSuggestions([])
+                })
+                .finally(() => {
+                    if (seq === searchFetchSeqRef.current) setSearchLoading(false)
+                })
+        }, 220)
+        return () => clearTimeout(timer)
+    }, [searchKeyword])
+
+    const renderSearchSuggestions = () => {
+        const q = searchKeyword.trim()
+        if (!isSearchOpen || q.length < 2) return null
+        return (
+            <div className="absolute left-0 right-0 top-[calc(100%+0.4rem)] z-40 overflow-hidden rounded-xl border border-violet-100 bg-white shadow-xl">
+                {searchLoading ? (
+                    <div className="px-3 py-2.5 text-sm text-slate-500">กำลังค้นหา...</div>
+                ) : searchSuggestions.length === 0 ? (
+                    <div className="px-3 py-2.5 text-sm text-slate-500">ไม่พบรายการที่ตรงกับคำค้น</div>
+                ) : (
+                    <div className="max-h-80 overflow-y-auto">
+                        {searchSuggestions.map((it) => (
+                            <button
+                                key={it.auction_id}
+                                type="button"
+                                className="block w-full border-b border-slate-100 px-3 py-2 text-left hover:bg-brand-50 last:border-0"
+                                onClick={() => handleSearchSuggestionPick(it.auction_id)}
+                            >
+                                <p className="truncate text-sm font-medium text-slate-800">{it.title}</p>
+                                <p className="mt-0.5 text-xs text-slate-500">
+                                    {it.auction_id} · {Number(it.current_bid ?? 0).toLocaleString()} ฿
+                                </p>
+                            </button>
+                        ))}
+                    </div>
+                )}
+                <button
+                    type="button"
+                    className="block w-full border-t border-violet-100 bg-violet-50/60 px-3 py-2 text-center text-xs font-semibold text-brand-700 hover:bg-violet-100/60"
+                    onClick={() => {
+                        setIsSearchOpen(false)
+                        router.push(`/auctions?q=${encodeURIComponent(q)}`)
+                    }}
+                >
+                    ดูผลค้นหาทั้งหมดสำหรับ "{q}"
+                </button>
+            </div>
+        )
     }
 
     const formatCompactCredit = (value: number) => {
@@ -132,73 +216,6 @@ export default function Navbar() {
         if (absValue >= 1_000) return `${(value / 1_000).toFixed(1).replace(/\.0$/, "")}k`
         return value.toString()
     }
-
-    useEffect(() => {
-        if (!isTopupModalOpen || !chargeID || topupStatus !== "pending" || expectedCredit === null) return
-
-        let attempts = 0
-        const maxAttempts = 30 // around 90 seconds
-
-        const interval = window.setInterval(async () => {
-            attempts += 1
-            try {
-                await refreshSession({ silent: true })
-                const history = await getCreditActivity(20, 0, "topup")
-                const current = history.items.find((item) => item.charge_id === chargeID)
-                if (current) {
-                    if (current.status === "successful" && current.paid && current.credited) {
-                        setTopupStatus("paid")
-                        notifyCreditChanged()
-                        window.clearInterval(interval)
-                        return
-                    }
-                    if (current.status === "failed" || (current.status !== "pending" && !current.paid)) {
-                        setTopupStatus("failed")
-                        window.clearInterval(interval)
-                        return
-                    }
-                }
-            } catch {
-                // ignore transient fetch errors; next tick retries
-            }
-
-            if (attempts >= maxAttempts) {
-                setTopupStatus("failed")
-                window.clearInterval(interval)
-            }
-        }, 3000)
-
-        return () => {
-            window.clearInterval(interval)
-        }
-    }, [chargeID, expectedCredit, isTopupModalOpen, refreshSession, topupStatus])
-
-    useEffect(() => {
-        if (topupStatus !== "pending" || expectedCredit === null) return
-        if (creditBalance < expectedCredit) return
-
-        setTopupStatus("paid")
-        notifyCreditChanged()
-    }, [creditBalance, expectedCredit, topupStatus])
-
-    useEffect(() => {
-        if (topupStatus !== "paid") return
-
-        Swal.fire({
-            toast: true,
-            position: "top-end",
-            icon: "success",
-            title: "เติมเงินสำเร็จ",
-            showConfirmButton: false,
-            timer: 2200,
-            timerProgressBar: true,
-        })
-        const timeout = window.setTimeout(() => {
-            resetTopupState()
-        }, 1200)
-
-        return () => window.clearTimeout(timeout)
-    }, [topupStatus])
 
     const handleLogout = async () => {
         if (isLoggingOut) return
@@ -216,47 +233,21 @@ export default function Navbar() {
     }
 
     const handleOpenTopup = () => {
-        setIsTopupModalOpen(true)
         setIsUserMenuOpen(false)
-        setQrCodeURL("")
-        setChargeID("")
-        setTopupStatus("idle")
-        setExpectedCredit(null)
-    }
-
-    const handleTopupSubmit = (event: React.FormEvent) => {
-        event.preventDefault()
-        const amount = Number(topupAmount)
-        if (!amount || amount < 20) {
-            window.alert("จำนวนเงินขั้นต่ำ 20 บาท")
-            return
-        }
-        setIsTopupLoading(true)
-        createPromptPayTopup(amount)
-            .then((res) => {
-                setChargeID(res.charge_id)
-                setQrCodeURL(res.qr_code_url)
-                setTopupStatus("pending")
-                setExpectedCredit(creditBalance + amount)
-            })
-            .catch((e) => {
-                setTopupStatus("failed")
-                setExpectedCredit(null)
-                const msg = e instanceof Error ? e.message : "สร้าง QR สำหรับ PromptPay ไม่สำเร็จ"
-                void Swal.fire({ icon: "error", title: "เติมเงินไม่สำเร็จ", text: msg, confirmButtonText: "ตกลง" })
-            })
-            .finally(() => {
-                setIsTopupLoading(false)
-            })
+        openTopupCreditSwal({
+            initialAmount: "100",
+            refreshSession,
+            getCreditBalance: () => creditBalanceRef.current,
+        })
     }
 
     return (
         <>
-            <nav ref={mobileNavRef} className="fixed inset-x-0 top-0 z-40 border-b border-slate-200 bg-white lg:hidden">
-                <div className="mx-auto max-w-7xl px-4 py-3">
+            <nav ref={mobileNavRef} className="fixed inset-x-0 top-0 z-40 border-b border-violet-100/90 bg-white/95 backdrop-blur-md lg:hidden">
+                <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
                     <div className="flex items-center gap-2">
                         <button
-                            className="rounded-lg border border-slate-300 p-2 text-slate-600"
+                            className="rounded-2xl border border-violet-200 p-2.5 text-brand-700"
                             type="button"
                             aria-expanded={isOpen}
                             aria-label="Toggle navigation"
@@ -264,33 +255,29 @@ export default function Navbar() {
                         >
                             <i className="fa-solid fa-bars"></i>
                         </button>
-                        <form className="relative flex-1" onSubmit={handleSearchSubmit}>
-                            <input
-                                type="text"
-                                className="form-input pr-10"
-                                placeholder="ค้นหาสินค้า"
-                                aria-label="Search product"
-                                value={searchKeyword}
-                                onChange={(event) => setSearchKeyword(event.target.value)}
-                            />
-                            <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" aria-label="ค้นหา">
-                                <i className="fa-solid fa-magnifying-glass"></i>
-                            </button>
-                        </form>
-                        {clientReady && !loading && user && (
-                            <Link
-                                href="/seller/auctions/new"
-                                className="shrink-0 rounded-lg bg-emerald-600 px-2.5 py-2 text-white shadow-sm transition hover:bg-emerald-700"
-                                aria-label="สร้างรายการประมูล"
-                                title="สร้างรายการประมูล"
-                            >
-                                <i className="fa-solid fa-gavel text-sm" aria-hidden />
-                            </Link>
-                        )}
+                        <div ref={mobileSearchWrapRef} className="relative flex-1">
+                            <form className="relative" onSubmit={handleSearchSubmit}>
+                                <input
+                                    type="text"
+                                    className="form-input border-slate-200 bg-slate-100 pr-10 placeholder:text-slate-500 focus:border-brand-500 focus:bg-white"
+                                    placeholder="ค้นหาชื่อสินค้า..."
+                                    aria-label="Search product"
+                                    value={searchKeyword}
+                                    onFocus={() => {
+                                        if (searchKeyword.trim().length >= 2) setIsSearchOpen(true)
+                                    }}
+                                    onChange={(event) => setSearchKeyword(event.target.value)}
+                                />
+                                <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-500" aria-label="ค้นหา">
+                                    <i className="fa-solid fa-magnifying-glass"></i>
+                                </button>
+                            </form>
+                            {renderSearchSuggestions()}
+                        </div>
                         {clientReady && !loading && user && (
                             <button
                                 type="button"
-                                className="shrink-0 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-2 text-xs font-medium text-emerald-700"
+                                className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-900"
                                 onClick={handleOpenTopup}
                                 aria-label="เครดิตคงเหลือ"
                             >
@@ -305,17 +292,17 @@ export default function Navbar() {
                         )}
                     </div>
                     {isOpen && (
-                        <div className="mt-3 space-y-2 rounded-lg border border-slate-200 p-3">
+                        <div className="mt-3 space-y-2 rounded-2xl border border-violet-100 bg-white/95 p-3 shadow-sm">
                             {navItems.map((item) => (
-                                <Link key={item.label} className="block rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-100" href={item.href} onClick={() => setIsOpen(false)}>
+                                <Link key={item.label} className="block rounded-xl px-2 py-1.5 text-sm text-slate-700 hover:bg-brand-50" href={item.href} onClick={() => setIsOpen(false)}>
                                     {item.label}
                                 </Link>
                             ))}
-                            <Link href="/how-it-works" onClick={() => setIsOpen(false)} className="block rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-100">
+                            <Link href="/how-it-works" onClick={() => setIsOpen(false)} className="block rounded-xl px-2 py-1.5 text-sm text-slate-700 hover:bg-brand-50">
                                 วิธีใช้งาน
                             </Link>
                             {!clientReady ? (
-                                <div className="space-y-2 border-t border-slate-200 pt-2">
+                                <div className="space-y-2 border-t border-violet-100 pt-2">
                                     <div className="h-4 w-40 animate-pulse rounded bg-slate-100" aria-hidden />
                                     <div className="h-4 w-28 animate-pulse rounded bg-slate-100" aria-hidden />
                                 </div>
@@ -323,16 +310,28 @@ export default function Navbar() {
                                 <>
                                     {loading && <p className="text-sm text-slate-500">Loading...</p>}
                                     {!loading && !user && (
-                                        <div className="space-y-1 border-t border-slate-200 pt-2">
-                                            <Link href="/login" onClick={() => setIsOpen(false)} className="block rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-100">เข้าสู่ระบบ</Link>
-                                            <Link href="/register" onClick={() => setIsOpen(false)} className="block rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-100">สมัครสมาชิก</Link>
+                                        <div className="space-y-2 border-t border-violet-100 pt-2">
+                                            <Link
+                                                href="/login"
+                                                onClick={() => setIsOpen(false)}
+                                                className="block rounded-full border border-slate-200 bg-white px-4 py-2.5 text-center text-sm font-semibold text-brand-900 transition hover:bg-slate-50"
+                                            >
+                                                เข้าสู่ระบบ
+                                            </Link>
+                                            <Link
+                                                href="/register"
+                                                onClick={() => setIsOpen(false)}
+                                                className="block rounded-full bg-brand-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition hover:bg-brand-700"
+                                            >
+                                                สมัครสมาชิก
+                                            </Link>
                                         </div>
                                     )}
                                     {!loading && user && (
-                                        <div className="space-y-2 border-t border-slate-200 pt-2 text-sm text-slate-700">
+                                        <div className="space-y-2 border-t border-violet-100 pt-2 text-sm text-slate-700">
                                             <Link
                                                 href="/seller/auctions/new"
-                                                className="block rounded-md bg-emerald-600 px-2 py-2.5 text-center text-xs font-semibold leading-snug text-white hover:bg-emerald-700"
+                                                className="block rounded-2xl bg-brand-600 px-2 py-2.5 text-center text-xs font-semibold leading-snug text-white shadow-md shadow-brand-600/20 hover:bg-brand-700"
                                                 onClick={() => setIsOpen(false)}
                                             >
                                                 สร้างรายการประมูล
@@ -342,14 +341,14 @@ export default function Navbar() {
                                                     <Link
                                                         key={item.href}
                                                         href={item.href}
-                                                        className="block rounded px-2 py-2 text-xs text-slate-700 hover:bg-slate-100"
+                                                        className="block rounded-xl px-2 py-2 text-xs text-slate-700 hover:bg-brand-50"
                                                         onClick={() => setIsOpen(false)}
                                                     >
                                                         {item.label}
                                                     </Link>
                                                 ))}
                                             </div>
-                                            <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-2 pt-2">
+                                            <div className="flex items-center justify-between gap-3 border-t border-violet-100 px-2 pt-2">
                                                 <p className="min-w-0 truncate text-xs text-slate-600">
                                                     {`${user.firstName || "ผู้ใช้งาน"} ${user.lastName || ""}`}
                                                 </p>
@@ -371,37 +370,77 @@ export default function Navbar() {
                 </div>
             </nav>
             <div className="h-[73px] lg:hidden" aria-hidden="true"></div>
-            <header className="sticky top-0 z-50 hidden border-b border-slate-200 bg-white lg:block">
-                <div className="relative mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
-                    <Link href="/" className="flex items-center gap-2 text-slate-900">
-                        <Image
-                            src="/bootstrap-logo-shadow.png"
-                            width={40}
-                            height={32}
-                            alt="Pramool"
-                        />
-                        <span className="text-xl font-semibold">Pramool</span>
+            <header className="sticky top-0 z-50 hidden border-b border-violet-100 bg-white shadow-sm lg:block">
+                <div className="relative mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
+                    <Link href="/" className="flex items-center gap-3 text-brand-900">
+                        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-600 text-lg text-white shadow-md shadow-brand-600/30">
+                            <i className="fa-solid fa-gavel" aria-hidden />
+                        </span>
+                        <span className="flex flex-col leading-tight">
+                            <span className="font-display text-xl font-bold tracking-tight">Pramool</span>
+                            <span className="text-xs font-medium text-brand-600">ประมูลง่าย · ได้ของชัวร์</span>
+                        </span>
                     </Link>
-                    <form className="flex-1" onSubmit={handleSearchSubmit}>
-                        <input
-                            type="search"
-                            className="form-input"
-                            placeholder="ค้นหาสินค้า"
-                            aria-label="Search"
-                            value={searchKeyword}
-                            onChange={(event) => setSearchKeyword(event.target.value)}
-                        />
-                    </form>
-                    <nav className="flex items-center gap-4 text-sm">
-                        {navItems.map((item) => (
-                            <Link key={item.label} href={item.href} className="text-slate-700 hover:text-slate-900">
-                                {item.label}
-                            </Link>
-                        ))}
-                        <Link href="/how-it-works" className="text-slate-700 hover:text-slate-900">
+                    <div ref={desktopSearchWrapRef} className="relative mx-auto max-w-xl flex-1">
+                        <form className="relative" onSubmit={handleSearchSubmit}>
+                            <input
+                                type="search"
+                                className="form-input border-slate-200 bg-slate-100 py-2.5 pl-4 pr-11 placeholder:text-slate-500 focus:border-brand-500 focus:bg-white"
+                                placeholder="ค้นหาชื่อสินค้า..."
+                                aria-label="ค้นหา"
+                                value={searchKeyword}
+                                onFocus={() => {
+                                    if (searchKeyword.trim().length >= 2) setIsSearchOpen(true)
+                                }}
+                                onChange={(event) => setSearchKeyword(event.target.value)}
+                            />
+                            <button
+                                type="submit"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-500 hover:text-brand-700"
+                                aria-label="ค้นหา"
+                            >
+                                <i className="fa-solid fa-magnifying-glass" />
+                            </button>
+                        </form>
+                        {renderSearchSuggestions()}
+                    </div>
+                    <nav className="hidden shrink-0 items-center gap-6 text-sm lg:flex">
+                        {navItems.map((item) => {
+                            const active =
+                                item.href === "/"
+                                    ? pathname === "/"
+                                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                            return (
+                                <Link
+                                    key={item.label}
+                                    href={item.href}
+                                    className={
+                                        active
+                                            ? "inline-flex min-h-10 items-center border-b-2 border-brand-600 py-2 font-semibold text-brand-700"
+                                            : "inline-flex min-h-10 items-center border-b-2 border-transparent py-2 font-medium text-slate-600 transition hover:text-brand-700"
+                                    }
+                                >
+                                    {item.label}
+                                </Link>
+                            );
+                        })}
+                        <Link
+                            href="/how-it-works"
+                            className={
+                                pathname.startsWith("/how-it-works")
+                                    ? "inline-flex min-h-10 items-center border-b-2 border-brand-600 py-2 font-semibold text-brand-700"
+                                    : "inline-flex min-h-10 items-center border-b-2 border-transparent py-2 font-medium text-slate-600 transition hover:text-brand-700"
+                            }
+                        >
                             วิธีใช้งาน
                         </Link>
                     </nav>
+                    <span
+                        className="hidden shrink-0 select-none px-0.5 text-sm font-light text-slate-300 lg:inline lg:self-center"
+                        aria-hidden
+                    >
+                        |
+                    </span>
                     {!clientReady ? (
                         <div className="flex h-9 items-center gap-2" aria-hidden>
                             <span className="h-9 w-[200px] animate-pulse rounded-md bg-slate-100" />
@@ -410,16 +449,26 @@ export default function Navbar() {
                         <>
                             {loading && <p className="text-sm text-slate-500">Loading...</p>}
                             {!loading && !user && (
-                                <div className="flex items-center gap-2">
-                                    <Link href="/login" className="btn-outline">เข้าสู่ระบบ</Link>
-                                    <Link href="/register" className="btn-primary">สมัครสมาชิก</Link>
+                                <div className="flex shrink-0 items-center gap-2">
+                                    <Link
+                                        href="/login"
+                                        className="inline-flex min-h-10 items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-brand-900 transition hover:bg-slate-50"
+                                    >
+                                        เข้าสู่ระบบ
+                                    </Link>
+                                    <Link
+                                        href="/register"
+                                        className="inline-flex min-h-10 items-center justify-center rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-brand-600/25 transition hover:bg-brand-700"
+                                    >
+                                        สมัครสมาชิก
+                                    </Link>
                                 </div>
                             )}
                             {!loading && user && (
                                 <div className="flex items-center gap-2">
                                     <button
                                         type="button"
-                                        className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
+                                        className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900"
                                         onClick={handleOpenTopup}
                                     >
                                         เครดิต {creditBalance.toLocaleString()} ฿
@@ -427,36 +476,36 @@ export default function Navbar() {
                                     <div ref={userMenuRef} className="relative">
                                     <button
                                         type="button"
-                                        className="flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                                        className="flex items-center gap-2 rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm"
                                         onClick={() => setIsUserMenuOpen((prev) => !prev)}
                                     >
                                         <span>{`${user.firstName || "ผู้ใช้งาน"} ${user.lastName || ""}`}</span>
                                         <i className="fa-solid fa-chevron-down text-xs"></i>
                                     </button>
                                     {isUserMenuOpen && (
-                                        <div className="absolute right-0 top-11 z-30 w-64 rounded-md border border-slate-200 bg-white p-1 shadow-md">
+                                        <div className="absolute right-0 top-11 z-30 w-64 rounded-2xl border border-violet-100 bg-white p-2 shadow-xl shadow-violet-200/40">
                                             <Link
                                                 href="/seller/auctions/new"
-                                                className="block rounded px-3 py-2 text-left text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+                                                className="block rounded-xl px-3 py-2 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50"
                                                 onClick={() => setIsUserMenuOpen(false)}
                                             >
                                                 สร้างรายการประมูล
                                             </Link>
-                                            <div className="my-1 border-t border-slate-100" />
+                                            <div className="my-1 border-t border-violet-100" />
                                             {userMenuItems.map((item) => (
                                                 <Link
                                                     key={item.href}
                                                     href={item.href}
-                                                    className="block rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                                                    className="block rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-brand-50"
                                                     onClick={() => setIsUserMenuOpen(false)}
                                                 >
                                                     {item.label}
                                                 </Link>
                                             ))}
-                                            <div className="my-1 border-t border-slate-200"></div>
+                                            <div className="my-1 border-t border-violet-100"></div>
                                             <button
                                                 type="button"
-                                                className="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                                                className="w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-violet-50"
                                                 onClick={handleLogout}
                                                 disabled={isLoggingOut}
                                             >
@@ -471,58 +520,6 @@ export default function Navbar() {
                     )}
                 </div>
             </header>
-            {isTopupModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-                        <div className="mb-4 flex items-center justify-between">
-                            <h3 className="text-lg font-semibold text-slate-900">เติมเครดิตประมูล</h3>
-                            <button type="button" className="rounded p-1 text-slate-500 hover:bg-slate-100" onClick={resetTopupState}>
-                                <i className="fa-solid fa-xmark"></i>
-                            </button>
-                        </div>
-                        <form className="space-y-4" onSubmit={handleTopupSubmit}>
-                            <div>
-                                <label className="mb-1 block text-sm font-medium text-slate-700">จำนวนเงิน (บาท)</label>
-                                <input
-                                    type="number"
-                                    min={20}
-                                    step={10}
-                                    className="form-input"
-                                    value={topupAmount}
-                                    onChange={(e) => setTopupAmount(e.target.value)}
-                                />
-                                <p className="mt-1 text-xs text-slate-500">ระบบจะสร้าง QR PromptPay ผ่าน Omise และแสดงในหน้านี้</p>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2">
-                                {[100, 300, 500].map((amount) => (
-                                    <button
-                                        key={amount}
-                                        type="button"
-                                        className="btn-outline py-2 text-xs"
-                                        onClick={() => setTopupAmount(String(amount))}
-                                    >
-                                        {amount} ฿
-                                    </button>
-                                ))}
-                            </div>
-                            <button type="submit" className="btn-primary w-full py-2.5" disabled={isTopupLoading}>
-                                {isTopupLoading ? "กำลังสร้าง QR..." : "สร้าง QR PromptPay"}
-                            </button>
-                        </form>
-                        {qrCodeURL && (
-                            <div className="mt-4 rounded-lg border border-slate-200 p-3">
-                                <p className="mb-2 text-xs text-slate-500">สแกน QR เพื่อชำระเงิน</p>
-                                <img src={qrCodeURL} alt="PromptPay QR" className="mx-auto h-52 w-52 rounded-md border border-slate-200 object-contain" />
-                                <p className="mt-2 text-center text-xs text-slate-500">{`รหัสธุรกรรม: ${chargeID}`}</p>
-                                <p className={`mt-1 text-center text-xs ${topupStatus === "paid" ? "text-emerald-600" : topupStatus === "failed" ? "text-red-500" : "text-amber-600"}`}>
-                                    {topupStatus === "paid" ? "ชำระเงินสำเร็จ เครดิตถูกเพิ่มแล้ว" : topupStatus === "failed" ? "ชำระเงินไม่สำเร็จ" : "หลังชำระเงิน ระบบจะอัปเดตเครดิตอัตโนมัติผ่าน webhook"}
-                                </p>
-                                <p className="mt-1 text-center text-xs text-slate-500">หากยอดเครดิตยังไม่อัปเดต ให้กดรีเฟรชหน้าอีกครั้ง</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
         </>
     )
 }

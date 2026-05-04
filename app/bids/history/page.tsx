@@ -8,7 +8,7 @@ import {
   type MyBidHistoryItem,
 } from "@/app/lib/api/auction"
 import { getCoreApiBaseUrl } from "@/app/lib/constants/common"
-import { AppPageShell, APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
+import { AppPageShell, APP_PAGE_INNER } from "@/app/components/AppPageShell"
 
 function coverSrc(url: string): string {
   if (!url?.trim()) return "https://placehold.co/600x400?text=Auction"
@@ -85,7 +85,7 @@ export default function BidHistoryPage() {
   if (loading) {
     return (
       <AppPageShell>
-        <main className={APP_PAGE_INNER_WIDE}>
+        <main className={APP_PAGE_INNER}>
           <p className="text-slate-600">กำลังโหลด…</p>
         </main>
       </AppPageShell>
@@ -94,7 +94,7 @@ export default function BidHistoryPage() {
 
   return (
     <AppPageShell>
-    <main className={APP_PAGE_INNER_WIDE}>
+    <main className={APP_PAGE_INNER}>
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-slate-900">ประวัติการประมูล</h1>
         <p className="mt-1 text-sm text-slate-500">

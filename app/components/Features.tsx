@@ -1,38 +1,63 @@
-import React from 'react'
+import Link from "next/link";
+import React from "react";
 
-type Props = {}
+export default function Features() {
+  const items = [
+    {
+      title: "ตัดสินใจง่าย ข้อมูลชัด",
+      desc: "ดูรายละเอียดสินค้า ราคา และเวลาปิดประมูลได้ครบในหน้าเดียว",
+      icon: "fa-bolt",
+    },
+    {
+      title: "ปลอดภัย โปร่งใส",
+      desc: "ระบบเครดิตและการยืนยันตัวตนช่วยลดความเสี่ยงจากการประมูล",
+      icon: "fa-shield-halved",
+    },
+    {
+      title: "ลดความผิดพลาดจากการบิด",
+      desc: "กำหนดขั้นบิดและยอด hold ชัดเจน ลดโอกาสบิดพลาด",
+      icon: "fa-hand-holding-dollar",
+    },
+    {
+      title: "ยกระดับประสบการณ์ประมูล",
+      desc: "ออกแบบให้ใช้งานได้ทั้งมือถือและเดสก์ท็อป",
+      icon: "fa-star",
+    },
+  ];
 
-export default function Features({ }: Props) {
-    return (
-        <>
-            <h2 className="border-b border-slate-200 pb-2 text-2xl font-bold text-slate-900">ทำไมต้องใช้ PRAMOOL.IN.TH</h2>
-            <div className="grid items-start gap-8 py-6 md:grid-cols-2 md:py-10">
-                <div className="flex flex-col items-start gap-3">
-                    <h2 className="text-3xl font-bold text-slate-900">บริการของเรา</h2>
-                    <p className="text-slate-600">
-                        Paragraph of text beneath the heading to explain the heading. We'll
-                        add onto it with another sentence and probably just keep going until
-                        we run out of words.
-                    </p>
-                    <a href="#" className="btn-primary">สมัครสมาชิก</a>
-                </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {[
-                        "ทำให้คุณตัดสินใจได้ง่ายและเร็วขึ้น",
-                        "ป้องกันการโกง และติดตามได้อย่างแม่นยำ",
-                        "ป้องกันการเปิดประมูล/บิด โดยที่ไม่ได้ตั้งใจ",
-                        "ยกระดับการประมูล",
-                    ].map((title) => (
-                        <div key={title} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white">
-                                <i className="fas fa-star"></i>
-                            </div>
-                            <h4 className="mb-1 font-semibold text-slate-900">{title}</h4>
-                            <p className="text-sm text-slate-600">Paragraph of text beneath the heading to explain the heading.</p>
-                        </div>
-                    ))}
-                    </div>
+  return (
+    <section className="rounded-3xl border border-violet-100 bg-white/80 px-6 py-10 shadow-soft md:px-10 md:py-12">
+      <h2 className="font-display border-b border-violet-100 pb-3 text-2xl font-bold text-brand-800 md:text-3xl">
+        ทำไมต้อง Pramool.in.th
+      </h2>
+      <div className="grid items-start gap-10 py-8 md:grid-cols-2 md:py-10">
+        <div className="flex flex-col gap-4">
+          <h3 className="font-display text-2xl font-bold text-brand-800 md:text-3xl">
+            บริการของเรา
+          </h3>
+          <p className="leading-relaxed text-slate-600">
+            แพลตฟอร์มประมูลออนไลน์ที่เน้นความโปร่งใสและประสบการณ์ผู้ใช้ — ทั้งผู้ขายและผู้ซื้อเข้าถึงข้อมูลสำคัญได้ง่าย
+            และมีเครื่องมือช่วยจัดการการชำระเงินอย่างเป็นระบบ
+          </p>
+          <Link href="/register" className="btn-primary w-fit px-8">
+            สมัครสมาชิกฟรี
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {items.map((row) => (
+            <div
+              key={row.title}
+              className="card-elevated p-5 transition hover:shadow-brand/20"
+            >
+              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-brand-700 text-lg text-white shadow-md">
+                <i className={`fas ${row.icon}`} aria-hidden />
+              </div>
+              <h4 className="mb-2 font-display font-semibold text-brand-900">{row.title}</h4>
+              <p className="text-sm leading-relaxed text-slate-600">{row.desc}</p>
             </div>
-        </>
-    )
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
