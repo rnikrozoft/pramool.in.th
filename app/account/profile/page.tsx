@@ -18,6 +18,7 @@ import {
   BankSelect,
 } from "@/app/components/LocationSelector"
 import { FormStepSection } from "@/app/components/FormStepSection"
+import Icon from "@/app/components/Icon"
 
 type ProfileForm = {
   first_name: string
@@ -388,7 +389,7 @@ export default function ProfilePage() {
               className="mb-2 inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-800"
             >
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
-                <i className="fa-solid fa-house" aria-hidden />
+                <Icon name="fa-house" aria-hidden />
               </span>
               กลับหน้าหลัก
             </Link>
@@ -583,19 +584,19 @@ export default function ProfilePage() {
                   <ul className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-xs text-slate-600">
                     <li className="flex gap-2">
                       <span className="mt-0.5 shrink-0 text-emerald-600">
-                        <i className="fa-solid fa-circle-check" aria-hidden />
+                        <Icon name="fa-circle-check" aria-hidden />
                       </span>
                       แก้ไขข้อมูลแล้วต้องยืนยัน OTP ทางเบอร์นี้ทุกครั้ง
                     </li>
                     <li className="flex gap-2">
                       <span className="mt-0.5 shrink-0 text-emerald-600">
-                        <i className="fa-solid fa-circle-check" aria-hidden />
+                        <Icon name="fa-circle-check" aria-hidden />
                       </span>
                       ตรวจสอบเบอร์โทรให้รับ SMS ได้
                     </li>
                     <li className="flex gap-2">
                       <span className="mt-0.5 shrink-0 text-emerald-600">
-                        <i className="fa-solid fa-circle-check" aria-hidden />
+                        <Icon name="fa-circle-check" aria-hidden />
                       </span>
                       ที่อยู่ใช้จัดส่งได้จริง
                     </li>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useContext, useEffect } from "react"
+import { useContext, useEffect, useRef } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { UserContext } from "@/app/context/UserContext"
 import { getMyOnboardingStatus } from "@/app/lib/api/user"
@@ -9,9 +9,12 @@ export default function OnboardingGuard() {
   const { user, loading } = useContext(UserContext)
   const pathname = usePathname()
   const router = useRouter()
+  const fetchedOnceRef = useRef(false)
 
   useEffect(() => {
     if (loading || !user) return
+    if (fetchedOnceRef.current) return
+    fetchedOnceRef.current = true
 
     getMyOnboardingStatus()
       .then((status) => {

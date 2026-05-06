@@ -24,6 +24,7 @@ import { getCoreApiBaseUrl } from "@/app/lib/constants/common"
 import { notifyCreditChanged } from "@/app/lib/creditSync"
 import { useMultiAuctionWebSocket } from "@/app/lib/hooks/useMultiAuctionWebSocket"
 import { AppPageShell, APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
+import Icon from "@/app/components/Icon"
 
 type TabKey = "all" | "active" | "ending_soon" | "outbid" | "closed"
 type SortKey = "latest" | "end" | "price"
@@ -478,7 +479,7 @@ export default function ActiveBidsPage() {
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex gap-3">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-100 text-brand-600">
-                  <i className="fa-solid fa-gavel text-lg" aria-hidden />
+                  <Icon name="fa-gavel" className="text-lg" aria-hidden />
                 </span>
                 <div>
                   <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">รายการที่ฉันกำลังประมูล</h1>
@@ -510,7 +511,7 @@ export default function ActiveBidsPage() {
                 <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
                   <div className="flex gap-3 rounded-2xl border border-emerald-200/40 bg-white p-4 shadow-soft">
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
-                      <i className="fa-solid fa-briefcase" aria-hidden />
+                      <Icon name="fa-briefcase" aria-hidden />
                     </div>
                     <div>
                       <p className="text-xs font-medium text-emerald-700">กำลังประมูล</p>
@@ -520,7 +521,7 @@ export default function ActiveBidsPage() {
                   </div>
                   <div className="flex gap-3 rounded-2xl border border-amber-200/40 bg-white p-4 shadow-soft">
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
-                      <i className="fa-solid fa-clock" aria-hidden />
+                      <Icon name="fa-clock" aria-hidden />
                     </div>
                     <div>
                       <p className="text-xs font-medium text-amber-800">ใกล้หมดเวลา</p>
@@ -530,7 +531,7 @@ export default function ActiveBidsPage() {
                   </div>
                   <div className="flex gap-3 rounded-2xl border border-red-200/40 bg-white p-4 shadow-soft">
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 text-red-600">
-                      <i className="fa-solid fa-circle-xmark" aria-hidden />
+                      <Icon name="fa-circle-xmark" aria-hidden />
                     </div>
                     <div>
                       <p className="text-xs font-medium text-red-700">โดนปิดแซง</p>
@@ -540,7 +541,7 @@ export default function ActiveBidsPage() {
                   </div>
                   <div className="flex gap-3 rounded-2xl border border-brand-200/40 bg-white p-4 shadow-soft">
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
-                      <i className="fa-solid fa-flag-checkered" aria-hidden />
+                      <Icon name="fa-flag-checkered" aria-hidden />
                     </div>
                     <div>
                       <p className="text-xs font-medium text-brand-800">ปิดประมูลแล้ว</p>
@@ -568,7 +569,7 @@ export default function ActiveBidsPage() {
                         onClick={() => void fetchList({ silent: true, showSyncing: true })}
                         disabled={syncing || !!listError}
                       >
-                        <i className={`fa-solid fa-arrows-rotate ${syncing ? "animate-spin" : ""}`} aria-hidden />
+                        <Icon name="fa-arrows-rotate" className={syncing ? "animate-spin" : ""} aria-hidden />
                       </button>
                       <div className="relative min-w-0 flex-1">
                         <select
@@ -585,7 +586,7 @@ export default function ActiveBidsPage() {
                           className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400"
                           aria-hidden
                         >
-                          <i className="fa-solid fa-chevron-down block text-[0.625rem] leading-none" />
+                          <Icon name="fa-chevron-down" className="block text-[0.625rem] leading-none" />
                         </span>
                       </div>
                     </div>
@@ -686,7 +687,7 @@ export default function ActiveBidsPage() {
                                 {item.can_confirm_received ? (
                                   <div className="flex flex-col items-center gap-1.5 text-center">
                                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-                                      <i className="fa-solid fa-box-open text-xs" aria-hidden />
+                                      <Icon name="fa-box-open" className="text-xs" aria-hidden />
                                     </span>
                                     <div>
                                       <p className="text-sm font-medium text-slate-900">รอยืนยันรับของ</p>
@@ -696,7 +697,7 @@ export default function ActiveBidsPage() {
                                 ) : ended ? (
                                   <div className="flex flex-col items-center gap-1.5 text-center">
                                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                                      <i className="fa-solid fa-flag text-xs" aria-hidden />
+                                      <Icon name="fa-flag" className="text-xs" aria-hidden />
                                     </span>
                                     <div>
                                       <p className="text-sm font-medium text-slate-900">ปิดประมูลแล้ว</p>

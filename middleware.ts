@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
 
   if (pathname.startsWith("/register/address") && !isLoggedIn) {
     const url = request.nextUrl.clone();
-    url.pathname = "/register";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 

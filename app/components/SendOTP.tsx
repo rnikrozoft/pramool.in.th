@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import useCountdownTimer from './OTPCountdown';
 import { callPostAPI } from '../lib/utils/call-api';
 import { userFacingMessage } from '../lib/utils/userFacingMessage';
+import Icon from "@/app/components/Icon"
 
 interface OTPFormProps {
     token: string;
@@ -70,7 +71,7 @@ export default function OTPForm({ token, setShowPinModal }: OTPFormProps) {
                             onClick={() => setShowPinModal(false)}
                             aria-label="Close"
                         >
-                            <i className="fa-solid fa-xmark"></i>
+                            <Icon name="fa-xmark" />
                         </button>
                     </div>
                     <div>

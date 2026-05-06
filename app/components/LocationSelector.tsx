@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react"
 import subDistricts from '../data/sub-districts.json';
 import districts from '../data/districts.json';
 import provinces from '../data/provinces.json';
+import Icon from "@/app/components/Icon"
 
 type SearchOption = {
     id: number
@@ -81,7 +82,7 @@ function SearchableSelect({
                 disabled={disabled}
                 aria-label="toggle location options"
             >
-                <i className={`fa-solid ${open ? "fa-chevron-up" : "fa-chevron-down"} text-xs`}></i>
+                <Icon name={open ? "fa-chevron-up" : "fa-chevron-down"} className="text-xs" />
             </button>
             {open && !disabled && (
                 <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">

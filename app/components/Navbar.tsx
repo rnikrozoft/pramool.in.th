@@ -8,6 +8,7 @@ import { logout } from '../lib/api/user'
 import type { PublicAuctionListItem } from '../lib/api/auction'
 import { listPublicAuctionsCached } from '../lib/data/publicAuctionsCache'
 import { openTopupCreditSwal } from '../lib/utils/topupCreditSwal'
+import Icon from "@/app/components/Icon"
 
 export default function Navbar() {
     type SearchSuggestion = Pick<PublicAuctionListItem, "auction_id" | "title" | "current_bid" | "cover_image_url">
@@ -224,7 +225,12 @@ export default function Navbar() {
             const ok = await logout()
             if (ok) {
                 setUser(null)
-                router.push('/register')
+                try {
+                    localStorage.removeItem("phone")
+                } catch {
+                    /* ignore */
+                }
+                router.push('/')
                 router.refresh()
             }
         } finally {
@@ -253,7 +259,7 @@ export default function Navbar() {
                             aria-label="Toggle navigation"
                             onClick={() => setIsOpen((prev) => !prev)}
                         >
-                            <i className="fa-solid fa-bars"></i>
+                            <Icon name="fa-bars" />
                         </button>
                         <div ref={mobileSearchWrapRef} className="relative flex-1">
                             <form className="relative" onSubmit={handleSearchSubmit}>
@@ -269,7 +275,7 @@ export default function Navbar() {
                                     onChange={(event) => setSearchKeyword(event.target.value)}
                                 />
                                 <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-500" aria-label="ค้นหา">
-                                    <i className="fa-solid fa-magnifying-glass"></i>
+                                    <Icon name="fa-magnifying-glass" />
                                 </button>
                             </form>
                             {renderSearchSuggestions()}
@@ -374,7 +380,7 @@ export default function Navbar() {
                 <div className="relative mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
                     <Link href="/" className="flex items-center gap-3 text-brand-900">
                         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-600 text-lg text-white shadow-md shadow-brand-600/30">
-                            <i className="fa-solid fa-gavel" aria-hidden />
+                            <Icon name="fa-gavel" aria-hidden />
                         </span>
                         <span className="flex flex-col leading-tight">
                             <span className="font-display text-xl font-bold tracking-tight">Pramool</span>
@@ -399,7 +405,7 @@ export default function Navbar() {
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-500 hover:text-brand-700"
                                 aria-label="ค้นหา"
                             >
-                                <i className="fa-solid fa-magnifying-glass" />
+                                <Icon name="fa-magnifying-glass" />
                             </button>
                         </form>
                         {renderSearchSuggestions()}
@@ -480,7 +486,7 @@ export default function Navbar() {
                                         onClick={() => setIsUserMenuOpen((prev) => !prev)}
                                     >
                                         <span>{`${user.firstName || "ผู้ใช้งาน"} ${user.lastName || ""}`}</span>
-                                        <i className="fa-solid fa-chevron-down text-xs"></i>
+                                        <Icon name="fa-chevron-down" className="text-xs" />
                                     </button>
                                     {isUserMenuOpen && (
                                         <div className="absolute right-0 top-11 z-30 w-64 rounded-2xl border border-violet-100 bg-white p-2 shadow-xl shadow-violet-200/40">

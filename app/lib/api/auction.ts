@@ -130,6 +130,8 @@ export async function getMySellerAuctions(params?: {
     if (params?.limit != null && params.limit > 0) sp.set("limit", String(params.limit));
     if (params?.offset != null && params.offset > 0) sp.set("offset", String(params.offset));
     if (params?.scope && params.scope !== "all") sp.set("scope", params.scope);
+    // Avoid stale browser cache on seller dashboard right after create/reopen/close actions.
+    sp.set("_", String(Date.now()));
     const q = sp.toString();
     const path = q ? `/seller/auctions?${q}` : "/seller/auctions";
     const response = await callGetAPI(path, true, getAuctionRealtimeBaseUrl());

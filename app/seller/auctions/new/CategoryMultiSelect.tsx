@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
+import Icon from "@/app/components/Icon"
 
 type Props = {
     options: readonly string[]
@@ -147,7 +148,7 @@ export function CategoryMultiSelect({ options, value, onChange, max = 5 }: Props
                                 clearAll()
                             }}
                         >
-                            <i className="fa-solid fa-xmark text-xs" aria-hidden />
+                            <Icon name="fa-xmark" className="text-xs" aria-hidden />
                         </button>
                     )}
                     <button
@@ -162,7 +163,7 @@ export function CategoryMultiSelect({ options, value, onChange, max = 5 }: Props
                             inputRef.current?.focus()
                         }}
                     >
-                        <i className={`fa-solid fa-chevron-down text-xs transition ${open ? "rotate-180" : ""}`} aria-hidden />
+                        <Icon name="fa-chevron-down" className={`text-xs transition ${open ? "rotate-180" : ""}`} aria-hidden />
                     </button>
                 </div>
             </div>

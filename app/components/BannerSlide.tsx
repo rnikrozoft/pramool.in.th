@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
+import Icon from "@/app/components/Icon"
 
 export default function BannerSlide() {
   const slides = [
@@ -60,7 +61,7 @@ export default function BannerSlide() {
         onClick={goPrev}
         aria-label="สไลด์ก่อนหน้า"
       >
-        <i className="fa-solid fa-chevron-left" aria-hidden />
+        <Icon name="fa-chevron-left" aria-hidden />
       </button>
       <button
         className="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-brand-700 shadow-md transition hover:bg-white"
@@ -68,7 +69,7 @@ export default function BannerSlide() {
         onClick={goNext}
         aria-label="สไลด์ถัดไป"
       >
-        <i className="fa-solid fa-chevron-right" aria-hidden />
+        <Icon name="fa-chevron-right" aria-hidden />
       </button>
       <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
         {slides.map((_, index) => (

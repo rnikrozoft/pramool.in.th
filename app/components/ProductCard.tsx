@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react'
 import BackModal from './BackModal'
 import Image from 'next/image'
 import Link from 'next/link'
+import Icon from "@/app/components/Icon"
 
 type Props = {
     item: item
@@ -64,11 +65,11 @@ export default function ProductCard({ item }: Props) {
                         onClick={() => setIsModalOpen(true)}
                         className="rounded-full bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white shadow-md"
                     >
-                        <i className="fas fa-undo"></i>
+                        <Icon name="fa-undo" />
                     </button>
                     <BackModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
                     <span className="rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-brand-800 shadow-sm ring-1 ring-violet-100">
-                        <i className="fas fa-eye"></i> 99+
+                        <Icon name="fa-eye" /> 99+
                     </span>
                 </div>
             </div>
@@ -79,18 +80,18 @@ export default function ProductCard({ item }: Props) {
                     {timeLeft > 0 ? formatTimeLeft(timeLeft) : "หมดเวลาแล้ว"}
                 </div>
                 <div className="text-accent-500">
-                    <i className="fa-solid fa-star"></i>
-                    <i className="fa-solid fa-star"></i>
-                    <i className="fa-solid fa-star"></i>
-                    <i className="fa-solid fa-star"></i>
-                    <i className="fa-solid fa-star"></i>
+                    <Icon name="fa-star" />
+                    <Icon name="fa-star" />
+                    <Icon name="fa-star" />
+                    <Icon name="fa-star" />
+                    <Icon name="fa-star" />
                 </div>
             </div>
             <Link
                 href={`/product/${item.id}`}
                 className="btn-outline mt-2 w-full"
             >
-                <i className="fa-solid fa-gavel mr-1"></i>
+                <Icon name="fa-gavel" className="mr-1" />
                 <span>ร่วมประมูล (บิดครั้งละ 120)</span>
             </Link>
         </>

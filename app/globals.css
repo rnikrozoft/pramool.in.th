@@ -41,6 +41,53 @@
   .card-elevated {
     @apply rounded-3xl border border-violet-100/80 bg-white shadow-soft;
   }
+
+  /* Homepage scoped helpers (modern/playful refresh). Visual-only utilities. */
+  .home-container {
+    @apply mx-auto max-w-7xl px-4 sm:px-6;
+  }
+
+  .home-section {
+    @apply relative overflow-hidden py-16 sm:py-20;
+  }
+
+  .home-section-tight {
+    @apply relative overflow-hidden py-14 sm:py-16;
+  }
+
+  .home-eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-brand-50 to-fuchsia-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-700 ring-1 ring-brand-100;
+  }
+
+  .home-eyebrow-on-dark {
+    @apply inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white ring-1 ring-white/25 backdrop-blur-sm;
+  }
+
+  .home-gradient-text {
+    @apply bg-gradient-to-r from-brand-600 to-fuchsia-600 bg-clip-text text-transparent;
+  }
+
+  .home-card {
+    @apply rounded-3xl border border-slate-200/80 bg-white shadow-soft transition;
+  }
+
+  .home-card-hover {
+    @apply hover:-translate-y-1 hover:border-brand-200 hover:shadow-xl hover:shadow-brand-900/10;
+  }
+}
+
+@layer utilities {
+  .home-dot-grid {
+    background-image: radial-gradient(circle at 1px 1px, rgba(124, 58, 237, 0.18) 1px, transparent 0);
+    background-size: 22px 22px;
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 78%);
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 78%);
+  }
+
+  .home-dot-grid-soft {
+    background-image: radial-gradient(circle at 1px 1px, rgba(124, 58, 237, 0.08) 1px, transparent 0);
+    background-size: 20px 20px;
+  }
 }
 
 @keyframes swal2-toast-fade-in {
@@ -161,20 +208,58 @@
 }
 
 .swal2-popup.swal2-toast {
-  border-radius: 0.75rem !important;
-  border: 1px solid rgb(237 233 254) !important;
-  box-shadow: 0 4px 20px rgba(109, 40, 217, 0.1) !important;
-  padding: 0.75rem 1rem !important;
+  border-radius: 1rem !important;
+  border: 1px solid rgb(209 213 219) !important;
+  background: #ffffff !important;
+  box-shadow: 0 4px 16px rgb(15 23 42 / 0.08) !important;
+  padding: 1rem 1.1rem !important;
+  min-height: 5rem !important;
+  min-width: 20rem !important;
 }
 
 .swal2-popup.swal2-toast .swal2-title {
-  font-size: 0.875rem !important;
-  font-weight: 600 !important;
-  color: rgb(15 23 42) !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  color: rgb(17 24 39) !important;
+  margin: 0 !important;
 }
 
-.swal2-popup.swal2-toast .swal2-timer-progress-bar {
-  background: rgb(109 40 217) !important;
+.swal2-popup.swal2-toast .swal2-html-container {
+  margin: 0.25rem 0 0 0 !important;
+  font-size: 0.95rem !important;
+  color: rgb(107 114 128) !important;
+  text-align: left !important;
+}
+
+.swal2-popup.swal2-toast .swal2-icon {
+  width: 1.6rem !important;
+  height: 1.6rem !important;
+  margin: 0 0.85rem 0 0 !important;
+}
+
+.swal2-popup.swal2-toast .swal2-icon.swal2-success {
+  border-color: rgb(34 197 94) !important;
+  color: rgb(34 197 94) !important;
+  animation: none !important;
+}
+
+.swal2-popup.swal2-toast .swal2-icon.swal2-success [class^="swal2-success-"],
+.swal2-popup.swal2-toast .swal2-icon.swal2-success [class*=" swal2-success-"] {
+  animation: none !important;
+}
+
+.swal2-popup.swal2-toast .swal2-close {
+  color: rgb(148 163 184) !important;
+  font-size: 1.8rem !important;
+  padding: 0 0.15rem !important;
+  margin-left: 0.65rem !important;
+  align-self: flex-start !important;
+  line-height: 1 !important;
+}
+
+.swal2-popup.swal2-toast .swal2-close:hover {
+  color: rgb(100 116 139) !important;
+  background: transparent !important;
 }
 
 /* เติมเครดิต — ฟอร์มใน SweetAlert (จัดซ้าย, ช่องกรอกชัด, ปุ่มกดได้ชัด) */

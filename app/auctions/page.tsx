@@ -11,6 +11,7 @@ import { listPublicAuctionsCached } from "@/app/lib/data/publicAuctionsCache"
 import { getCoreApiBaseUrl } from "@/app/lib/constants/common"
 import { APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
 import { CategoryMultiSelect } from "@/app/seller/auctions/new/CategoryMultiSelect"
+import Icon from "@/app/components/Icon"
 
 type SortOption = AuctionListSort
 
@@ -126,11 +127,11 @@ function SellerStarsRow({ score10 }: { score10: number }) {
     const fullAt = (i + 1) * 2
     const halfAt = i * 2 + 1
     if (s >= fullAt) {
-      stars.push(<i key={i} className="fa-solid fa-star text-amber-400" aria-hidden />)
+      stars.push(<Icon key={i} name="fa-star" className="text-amber-400" aria-hidden />)
     } else if (s >= halfAt) {
-      stars.push(<i key={i} className="fa-solid fa-star-half-stroke text-amber-400" aria-hidden />)
+      stars.push(<Icon key={i} name="fa-star-half-stroke" className="text-amber-400" aria-hidden />)
     } else {
-      stars.push(<i key={i} className="fa-regular fa-star text-slate-300" aria-hidden />)
+      stars.push(<Icon key={i} name="fa-star" className="text-slate-300" aria-hidden />)
     }
   }
   return (
@@ -269,7 +270,7 @@ const AuctionCard = memo(function AuctionCard({
         <div className="max-w-[55%] text-right sm:max-w-[50%]">
           <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">เหลือเวลา</p>
           <p className={`mt-0.5 flex items-center justify-end gap-1 font-display text-lg font-bold tabular-nums leading-tight sm:text-xl ${accentTimer[accent]}`}>
-            <i className="fa-regular fa-clock shrink-0 text-[0.85em] opacity-80" aria-hidden />
+            <Icon name="fa-clock" className="shrink-0 text-[0.85em] opacity-80" aria-hidden />
             <span className="text-right">{line}</span>
           </p>
         </div>
@@ -281,7 +282,7 @@ const AuctionCard = memo(function AuctionCard({
         href={`/product/${item.auction_id}`}
         className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
       >
-        <i className="fa-solid fa-bolt text-xs" aria-hidden />
+        <Icon name="fa-bolt" className="text-xs" aria-hidden />
         ประมูลตอนนี้
       </Link>
     </div>
@@ -640,7 +641,7 @@ function AuctionsPageInner() {
             className="flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700"
             onClick={() => setIsMobileFilterOpen(true)}
           >
-            <i className="fa-solid fa-sliders mr-2 text-brand-600" aria-hidden />
+            <Icon name="fa-sliders" className="mr-2 text-brand-600" aria-hidden />
             ตัวกรอง
           </button>
           <select

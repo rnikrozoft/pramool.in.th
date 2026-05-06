@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation"
 import { UserContext } from "../context/UserContext"
 import { signup } from "../lib/api/user"
 import { runPostAuthRedirect } from "../lib/postAuthRedirect"
-import { notify } from "../lib/utils/notify"
+import { notify, queueNotify } from "../lib/utils/notify"
 import { userFacingMessage } from "../lib/utils/userFacingMessage"
+import Icon from "@/app/components/Icon"
 
 const features = [
   {
@@ -107,9 +108,8 @@ export default function RegisterPage() {
       }
 
       await refreshSession()
-      notify("success", "สมัครสมาชิกสำเร็จ").then(() => {
-        void runPostAuthRedirect(router, { phoneForOnboarding: t })
-      })
+      queueNotify("success", "สมัครสมาชิกสำเร็จ")
+      void runPostAuthRedirect(router, { phoneForOnboarding: t })
     } catch {
       notify("error")
     }
@@ -133,7 +133,7 @@ export default function RegisterPage() {
               {features.map((f) => (
                 <li key={f.title} className="flex gap-4">
                   <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-600 ring-2 ring-brand-100/80">
-                    <i className={`fa-solid ${f.icon}`} aria-hidden />
+                    <Icon name={f.icon} aria-hidden />
                   </span>
                   <div>
                     <p className="font-display font-bold text-slate-900">{f.title}</p>
@@ -246,7 +246,7 @@ export default function RegisterPage() {
                       aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
                       onClick={() => setShowPassword((v) => !v)}
                     >
-                      <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`} aria-hidden />
+                      <Icon name={showPassword ? "fa-eye-slash" : "fa-eye"} aria-hidden />
                     </button>
                   </div>
                 </div>
@@ -270,7 +270,7 @@ export default function RegisterPage() {
                       aria-label={showConfirmPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
                       onClick={() => setShowConfirmPassword((v) => !v)}
                     >
-                      <i className={`fa-solid ${showConfirmPassword ? "fa-eye-slash" : "fa-eye"}`} aria-hidden />
+                      <Icon name={showConfirmPassword ? "fa-eye-slash" : "fa-eye"} aria-hidden />
                     </button>
                   </div>
                 </div>
@@ -299,7 +299,7 @@ export default function RegisterPage() {
                   type="submit"
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-600/20 transition hover:bg-brand-700"
                 >
-                  <i className="fa-solid fa-user-plus text-base shrink-0" aria-hidden />
+                  <Icon name="fa-user-plus" className="text-base shrink-0" aria-hidden />
                   สมัครสมาชิก
                 </button>
               </form>

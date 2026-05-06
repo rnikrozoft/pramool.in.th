@@ -21,6 +21,7 @@ import { AppPageShell, APP_PAGE_INNER_PRODUCT, APP_PAGE_INNER_WIDE } from '@/app
 import Swal from 'sweetalert2'
 import { isAuctionBiddingPausedUntil } from '@/app/lib/auctionRealtime'
 import { userFacingErrorMessage, userFacingMessage } from '@/app/lib/utils/userFacingMessage'
+import Icon from "@/app/components/Icon"
 
 type Props = {}
 
@@ -1069,7 +1070,7 @@ export default function Product({ }: Props) {
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">วางราคาประมูล</h3>
               <button type="button" className="rounded p-1 text-slate-500" onClick={() => setIsBidSheetOpen(false)}>
-                <i className="fa-solid fa-xmark"></i>
+                <Icon name="fa-xmark" />
               </button>
             </div>
             <p className="text-xs text-slate-500">ราคาปัจจุบัน {currentPrice.toLocaleString()} ฿ • ขั้นต่ำ +{minIncrement.toLocaleString()} ฿</p>

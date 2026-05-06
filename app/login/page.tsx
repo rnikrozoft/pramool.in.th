@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation"
 import { UserContext } from "../context/UserContext"
 import { login } from "../lib/api/user"
 import { runPostAuthRedirect } from "../lib/postAuthRedirect"
-import { notify } from "../lib/utils/notify"
+import { notify, queueNotify } from "../lib/utils/notify"
 import { userFacingMessage } from "../lib/utils/userFacingMessage"
+import Icon from "@/app/components/Icon"
 
 const features = [
   {
@@ -78,9 +79,8 @@ export default function LoginPage() {
       }
       persistPhoneForOnboarding(id)
       await refreshSession()
-      notify("success", "เข้าสู่ระบบสำเร็จ").then(() => {
-        void runPostAuthRedirect(router)
-      })
+      queueNotify("success", "เข้าสู่ระบบสำเร็จ")
+      void runPostAuthRedirect(router)
     } catch {
       notify("error")
     } finally {
@@ -103,7 +103,7 @@ export default function LoginPage() {
               {features.map((f) => (
                 <li key={f.title} className="flex gap-4">
                   <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-600 ring-2 ring-brand-100/80">
-                    <i className={`fa-solid ${f.icon}`} aria-hidden />
+                    <Icon name={f.icon} aria-hidden />
                   </span>
                   <div>
                     <p className="font-display font-bold text-slate-900">{f.title}</p>
@@ -141,7 +141,7 @@ export default function LoginPage() {
                       className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
                       aria-hidden
                     >
-                      <i className="fa-solid fa-user" />
+                      <Icon name="fa-user" />
                     </span>
                     <input
                       id="login-id"
@@ -163,7 +163,7 @@ export default function LoginPage() {
                       className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
                       aria-hidden
                     >
-                      <i className="fa-solid fa-lock" />
+                      <Icon name="fa-lock" />
                     </span>
                     <input
                       id="login-password"
@@ -180,7 +180,7 @@ export default function LoginPage() {
                       aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
                       onClick={() => setShowPassword((v) => !v)}
                     >
-                      <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`} aria-hidden />
+                      <Icon name={showPassword ? "fa-eye-slash" : "fa-eye"} aria-hidden />
                     </button>
                   </div>
                   <p className="mt-1.5 text-xs text-slate-500">

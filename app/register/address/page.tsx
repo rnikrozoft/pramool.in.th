@@ -20,6 +20,7 @@ import { AppPageShell, APP_PAGE_INNER } from "@/app/components/AppPageShell"
 import { FormStepSection } from "@/app/components/FormStepSection"
 import { notify } from "@/app/lib/utils/notify"
 import { userFacingMessage } from "@/app/lib/utils/userFacingMessage"
+import Icon from "@/app/components/Icon"
 
 export default function AddressPage() {
     const router = useRouter();
@@ -261,7 +262,7 @@ export default function AddressPage() {
                     className="mb-2 inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-800"
                 >
                     <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
-                        <i className="fa-solid fa-house" aria-hidden />
+                        <Icon name="fa-house" aria-hidden />
                     </span>
                     กลับหน้าหลัก
                 </Link>
@@ -489,19 +490,19 @@ export default function AddressPage() {
                         <ul className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-xs text-slate-600">
                             <li className="flex gap-2">
                                 <span className="mt-0.5 shrink-0 text-emerald-600">
-                                    <i className="fa-solid fa-circle-check" aria-hidden />
+                                    <Icon name="fa-circle-check" aria-hidden />
                                 </span>
                                 ตรวจสอบชื่อ-นามสกุล และเลขบัตรให้ถูกต้อง
                             </li>
                             <li className="flex gap-2">
                                 <span className="mt-0.5 shrink-0 text-emerald-600">
-                                    <i className="fa-solid fa-circle-check" aria-hidden />
+                                    <Icon name="fa-circle-check" aria-hidden />
                                 </span>
                                 เลือกธนาคารและกรอกเลขบัญชี 10-16 หลัก
                             </li>
                             <li className="flex gap-2">
                                 <span className="mt-0.5 shrink-0 text-emerald-600">
-                                    <i className="fa-solid fa-circle-check" aria-hidden />
+                                    <Icon name="fa-circle-check" aria-hidden />
                                 </span>
                                 อัปโหลดเอกสาร KYC ให้ครบทั้ง 3 รายการ
                             </li>

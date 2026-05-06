@@ -11,6 +11,7 @@ import { notifyCreditChanged } from "@/app/lib/creditSync"
 import { AppPageShell, APP_PAGE_INNER_SELLER_NEW } from "@/app/components/AppPageShell"
 import { CategoryMultiSelect } from "./CategoryMultiSelect"
 import { userFacingErrorMessage } from "@/app/lib/utils/userFacingMessage"
+import Icon from "@/app/components/Icon"
 
 /** ต้องตรงกับ sellerCategoryWhitelist ใน auction-service */
 const CATEGORY_OPTIONS = [
@@ -379,7 +380,7 @@ export default function NewSellerAuctionPage() {
                             className="mb-2 inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-800"
                         >
                             <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
-                                <i className="fa-solid fa-arrow-left" aria-hidden />
+                                <Icon name="fa-arrow-left" aria-hidden />
                             </span>
                             กลับไปรายการของฉัน
                         </Link>
@@ -655,25 +656,25 @@ export default function NewSellerAuctionPage() {
                                 <ul className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-xs">
                                     <li className="flex items-center gap-2">
                                         <span className={checklist.titleOk ? "text-emerald-600" : "text-slate-300"}>
-                                            <i className="fa-solid fa-circle-check" />
+                                            <Icon name="fa-circle-check" />
                                         </span>
                                         มีชื่อรายการ
                                     </li>
                                     <li className="flex items-center gap-2">
                                         <span className={checklist.categoriesOk ? "text-emerald-600" : "text-slate-300"}>
-                                            <i className="fa-solid fa-circle-check" />
+                                            <Icon name="fa-circle-check" />
                                         </span>
                                         เลือกหมวดหมู่แล้ว
                                     </li>
                                     <li className="flex items-center gap-2">
                                         <span className={checklist.imagesOk ? "text-emerald-600" : "text-slate-300"}>
-                                            <i className="fa-solid fa-circle-check" />
+                                            <Icon name="fa-circle-check" />
                                         </span>
                                         อัปโหลดรูปแล้ว
                                     </li>
                                     <li className="flex items-center gap-2">
                                         <span className={checklist.scheduleOk ? "text-emerald-600" : "text-slate-300"}>
-                                            <i className="fa-solid fa-circle-check" />
+                                            <Icon name="fa-circle-check" />
                                         </span>
                                         กำหนดเวลาปิดแล้ว
                                     </li>

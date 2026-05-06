@@ -1,4 +1,5 @@
 import React from "react";
+import Icon from "@/app/components/Icon"
 
 export default function AccountTypes() {
   return (
@@ -21,15 +22,15 @@ export default function AccountTypes() {
             </p>
             <ul className="mt-6 space-y-3 text-left text-sm text-slate-600">
               <li className="flex gap-2">
-                <i className="fa-solid fa-check mt-0.5 text-brand-600" aria-hidden />
+                <Icon name="fa-check" className="mt-0.5 text-brand-600" aria-hidden />
                 เข้าร่วมประมูลและเปิดรายการได้
               </li>
               <li className="flex gap-2">
-                <i className="fa-solid fa-check mt-0.5 text-brand-600" aria-hidden />
+                <Icon name="fa-check" className="mt-0.5 text-brand-600" aria-hidden />
                 แจ้งเตือนพื้นฐาน
               </li>
               <li className="flex gap-2">
-                <i className="fa-solid fa-check mt-0.5 text-brand-600" aria-hidden />
+                <Icon name="fa-check" className="mt-0.5 text-brand-600" aria-hidden />
                 ศูนย์ช่วยเหลือ
               </li>
             </ul>
@@ -48,15 +49,15 @@ export default function AccountTypes() {
             </p>
             <ul className="mt-6 space-y-3 text-left text-sm text-slate-600">
               <li className="flex gap-2">
-                <i className="fa-solid fa-check mt-0.5 text-brand-600" aria-hidden />
+                <Icon name="fa-check" className="mt-0.5 text-brand-600" aria-hidden />
                 ไฮไลต์รายการและรายงานเพิ่มเติม
               </li>
               <li className="flex gap-2">
-                <i className="fa-solid fa-check mt-0.5 text-brand-600" aria-hidden />
+                <Icon name="fa-check" className="mt-0.5 text-brand-600" aria-hidden />
                 สนับสนุนลำดับความสำคัญ
               </li>
               <li className="flex gap-2">
-                <i className="fa-solid fa-check mt-0.5 text-brand-600" aria-hidden />
+                <Icon name="fa-check" className="mt-0.5 text-brand-600" aria-hidden />
                 ฟีเจอร์พิเศษตามนโยบายแพลตฟอร์ม
               </li>
             </ul>
@@ -95,10 +96,10 @@ export default function AccountTypes() {
                   {feature}
                 </th>
                 <td className="px-4 py-3 text-brand-600">
-                  <i className="fas fa-check" aria-hidden />
+                  <Icon name="fa-check" aria-hidden />
                 </td>
                 <td className="px-4 py-3 text-brand-600">
-                  <i className="fas fa-check" aria-hidden />
+                  <Icon name="fa-check" aria-hidden />
                 </td>
               </tr>
             ))}

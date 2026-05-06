@@ -52,11 +52,11 @@ const showcaseItems: ShowcaseItem[] = [
 export default function Home() {
   return (
     <main className="bg-white">
-      <HomeCategoryBar />
       <HeroWebsign />
+      <HomeCategoryBar />
       <HomeAuctionShowcase items={showcaseItems} />
-      <HomeCategoryPromo />
       <HomeHowItWorks />
+      <HomeCategoryPromo />
       <HomeWhyPramool />
       <HomeCtaBanner />
     </main>

@@ -8,6 +8,7 @@ import { UserProvider } from "./context/UserContext";
 import OnboardingGuard from "./components/OnboardingGuard";
 import RouteWarmup from "./components/RouteWarmup";
 import SwalThemeInit from "./components/SwalThemeInit";
+import QueuedToast from "./components/QueuedToast";
 
 const noto = Noto_Sans_Thai({
   subsets: ["latin", "thai"],
@@ -45,6 +46,7 @@ export default function RootLayout({
       >
         <UserProvider>
           <SwalThemeInit />
+          <QueuedToast />
           <RouteWarmup />
           <OnboardingGuard />
           <Suspense

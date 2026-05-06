@@ -24,6 +24,7 @@ import { notifyCreditChanged } from "@/app/lib/creditSync"
 import { useMultiAuctionWebSocket } from "@/app/lib/hooks/useMultiAuctionWebSocket"
 import { userFacingErrorMessage } from "@/app/lib/utils/userFacingMessage"
 import { AppPageShell, APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
+import Icon from "@/app/components/Icon"
 
 type TabKey = "all" | "active" | "closed"
 
@@ -485,7 +486,7 @@ export default function SellerAuctionsPage() {
                         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                             <div className="flex gap-3">
                                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-100 text-brand-600">
-                                    <i className="fa-solid fa-gavel text-lg" aria-hidden />
+                                    <Icon name="fa-gavel" className="text-lg" aria-hidden />
                                 </span>
                                 <div>
                                     <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">รายการที่ฉันเปิดประมูล</h1>
@@ -496,7 +497,7 @@ export default function SellerAuctionsPage() {
                                 href="/seller/auctions/new"
                                 className="inline-flex shrink-0 items-center justify-center rounded-pill bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-brand transition hover:bg-brand-700"
                             >
-                                <i className="fa-solid fa-plus mr-2 text-xs" aria-hidden />
+                                <Icon name="fa-plus" className="mr-2 text-xs" aria-hidden />
                                 สร้างรายการประมูลใหม่
                             </Link>
                         </div>
@@ -504,7 +505,7 @@ export default function SellerAuctionsPage() {
                         <div className="mb-6 grid gap-3 sm:grid-cols-2">
                             <div className="flex gap-3 rounded-2xl border border-emerald-200/40 bg-white p-4 shadow-soft">
                                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
-                                    <i className="fa-solid fa-briefcase" aria-hidden />
+                                    <Icon name="fa-briefcase" aria-hidden />
                                 </div>
                                 <div>
                                     <p className="text-xs font-medium text-emerald-700">กำลังประมูล</p>
@@ -513,7 +514,7 @@ export default function SellerAuctionsPage() {
                             </div>
                             <div className="flex gap-3 rounded-2xl border border-brand-200/40 bg-white p-4 shadow-soft">
                                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
-                                    <i className="fa-solid fa-flag-checkered" aria-hidden />
+                                    <Icon name="fa-flag-checkered" aria-hidden />
                                 </div>
                                 <div>
                                     <p className="text-xs font-medium text-brand-800">ปิดประมูลแล้ว</p>
@@ -551,7 +552,7 @@ export default function SellerAuctionsPage() {
                                         className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400"
                                         aria-hidden
                                     >
-                                        <i className="fa-solid fa-chevron-down block text-[0.625rem] leading-none" />
+                                        <Icon name="fa-chevron-down" className="block text-[0.625rem] leading-none" />
                                     </span>
                                 </div>
                             </div>
@@ -663,7 +664,7 @@ export default function SellerAuctionsPage() {
                                                                 href={`/product/${encodeURIComponent(row.auctionId)}`}
                                                                 className={sellerManageBtnNeutral}
                                                             >
-                                                                <i className="fa-solid fa-eye text-xs opacity-80" aria-hidden />
+                                                                <Icon name="fa-eye" className="text-xs opacity-80" aria-hidden />
                                                                 ดูรายละเอียด
                                                             </Link>
                                                             {showReopen ? (
@@ -673,7 +674,7 @@ export default function SellerAuctionsPage() {
                                                                     disabled={busy}
                                                                     onClick={() => void handleReopen(row)}
                                                                 >
-                                                                    <i className="fa-solid fa-rotate-right text-xs" aria-hidden />
+                                                                    <Icon name="fa-rotate-right" className="text-xs" aria-hidden />
                                                                     เปิดอีกครั้ง
                                                                 </button>
                                                             ) : null}
@@ -684,7 +685,7 @@ export default function SellerAuctionsPage() {
                                                                     disabled={busy}
                                                                     onClick={() => void handleCloseEarly(row)}
                                                                 >
-                                                                    <i className="fa-solid fa-stop text-xs" aria-hidden />
+                                                                    <Icon name="fa-stop" className="text-xs" aria-hidden />
                                                                     ปิดประมูล
                                                                 </button>
                                                             ) : null}
@@ -695,7 +696,7 @@ export default function SellerAuctionsPage() {
                                                                     disabled={busy}
                                                                     onClick={() => void handleMarkShipped(row)}
                                                                 >
-                                                                    <i className="fa-solid fa-truck-fast text-xs" aria-hidden />
+                                                                    <Icon name="fa-truck-fast" className="text-xs" aria-hidden />
                                                                     บันทึกส่งของ
                                                                 </button>
                                                             ) : null}
@@ -716,7 +717,7 @@ export default function SellerAuctionsPage() {
                                         className="text-sm font-medium text-brand-600 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                         {loadingMore ? "กำลังโหลด…" : "โหลดเพิ่มเติม"}{" "}
-                                        <i className="fa-solid fa-chevron-down ml-1 text-xs" aria-hidden />
+                                        <Icon name="fa-chevron-down" className="ml-1 text-xs" aria-hidden />
                                     </button>
                                 ) : (
                                     items.length > 0 && (
