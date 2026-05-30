@@ -11,24 +11,22 @@ import {
     reopenSellerAuction,
     type SellerAuctionItem,
     type SellerAuctionListScope,
+    type SellerAuctionListSort,
 } from "@/app/lib/api/auction"
-import {
-    auctionListWsNeedsFullRefetch,
-    computeSellerAuctionsPollIntervalMs,
-    patchSellerAuctionFromWsMessage,
-    pickAuctionIdsForLimitedWebSocket,
-    type AuctionWSClientPayload,
-} from "@/app/lib/auctionRealtime"
 import { getCoreApiBaseUrl } from "@/app/lib/constants/common"
 import { notifyCreditChanged } from "@/app/lib/creditSync"
-import { useMultiAuctionWebSocket } from "@/app/lib/hooks/useMultiAuctionWebSocket"
+import { notifyPendingShipChanged } from "@/app/lib/pendingShipBadgeSync"
 import { userFacingErrorMessage } from "@/app/lib/utils/userFacingMessage"
 import { AppPageShell, APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
 import Icon from "@/app/components/Icon"
+import { SellerStarsDisplay } from "@/app/components/SellerStarRating"
+import { buildEarlyCloseConfirmHtml } from "@/app/lib/feePolicyDisplay"
+import { isAuctionBiddingPausedUntil } from "@/app/lib/auctionRealtime"
+import { getWalletFees, loadWalletFees, type ActiveWalletFees } from "@/app/lib/walletFees"
 
 type TabKey = "all" | "active" | "closed"
 
-type SortKey = "latest" | "end" | "price"
+type SortKey = SellerAuctionListSort
 
 type AuctionTableRow = {
     key: string
@@ -39,6 +37,7 @@ type AuctionTableRow = {
     currentPrice: number
     startPrice: number
     totalBids: number
+    bidderCount: number
     /** ขั้นต่อบิด (บาท) — ใช้ในคอลัมน์ บิดครั้งละ */
     bidStep: number
     endAtMs: number
@@ -47,6 +46,11 @@ type AuctionTableRow = {
     reopenEligible: boolean
     pendingSellerPayout: boolean
     sellerShippedAt: string
+    biddingPausedUntil: string
+    buyerRating?: number
+    buyerReviewPoints?: number
+    winnerId: string
+    winnerDisplayName: string
 }
 
 function toCoverSrc(coverImageURL: string): string {
@@ -63,39 +67,6 @@ function toDatetimeLocalValue(d: Date): string {
 /** แสดงในตาราง: ปิดตาม API หรือเลยเวลา end_at แล้ว (ก่อน settle อัปเดต status) */
 function isDisplayClosed(row: AuctionTableRow, nowMs: number): boolean {
     return row.isClosed || nowMs >= row.endAtMs
-}
-
-function sellerItemPollRow(it: SellerAuctionItem): { endAtMs: number; isClosed: boolean } {
-    return {
-        endAtMs: new Date(it.end_at).getTime(),
-        isClosed: it.status === "closed",
-    }
-}
-
-function isSellerPollRowDisplayClosed(r: { endAtMs: number; isClosed: boolean }, nowMs: number): boolean {
-    return r.isClosed || nowMs >= r.endAtMs
-}
-
-function sortSellerAuctionRows(rows: AuctionTableRow[], sortBy: SortKey, nowMs: number): AuctionTableRow[] {
-    const copy = [...rows]
-    if (sortBy === "latest") {
-        copy.sort((a, b) => b.auctionId.localeCompare(a.auctionId, "en"))
-        return copy
-    }
-    if (sortBy === "price") {
-        copy.sort((a, b) => b.currentPrice - a.currentPrice)
-        return copy
-    }
-    /* end — ใกล้ปิดก่อน: กำลังประมูลเรียงตามเวลาปิด ascending; ปิดแล้วเรียงตามเวลาปิดล่าสุดก่อน */
-    copy.sort((a, b) => {
-        const aOpen = !isDisplayClosed(a, nowMs)
-        const bOpen = !isDisplayClosed(b, nowMs)
-        if (aOpen && !bOpen) return -1
-        if (!aOpen && bOpen) return 1
-        if (aOpen && bOpen) return a.endAtMs - b.endAtMs
-        return b.endAtMs - a.endAtMs
-    })
-    return copy
 }
 
 /** สอดคล้องกับหน้า bids/active — วัน + ชม. / น. / วิ. */
@@ -136,6 +107,7 @@ function sellerItemToRow(item: SellerAuctionItem): AuctionTableRow {
         currentPrice: item.current_bid,
         startPrice: item.start_price,
         totalBids: item.total_bids,
+        bidderCount: Number(item.bidder_count ?? 0),
         bidStep: step,
         endAtMs: endMs,
         isClosed: closed,
@@ -143,13 +115,19 @@ function sellerItemToRow(item: SellerAuctionItem): AuctionTableRow {
         reopenEligible: Boolean(item.reopen_eligible),
         pendingSellerPayout: Boolean(item.pending_seller_payout),
         sellerShippedAt: String(item.seller_shipped_at ?? "").trim(),
+        biddingPausedUntil: String(item.bidding_paused_until ?? "").trim(),
+        buyerRating: item.buyer_rating != null && item.buyer_rating > 0 ? item.buyer_rating : undefined,
+        buyerReviewPoints:
+            item.buyer_review_points != null && item.buyer_review_points > 0 ? item.buyer_review_points : undefined,
+        winnerId: String(item.winner_id ?? "").trim(),
+        winnerDisplayName: String(item.winner_display_name ?? "").trim(),
     }
 }
 
 const SELLER_LIST_PAGE_SIZE = 10
 
 const sellerManageBtnNeutral =
-    "inline-flex w-full min-h-[2.5rem] items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 text-center text-sm font-semibold leading-snug text-slate-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
+    "action-btn-secondary"
 
 const sellerManageBtnPrimary =
     "inline-flex w-full min-h-[2.5rem] items-center justify-center gap-2 rounded-lg bg-brand-600 px-2 py-2 text-sm font-semibold text-white shadow-md ring-1 ring-black/10 transition hover:bg-brand-700 hover:ring-black/15 disabled:cursor-not-allowed disabled:opacity-50"
@@ -167,23 +145,49 @@ function tabToScope(tab: TabKey): SellerAuctionListScope {
 }
 
 export default function SellerAuctionsPage() {
-    const { refreshSession } = useContext(UserContext)
+    const { user, refreshSession } = useContext(UserContext)
+    const pendingShipCount = Number(user?.pendingSellerShipCount ?? 0)
     const [items, setItems] = useState<SellerAuctionItem[]>([])
     const [listTotal, setListTotal] = useState(0)
     const [allCount, setAllCount] = useState(0)
     const [activeCount, setActiveCount] = useState(0)
     const [loading, setLoading] = useState(true)
-    const [loadingMore, setLoadingMore] = useState(false)
     const [error, setError] = useState("")
     const [tab, setTab] = useState<TabKey>("all")
     const [sortBy, setSortBy] = useState<SortKey>("latest")
+    const [page, setPage] = useState(1)
+    const [searchInput, setSearchInput] = useState("")
+    const [searchQuery, setSearchQuery] = useState("")
     const [tick, setTick] = useState(0)
     const [actionBusyId, setActionBusyId] = useState<string | null>(null)
+    const [syncing, setSyncing] = useState(false)
+    const [feePolicy, setFeePolicy] = useState<ActiveWalletFees>(() => getWalletFees())
     const itemsRef = useRef(items)
+
+    useEffect(() => {
+        void loadWalletFees().then(setFeePolicy)
+    }, [])
     itemsRef.current = items
     const tabRef = useRef(tab)
     tabRef.current = tab
+    const pageRef = useRef(page)
+    pageRef.current = page
+    const searchQueryRef = useRef(searchQuery)
+    searchQueryRef.current = searchQuery
+    const sortByRef = useRef(sortBy)
+    sortByRef.current = sortBy
     const reloadSellerAuctionsInFlightRef = useRef<Promise<void> | null>(null)
+
+    const listFetchParams = useCallback(
+        (pageNum: number) => ({
+            limit: SELLER_LIST_PAGE_SIZE,
+            offset: Math.max(0, (pageNum - 1) * SELLER_LIST_PAGE_SIZE),
+            scope: tabToScope(tabRef.current),
+            q: searchQueryRef.current || undefined,
+            sort: sortByRef.current,
+        }),
+        [],
+    )
 
     const applyListResponse = useCallback((res: Awaited<ReturnType<typeof getMySellerAuctions>>, replaceItems: SellerAuctionItem[]) => {
         setListTotal(res.total)
@@ -198,9 +202,7 @@ export default function SellerAuctionsPage() {
         }
         const p = (async () => {
             try {
-                const scope = tabToScope(tabRef.current)
-                const n = Math.max(SELLER_LIST_PAGE_SIZE, itemsRef.current.length)
-                const res = await getMySellerAuctions({ limit: n, offset: 0, scope })
+                const res = await getMySellerAuctions(listFetchParams(pageRef.current))
                 applyListResponse(res, res.items)
             } catch {
                 /* คงรายการเดิม */
@@ -213,28 +215,26 @@ export default function SellerAuctionsPage() {
             }
         })
         return p
-    }, [applyListResponse])
+    }, [applyListResponse, listFetchParams])
 
-    const handleLoadMore = useCallback(async () => {
-        if (loadingMore || itemsRef.current.length >= listTotal) return
-        setLoadingMore(true)
+    const handleSyncPrices = useCallback(async () => {
+        if (syncing) return
+        setSyncing(true)
         try {
-            const scope = tabToScope(tabRef.current)
-            const res = await getMySellerAuctions({
-                limit: SELLER_LIST_PAGE_SIZE,
-                offset: itemsRef.current.length,
-                scope,
-            })
-            setListTotal(res.total)
-            setAllCount(res.all_count)
-            setActiveCount(res.active_count)
-            setItems((prev) => [...prev, ...res.items])
-        } catch {
-            /* ignore */
+            await reloadSellerAuctions()
         } finally {
-            setLoadingMore(false)
+            setSyncing(false)
         }
-    }, [listTotal, loadingMore])
+    }, [reloadSellerAuctions, syncing])
+
+    useEffect(() => {
+        const id = window.setTimeout(() => setSearchQuery(searchInput.trim()), 300)
+        return () => window.clearTimeout(id)
+    }, [searchInput])
+
+    useEffect(() => {
+        setPage(1)
+    }, [tab, searchQuery, sortBy])
 
     const handleReopen = async (row: AuctionTableRow) => {
         if (!row.reopenEligible || actionBusyId) return
@@ -242,16 +242,19 @@ export default function SellerAuctionsPage() {
         const def = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         const result = await Swal.fire({
             title: "เปิดประมูลอีกครั้ง",
-            html: `<div class="swal-reopen-body text-left">
-<p class="text-sm text-slate-600">กำหนดเวลาปิดรอบใหม่ ระบบจะหักมัดจำเท่า<strong>ราคาเริ่มต้น</strong> (${row.startPrice.toLocaleString()} ฿) จากเครดิต</p>
-<label class="mt-3 block text-sm font-medium text-slate-700" for="swal-reopen-end">เวลาปิดประมูล</label>
-<input id="swal-reopen-end" type="datetime-local" class="swal2-input mt-1 w-full rounded-lg border border-slate-200 px-2 py-2" min="${toDatetimeLocalValue(min)}" value="${toDatetimeLocalValue(def)}" />
+            html: `<div class="swal-reopen-body">
+<p class="swal-reopen-desc">กำหนดเวลาปิดรอบใหม่ ระบบจะหักมัดจำเท่า<strong>ราคาเริ่มต้น</strong> (${row.startPrice.toLocaleString()} ฿) จากเครดิต</p>
+<label class="swal-reopen-label" for="swal-reopen-end">เวลาปิดประมูล</label>
+<input id="swal-reopen-end" type="datetime-local" class="swal-reopen-datetime" min="${toDatetimeLocalValue(min)}" value="${toDatetimeLocalValue(def)}" />
 </div>`,
             showCancelButton: true,
             confirmButtonText: "เปิดประมูล",
             cancelButtonText: "ยกเลิก",
             reverseButtons: true,
             focusConfirm: false,
+            customClass: {
+                popup: "swal-reopen-auction-popup",
+            },
             preConfirm: () => {
                 const el = document.getElementById("swal-reopen-end") as HTMLInputElement | null
                 if (!el?.value) {
@@ -285,20 +288,16 @@ export default function SellerAuctionsPage() {
     const handleCloseEarly = async (row: AuctionTableRow) => {
         if (row.isClosed || !row.allowEarlyClose || actionBusyId) return
         if (Date.now() >= row.endAtMs) return
+        if (isAuctionBiddingPausedUntil(row.biddingPausedUntil)) return
         const start = row.startPrice
         const last = row.currentPrice
         const hasBid = row.totalBids > 0
-        const earningEst = hasBid ? Math.floor((last * 70) / 100) : 0
-        const creditRefundEst = hasBid ? start : Math.max(last, start)
-        const fmt = (n: number) => n.toLocaleString("th-TH")
-        const detailHtml = hasBid
-            ? `<p class="swal2-early-close-detail text-left text-sm text-slate-600">เมื่อปิดแล้ว ระบบแยกยอดแบบนี้ (จากรายการนี้)</p>
-<ul class="swal2-early-close-list mt-2 list-inside list-disc space-y-1 text-left text-sm text-slate-800">
-<li><strong>ส่วนแบ่งผู้ขาย</strong> ≈ <strong>${fmt(earningEst)} ฿</strong> (70% ของราคาล่าสุด ${fmt(last)} ฿)</li>
-<li><strong>เครดิต</strong> คืนมัดจำโพสต์ ≈ <strong>${fmt(creditRefundEst)} ฿</strong> (ราคาเริ่มต้นที่หักตอนโพสต์)</li>
-</ul>
-<p class="mt-2 text-left text-xs text-slate-500">30% ที่เหลือเป็นค่าธรรมเนียม/ส่วนแบ่งแพลตฟอร์ม</p>`
-            : `<p class="text-left text-sm text-slate-600">ยังไม่มีผู้เสนอราคา — ระบบจะคืนเข้า<strong>เครดิต</strong>ประมาณ <strong>${fmt(creditRefundEst)} ฿</strong> (ตามราคาที่แสดงในรายการ)</p>`
+        const detailHtml = buildEarlyCloseConfirmHtml({
+            hasBid,
+            lastPrice: last,
+            startPrice: start,
+            fees: feePolicy,
+        })
         const result = await Swal.fire({
             title: "ปิดประมูลก่อนหมดเวลา?",
             html: `${detailHtml}<p class="mt-3 text-left text-xs text-slate-500">ตัวเลขอาจเปลี่ยนหากมีการบิดช่วงวินาทีสุดท้าย — ยืนยันหรือไม่</p>`,
@@ -313,6 +312,16 @@ export default function SellerAuctionsPage() {
         setActionBusyId(row.key)
         try {
             await closeAuctionEarly(row.auctionId)
+            setItems((prev) =>
+                prev.map((item) =>
+                    item.auction_id === row.auctionId
+                        ? {
+                              ...item,
+                              bidding_paused_until: new Date(Date.now() + 15_000).toISOString(),
+                          }
+                        : item,
+                ),
+            )
             notifyCreditChanged()
             await refreshSession({ force: true, silent: true })
             await reloadSellerAuctions()
@@ -339,6 +348,7 @@ export default function SellerAuctionsPage() {
         try {
             await markAuctionShipped(row.auctionId)
             notifyCreditChanged()
+            notifyPendingShipChanged()
             await refreshSession({ force: true, silent: true })
             await reloadSellerAuctions()
             void Swal.fire({ toast: true, position: "top-end", icon: "success", title: "บันทึกการจัดส่งแล้ว", showConfirmButton: false, timer: 2000 })
@@ -360,11 +370,7 @@ export default function SellerAuctionsPage() {
             setLoading(true)
             setError("")
             try {
-                const res = await getMySellerAuctions({
-                    limit: SELLER_LIST_PAGE_SIZE,
-                    offset: 0,
-                    scope: tabToScope(tab),
-                })
+                const res = await getMySellerAuctions(listFetchParams(page))
                 if (!cancelled) {
                     applyListResponse(res, res.items)
                 }
@@ -378,79 +384,7 @@ export default function SellerAuctionsPage() {
         return () => {
             cancelled = true
         }
-    }, [tab, applyListResponse])
-
-    useEffect(() => {
-        const onVis = () => {
-            if (document.visibilityState === "visible") {
-                void reloadSellerAuctions()
-            }
-        }
-        document.addEventListener("visibilitychange", onVis)
-        return () => document.removeEventListener("visibilitychange", onVis)
-    }, [reloadSellerAuctions])
-
-    useEffect(() => {
-        let cancelled = false
-        let timeoutId = 0
-
-        const scheduleNext = () => {
-            if (cancelled) return
-            const hidden = document.visibilityState !== "visible"
-            const pollRows = itemsRef.current.map(sellerItemPollRow)
-            const ms = computeSellerAuctionsPollIntervalMs(
-                Date.now(),
-                pollRows,
-                hidden,
-                isSellerPollRowDisplayClosed,
-            )
-            timeoutId = window.setTimeout(() => {
-                if (cancelled) return
-                if (document.visibilityState === "visible") {
-                    void reloadSellerAuctions()
-                }
-                scheduleNext()
-            }, ms)
-        }
-
-        scheduleNext()
-        return () => {
-            cancelled = true
-            window.clearTimeout(timeoutId)
-        }
-    }, [reloadSellerAuctions])
-
-    const sellerWsIds = useMemo(() => {
-        const now = Date.now()
-        const open = items.filter((it) => it.status === "active" && new Date(it.end_at).getTime() > now)
-        const ids = open.map((i) => i.auction_id)
-        return pickAuctionIdsForLimitedWebSocket(
-            ids,
-            (id) => {
-                const row = items.find((x) => x.auction_id === id)
-                return row ? new Date(row.end_at).getTime() : Number.MAX_SAFE_INTEGER
-            },
-            6,
-        )
-    }, [items])
-
-    const onSellerWsMessage = useCallback(
-        (auctionId: string, p: AuctionWSClientPayload) => {
-            if (auctionListWsNeedsFullRefetch(p)) {
-                void reloadSellerAuctions()
-                return
-            }
-            if (p.type !== "snapshot" && p.type !== "bid_update") return
-            setItems((prev) =>
-                prev.map((row) =>
-                    row.auction_id === auctionId ? patchSellerAuctionFromWsMessage(row, p) : row,
-                ),
-            )
-        },
-        [reloadSellerAuctions],
-    )
-
-    useMultiAuctionWebSocket(sellerWsIds, onSellerWsMessage)
+    }, [tab, page, searchQuery, sortBy, applyListResponse, listFetchParams])
 
     const tableRows = useMemo(() => items.map(sellerItemToRow), [items])
 
@@ -459,12 +393,11 @@ export default function SellerAuctionsPage() {
         return { all: allCount, active: activeCount, closed }
     }, [allCount, activeCount])
 
-    const displayRows = useMemo(() => {
-        const now = Date.now()
-        return sortSellerAuctionRows(tableRows, sortBy, now)
-    }, [tableRows, sortBy, tick])
+    const totalPages = Math.max(1, Math.ceil(listTotal / SELLER_LIST_PAGE_SIZE))
+    const pageStart = listTotal === 0 ? 0 : (page - 1) * SELLER_LIST_PAGE_SIZE + 1
+    const pageEnd = Math.min(page * SELLER_LIST_PAGE_SIZE, listTotal)
 
-    const hasMore = items.length < listTotal
+    const displayRows = useMemo(() => tableRows, [tableRows, tick])
 
     const tabButton = (key: TabKey, label: string, count: number, activeClass: string) => (
         <button
@@ -489,7 +422,7 @@ export default function SellerAuctionsPage() {
                                     <Icon name="fa-gavel" className="text-lg" aria-hidden />
                                 </span>
                                 <div>
-                                    <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">รายการที่ฉันเปิดประมูล</h1>
+                                    <h1 className="font-display text-2xl font-bold tracking-tight text-heading sm:text-3xl">รายการที่ฉันเปิดประมูล</h1>
                                     <p className="mt-1 text-sm text-slate-600">ติดตามสถานะการประมูลของคุณ</p>
                                 </div>
                             </div>
@@ -502,8 +435,8 @@ export default function SellerAuctionsPage() {
                             </Link>
                         </div>
 
-                        <div className="mb-6 grid gap-3 sm:grid-cols-2">
-                            <div className="flex gap-3 rounded-2xl border border-emerald-200/40 bg-white p-4 shadow-soft">
+                        <div className="mb-6 grid gap-3 sm:grid-cols-3">
+                            <div className="stat-card border-emerald-200/40 dark:border-emerald-900/40">
                                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
                                     <Icon name="fa-briefcase" aria-hidden />
                                 </div>
@@ -512,7 +445,7 @@ export default function SellerAuctionsPage() {
                                     <p className="mt-0.5 text-2xl font-bold text-emerald-900">{counts.active}</p>
                                 </div>
                             </div>
-                            <div className="flex gap-3 rounded-2xl border border-brand-200/40 bg-white p-4 shadow-soft">
+                            <div className="stat-card border-brand-200/40 dark:border-brand-900/40">
                                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
                                     <Icon name="fa-flag-checkered" aria-hidden />
                                 </div>
@@ -521,50 +454,97 @@ export default function SellerAuctionsPage() {
                                     <p className="mt-0.5 text-2xl font-bold text-brand-900">{counts.closed}</p>
                                 </div>
                             </div>
+                            <div className="stat-card border-red-200/40 dark:border-red-900/40">
+                                <div className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 text-red-600">
+                                    <Icon name="fa-truck-fast" aria-hidden />
+                                    {pendingShipCount > 0 ? (
+                                        <span className="absolute -right-0.5 -top-0.5 inline-flex h-3 w-3" aria-hidden>
+                                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                                            <span className="relative inline-flex h-3 w-3 rounded-full bg-red-600 ring-2 ring-white dark:ring-slate-900" />
+                                        </span>
+                                    ) : null}
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-red-700">ค้างส่ง</p>
+                                    <p className="mt-0.5 text-2xl font-bold text-red-900">{pendingShipCount}</p>
+                                </div>
+                            </div>
                         </div>
 
                         {loading && items.length === 0 && (
-                            <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500">กำลังโหลดรายการ...</div>
+                            <div className="mb-4 rounded-2xl border border-slate-200 bg-surface-card p-12 text-center text-muted dark:border-slate-700">กำลังโหลดรายการ...</div>
                         )}
                         {error && (
                             <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-center text-sm text-red-700">{error}</div>
                         )}
 
-                        <div className="overflow-hidden rounded-2xl border border-slate-200/50 bg-white shadow-soft">
-                            <div className="flex flex-col gap-3 border-b border-slate-100/90 bg-slate-50/40 px-4 py-3 sm:flex-row sm:items-end sm:justify-between sm:px-5">
+                        <div className="data-table-shell">
+                            <div className="flex flex-col gap-3 border-b border-slate-100/90 bg-slate-50/40 px-4 py-3 dark:border-slate-700/90 dark:bg-slate-800/40 sm:flex-row sm:items-end sm:justify-between sm:px-5">
                                 <div className="-mb-px flex flex-wrap gap-x-5 gap-y-1 overflow-x-auto">
                                     {tabButton("all", "ทั้งหมด", counts.all, "")}
                                     {tabButton("active", "กำลังประมูล", counts.active, "")}
                                     {tabButton("closed", "ปิดประมูลแล้ว", counts.closed, "")}
                                 </div>
-                                <div className="relative w-full min-w-0 sm:w-auto sm:max-w-sm sm:shrink-0">
-                                    <select
-                                        className="box-border block w-full min-w-0 appearance-none rounded-lg border-0 bg-white py-2.5 pl-3 pr-11 text-sm font-medium text-slate-700 ring-1 ring-slate-200/80 transition hover:ring-slate-300/90"
-                                        value={sortBy}
-                                        onChange={(e) => setSortBy(e.target.value as SortKey)}
-                                        aria-label="เรียงลำดับรายการในหมวดที่เลือก"
+                                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                                    <div className="relative w-full min-w-0 sm:w-52">
+                                        <Icon
+                                            name="fa-magnifying-glass"
+                                            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"
+                                            aria-hidden
+                                        />
+                                        <input
+                                            type="search"
+                                            value={searchInput}
+                                            onChange={(e) => setSearchInput(e.target.value)}
+                                            placeholder="ค้นหาชื่อหรือรหัสสินค้า"
+                                            aria-label="ค้นหาชื่อหรือรหัสสินค้า"
+                                            className="box-border block w-full min-w-0 rounded-lg border-0 bg-surface-card py-2.5 pl-9 pr-3 text-sm text-body ring-1 ring-slate-200/80 transition placeholder:text-slate-400 hover:ring-slate-300/90 focus:ring-brand-400 dark:ring-slate-600"
+                                        />
+                                    </div>
+                                    <div className="relative w-full min-w-0 sm:w-auto sm:max-w-sm sm:shrink-0">
+                                        <select
+                                            className="box-border block w-full min-w-0 appearance-none rounded-lg border-0 bg-surface-card py-2.5 pl-3 pr-11 text-sm font-medium text-body ring-1 ring-slate-200/80 transition hover:ring-slate-300/90 dark:ring-slate-600"
+                                            value={sortBy}
+                                            onChange={(e) => setSortBy(e.target.value as SortKey)}
+                                            aria-label="เรียงลำดับรายการในหมวดที่เลือก"
+                                        >
+                                            <option value="latest">เรียงล่าสุด</option>
+                                            <option value="end">ใกล้ปิดก่อน</option>
+                                            <option value="price">ราคาปัจจุบัน (สูงไปต่ำ)</option>
+                                        </select>
+                                        <span
+                                            className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400"
+                                            aria-hidden
+                                        >
+                                            <Icon name="fa-chevron-down" className="block text-[0.625rem] leading-none" />
+                                        </span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={syncing || loading}
+                                        onClick={() => void handleSyncPrices()}
+                                        className="inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-lg bg-surface-card px-3 py-2 text-sm font-semibold text-brand-700 ring-1 ring-brand-200/80 transition hover:bg-brand-50 hover:ring-brand-300/90 disabled:cursor-not-allowed disabled:opacity-50 dark:ring-brand-800/80 dark:hover:bg-brand-950/40"
                                     >
-                                        <option value="latest">เรียงล่าสุด</option>
-                                        <option value="end">ใกล้ปิดก่อน</option>
-                                        <option value="price">ราคาปัจจุบัน (สูงไปต่ำ)</option>
-                                    </select>
-                                    <span
-                                        className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400"
-                                        aria-hidden
-                                    >
-                                        <Icon name="fa-chevron-down" className="block text-[0.625rem] leading-none" />
-                                    </span>
+                                        <Icon
+                                            name="fa-arrows-rotate"
+                                            className={`text-xs ${syncing ? "animate-spin" : ""}`}
+                                            aria-hidden
+                                        />
+                                        {syncing ? "กำลังอัปเดต…" : "อัปเดตราคาล่าสุด"}
+                                    </button>
                                 </div>
                             </div>
                             <div className="overflow-x-auto">
-                                <table className="w-full min-w-[1000px] text-sm text-slate-800">
+                                <table className="w-full min-w-[1180px] text-sm text-slate-800">
                                     <thead>
-                                        <tr className="border-b border-slate-100 bg-white text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                        <tr className="table-header-row">
                                             <th className="px-4 py-3 pl-5 text-left">รายการสินค้า</th>
                                             <th className="whitespace-nowrap px-3 py-3 text-center">ราคาเปิด</th>
                                             <th className="px-4 py-3 text-center">ราคาปัจจุบัน</th>
                                             <th className="px-4 py-3 text-center">บิดครั้งละ</th>
                                             <th className="px-4 py-3 text-center">สถานะ</th>
+                                            <th className="whitespace-nowrap px-3 py-3 text-center">จำนวนผู้ประมูล</th>
+                                            <th className="whitespace-nowrap px-3 py-3 text-center">คะแนนจากผู้ซื้อ</th>
                                             <th className="px-4 py-3 text-center">เวลาที่เหลือ</th>
                                             <th className="w-[9rem] min-w-[9rem] max-w-[9rem] py-3 pl-2 pr-5 text-center">จัดการ</th>
                                         </tr>
@@ -572,8 +552,10 @@ export default function SellerAuctionsPage() {
                                     <tbody>
                                         {displayRows.length === 0 && !loading && (
                                             <tr>
-                                                <td colSpan={7} className="px-5 py-12 text-center text-slate-500">
-                                                    ไม่พบรายการในหมวดนี้
+                                                <td colSpan={9} className="px-5 py-12 text-center text-slate-500">
+                                                    {searchQuery
+                                                        ? `ไม่พบรายการที่ตรงกับ "${searchQuery}"`
+                                                        : "ไม่พบรายการในหมวดนี้"}
                                                 </td>
                                             </tr>
                                         )}
@@ -583,25 +565,45 @@ export default function SellerAuctionsPage() {
                                             const left = row.endAtMs - now
                                             const countdownLines = formatCountdownLines(left)
                                             const priceCell = "text-sm font-semibold tabular-nums"
+                                            const biddingPaused = isAuctionBiddingPausedUntil(row.biddingPausedUntil, now)
+                                            const closingEarly = biddingPaused && !displayClosed
                                             const canCloseEarly =
-                                                !row.isClosed && row.allowEarlyClose && now < row.endAtMs
+                                                !row.isClosed &&
+                                                row.allowEarlyClose &&
+                                                now < row.endAtMs &&
+                                                !biddingPaused
                                             const showReopen = row.reopenEligible
                                             const showShip =
                                                 row.isClosed &&
                                                 row.pendingSellerPayout &&
                                                 !row.sellerShippedAt
+                                            const hasBuyerReview =
+                                                row.buyerRating != null &&
+                                                row.buyerRating > 0 &&
+                                                row.buyerReviewPoints != null &&
+                                                row.buyerReviewPoints > 0
+                                            const awaitingBuyerReview =
+                                                displayClosed &&
+                                                !row.reopenEligible &&
+                                                row.totalBids > 0 &&
+                                                !hasBuyerReview
                                             const busy = actionBusyId === row.key
                                             return (
-                                                <tr key={row.key} className="border-b border-slate-100 last:border-0">
+                                                <tr key={row.key} className="border-b border-slate-100 last:border-0 dark:border-slate-700/80">
                                                     <td className="px-4 py-4 pl-5 text-left align-top">
-                                                        <div className="flex gap-3">
+                                                        <Link
+                                                            href={`/product/${encodeURIComponent(row.auctionId)}`}
+                                                            className="group flex gap-3 rounded-lg outline-offset-2 transition hover:opacity-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
+                                                        >
                                                             <img
                                                                 src={row.image}
                                                                 alt=""
-                                                                className="h-14 w-14 shrink-0 rounded-xl object-cover"
+                                                                className="h-14 w-14 shrink-0 rounded-xl object-cover ring-1 ring-slate-200/80 transition group-hover:ring-brand-300 dark:ring-slate-600"
                                                             />
                                                             <div className="min-w-0">
-                                                                <p className="font-semibold text-slate-900">{row.title}</p>
+                                                                <p className="font-semibold text-heading transition group-hover:text-brand-700 dark:group-hover:text-brand-400">
+                                                                    {row.title}
+                                                                </p>
                                                                 <p className="mt-0.5 text-xs text-slate-500">{row.auctionId}</p>
                                                                 <div className="mt-1 flex flex-wrap gap-1">
                                                                     {row.tags.map((t) => (
@@ -614,7 +616,7 @@ export default function SellerAuctionsPage() {
                                                                     ))}
                                                                 </div>
                                                             </div>
-                                                        </div>
+                                                        </Link>
                                                     </td>
                                                     <td className={`px-3 py-4 text-center align-middle ${priceCell} text-slate-800`}>
                                                         {row.startPrice != null && row.startPrice > 0 ? (
@@ -623,28 +625,74 @@ export default function SellerAuctionsPage() {
                                                             <span className="font-normal text-slate-400">—</span>
                                                         )}
                                                     </td>
-                                                    <td className={`px-4 py-4 text-center align-middle ${priceCell} ${displayClosed ? "text-slate-600" : "text-slate-900"}`}>
+                                                    <td className={`px-4 py-4 text-center align-middle ${priceCell} ${displayClosed ? "text-muted" : "text-heading"}`}>
                                                         {row.currentPrice.toLocaleString()} ฿
                                                     </td>
                                                     <td className="px-4 py-4 text-center align-middle">
                                                         {row.bidStep <= 0 ? (
                                                             <span className="text-sm text-slate-400">—</span>
                                                         ) : (
-                                                            <span className={`${priceCell} ${displayClosed ? "text-slate-600" : "text-slate-900"}`}>
+                                                            <span className={`${priceCell} ${displayClosed ? "text-muted" : "text-heading"}`}>
                                                                 {row.bidStep.toLocaleString()} ฿
                                                             </span>
                                                         )}
                                                     </td>
                                                     <td className="px-4 py-4 text-center align-middle">
-                                                        <div className="flex justify-center">
+                                                        <div className="flex flex-col items-center gap-1">
                                                             <span
                                                                 className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                                                    displayClosed ? "bg-slate-100 text-slate-700" : "bg-emerald-100 text-emerald-800"
+                                                                    displayClosed
+                                                                        ? "bg-slate-100 text-slate-700"
+                                                                        : closingEarly
+                                                                          ? "bg-amber-100 text-amber-800"
+                                                                          : "bg-emerald-100 text-emerald-800"
                                                                 }`}
                                                             >
-                                                                {displayClosed ? "ปิดประมูลแล้ว" : "กำลังประมูล"}
+                                                                {displayClosed
+                                                                    ? "ปิดประมูลแล้ว"
+                                                                    : closingEarly
+                                                                      ? "กำลังปิดประมูล"
+                                                                      : "กำลังประมูล"}
                                                             </span>
+                                                            {displayClosed && row.winnerId ? (
+                                                                <p className="max-w-[9rem] text-center text-xs leading-snug text-slate-600">
+                                                                    <span className="font-medium">ผู้ชนะ:</span>{" "}
+                                                                    <Link
+                                                                        href={`/user/${encodeURIComponent(row.winnerId)}`}
+                                                                        className="font-semibold text-brand-600 hover:text-brand-700 hover:underline"
+                                                                    >
+                                                                        {row.winnerDisplayName || "ดูโปรไฟล์"}
+                                                                    </Link>
+                                                                </p>
+                                                            ) : null}
                                                         </div>
+                                                    </td>
+                                                    <td className="px-3 py-4 text-center align-middle">
+                                                        <span
+                                                            className={`inline-flex items-center justify-center gap-1.5 text-sm font-semibold tabular-nums ${
+                                                                row.bidderCount > 0 ? "text-heading" : "text-slate-400"
+                                                            }`}
+                                                        >
+                                                            <Icon name="fa-users" className="text-xs opacity-70" aria-hidden />
+                                                            {row.bidderCount.toLocaleString()}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-3 py-4 text-center align-middle">
+                                                        {hasBuyerReview ? (
+                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                <SellerStarsDisplay rating={row.buyerRating!} size="sm" />
+                                                                <span className="text-xs font-semibold tabular-nums text-amber-800">
+                                                                    {row.buyerRating!.toFixed(1)} ดาว
+                                                                </span>
+                                                                <span className="text-[11px] text-slate-500">
+                                                                    {row.buyerReviewPoints} คะแนน
+                                                                </span>
+                                                            </div>
+                                                        ) : awaitingBuyerReview ? (
+                                                            <span className="text-xs font-medium text-slate-500">รอรีวิว</span>
+                                                        ) : (
+                                                            <span className="text-sm text-slate-400">—</span>
+                                                        )}
                                                     </td>
                                                     <td className="px-4 py-4 align-middle">
                                                         {displayClosed ? (
@@ -692,10 +740,20 @@ export default function SellerAuctionsPage() {
                                                             {showShip ? (
                                                                 <button
                                                                     type="button"
-                                                                    className={sellerManageBtnEmerald}
+                                                                    className={`${sellerManageBtnEmerald} relative`}
                                                                     disabled={busy}
                                                                     onClick={() => void handleMarkShipped(row)}
                                                                 >
+                                                                    <span
+                                                                        className="absolute -right-1 -top-1 inline-flex h-3 w-3"
+                                                                        aria-label="รอบันทึกส่งของ"
+                                                                    >
+                                                                        <span
+                                                                            className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75"
+                                                                            aria-hidden
+                                                                        />
+                                                                        <span className="relative inline-flex h-3 w-3 rounded-full bg-red-600 ring-2 ring-white dark:ring-slate-900" />
+                                                                    </span>
                                                                     <Icon name="fa-truck-fast" className="text-xs" aria-hidden />
                                                                     บันทึกส่งของ
                                                                 </button>
@@ -708,22 +766,43 @@ export default function SellerAuctionsPage() {
                                     </tbody>
                                 </table>
                             </div>
-                            <div className="border-t border-slate-100/90 bg-slate-50/30 px-5 py-4 text-center">
-                                {hasMore ? (
-                                    <button
-                                        type="button"
-                                        disabled={loadingMore}
-                                        onClick={() => void handleLoadMore()}
-                                        className="text-sm font-medium text-brand-600 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        {loadingMore ? "กำลังโหลด…" : "โหลดเพิ่มเติม"}{" "}
-                                        <Icon name="fa-chevron-down" className="ml-1 text-xs" aria-hidden />
-                                    </button>
-                                ) : (
-                                    items.length > 0 && (
-                                        <p className="text-xs text-slate-500">แสดงครบ {items.length} รายการในหมวดนี้</p>
-                                    )
-                                )}
+                            <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100/90 bg-slate-50/30 px-5 py-4 dark:border-slate-700/90 dark:bg-slate-800/30 sm:flex-row">
+                                <p className="text-xs text-slate-500">
+                                    {searchQuery ? (
+                                        <>พบ {listTotal.toLocaleString()} รายการจากการค้นหา</>
+                                    ) : (
+                                        <>ทั้งหมด {listTotal.toLocaleString()} รายการ</>
+                                    )}
+                                    {listTotal > 0 ? (
+                                        <>
+                                            {" "}
+                                            · แสดง {pageStart.toLocaleString()}–{pageEnd.toLocaleString()}
+                                        </>
+                                    ) : null}
+                                </p>
+                                {listTotal > SELLER_LIST_PAGE_SIZE ? (
+                                    <div className="flex items-center gap-2 text-sm text-body">
+                                        <button
+                                            type="button"
+                                            className="btn-outline px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                                            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                                            disabled={page <= 1 || loading}
+                                        >
+                                            ก่อนหน้า
+                                        </button>
+                                        <span className="tabular-nums">
+                                            หน้า {page} / {totalPages}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="btn-outline px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                                            onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                                            disabled={page >= totalPages || loading}
+                                        >
+                                            ถัดไป
+                                        </button>
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
                 </div>

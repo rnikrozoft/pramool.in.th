@@ -12,7 +12,7 @@ const rings: { icon: string; label: string; href: string }[] = [
 
 export default function HomeCategoryPromo() {
   return (
-    <section className="bg-white py-14 sm:py-16">
+    <section className="bg-surface-page py-14 sm:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-brand-700 via-fuchsia-700 to-brand-900 px-5 py-10 shadow-xl shadow-brand-900/25 sm:px-10 sm:py-12">
           <div

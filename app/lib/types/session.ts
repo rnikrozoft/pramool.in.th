@@ -6,4 +6,6 @@ export type SessionUser = {
     credit: number
     withdrawalBlocked?: boolean
     withdrawalBlockReason?: string
+    /** รายการประมูลปิดแล้วที่ยังไม่บันทึกส่งของ (ผู้ขาย) */
+    pendingSellerShipCount?: number
 }

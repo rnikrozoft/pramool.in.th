@@ -62,12 +62,12 @@ export default function OTPForm({ token, setShowPinModal }: OTPFormProps) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" tabIndex={-1}>
             <div className="w-full max-w-md">
-                <form className="rounded-xl bg-white p-5 shadow-xl" onSubmit={handleSubmit}>
+                <form className="rounded-xl bg-surface-card p-5 shadow-xl dark:shadow-black/40" onSubmit={handleSubmit}>
                     <div className="mb-3 flex items-center justify-between">
-                        <h5 className="text-lg font-semibold text-slate-900">กรุณากรอกรหัส OTP</h5>
+                        <h5 className="text-lg font-semibold text-heading">กรุณากรอกรหัส OTP</h5>
                         <button
                             type="button"
-                            className="rounded-md p-2 text-slate-500 hover:bg-slate-100"
+                            className="rounded-md p-2 text-muted hover:bg-slate-100 dark:hover:bg-slate-800"
                             onClick={() => setShowPinModal(false)}
                             aria-label="Close"
                         >

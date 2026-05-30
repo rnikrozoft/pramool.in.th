@@ -2,6 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "");
+const ONBOARDING_ADDRESS_PATH = "/register/address";
+
+function userApiBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_USER_API_BASE_URL?.trim() || "http://localhost:3001";
+}
+
+function isOnboardingAddressPath(pathname: string): boolean {
+  return (
+    pathname === ONBOARDING_ADDRESS_PATH ||
+    pathname.startsWith(`${ONBOARDING_ADDRESS_PATH}/`)
+  );
+}
+
+async function needsOnboardingAddress(request: NextRequest): Promise<boolean> {
+  try {
+    const res = await fetch(`${userApiBaseUrl()}/users/onboarding-status`, {
+      headers: { cookie: request.headers.get("cookie") ?? "" },
+      cache: "no-store",
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { is_first_registration?: boolean };
+    return Boolean(data.is_first_registration);
+  } catch {
+    return false;
+  }
+}
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -17,16 +43,18 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (pathname === "/register" && isLoggedIn) {
+  if (isOnboardingAddressPath(pathname) && !isLoggedIn) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith("/register/address") && !isLoggedIn) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return NextResponse.redirect(url);
+  if (isLoggedIn && !isOnboardingAddressPath(pathname)) {
+    if (await needsOnboardingAddress(request)) {
+      const url = request.nextUrl.clone();
+      url.pathname = ONBOARDING_ADDRESS_PATH;
+      return NextResponse.redirect(url);
+    }
   }
 
   const requiresAuth =
@@ -45,11 +73,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/register",
-    "/register/:path*",
-    "/account/:path*",
-    "/seller/:path*",
-    "/bids/:path*",
-    "/wallet/:path*",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)",
   ],
 };

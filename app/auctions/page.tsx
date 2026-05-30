@@ -1,17 +1,19 @@
 "use client"
 
 import Link from "next/link"
-import React, { memo, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import React, { memo, Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   type AuctionListSort,
   type PublicAuctionListItem,
+  fetchAuctionRoomPresence,
 } from "@/app/lib/api/auction"
 import { listPublicAuctionsCached } from "@/app/lib/data/publicAuctionsCache"
 import { getCoreApiBaseUrl } from "@/app/lib/constants/common"
 import { APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
 import { CategoryMultiSelect } from "@/app/seller/auctions/new/CategoryMultiSelect"
 import Icon from "@/app/components/Icon"
+import { bahtFromInput, blockBahtDecimalKey } from "@/app/lib/money/baht"
 
 type SortOption = AuctionListSort
 
@@ -67,78 +69,24 @@ function coverImageUrl(path: string | undefined): string {
   return `${getCoreApiBaseUrl()}${u.startsWith("/") ? "" : "/"}${u}`
 }
 
+/** แสดงหน่วยเดียวแบบย่อ: วัน (>24ชม.) → ชม. (>60นาที) → นาที → วินาที */
 function formatCountdown(endMs: number): string {
   const now = Date.now()
   if (!Number.isFinite(endMs) || endMs <= now) return "ปิดแล้ว"
-  let sec = Math.floor((endMs - now) / 1000)
-  const days = Math.floor(sec / 86400)
-  sec %= 86400
-  const hours = Math.floor(sec / 3600)
-  sec %= 3600
-  const minutes = Math.floor(sec / 60)
-  const seconds = sec % 60
-  if (days > 0) return `เหลือ ${days} วัน ${hours} ชม. ${minutes} นาที`
-  if (hours > 0) return `เหลือ ${hours} ชม. ${minutes} นาที ${seconds} วินาที`
-  if (minutes > 0) return `เหลือ ${minutes} นาที ${seconds} วินาที`
-  return `เหลือ ${seconds} วินาที`
-}
-
-/** ค่าจำลองสำหรับการ์ด — คงที่ต่อ auction_id */
-const MOCK_SELLER_FIRST = [
-  "สมชาย",
-  "วิภา",
-  "ณัฐพล",
-  "อรทัย",
-  "กิตติ",
-  "มาลี",
-  "ธนา",
-  "ศศิธร",
-]
-const MOCK_SELLER_LAST = [
-  "ใจดี",
-  "รักสงบ",
-  "วงศ์ใหญ่",
-  "แสงทอง",
-  "มั่นคง",
-  "บุญมี",
-  "ศรีสุข",
-  "พงศ์พิพัฒน์",
-]
-
-function hashAuctionId(s: string): number {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
-  return Math.abs(h)
-}
-
-function mockSellerForAuctionCard(auctionId: string): { fullName: string; score10: number } {
-  const h = hashAuctionId(auctionId)
-  const first = MOCK_SELLER_FIRST[h % MOCK_SELLER_FIRST.length]
-  const last = MOCK_SELLER_LAST[(h >>> 5) % MOCK_SELLER_LAST.length]
-  const score10 = Math.round((4 + ((h % 61) / 10)) * 10) / 10
-  return { fullName: `${first} ${last}`, score10 }
-}
-
-/** 5 ดาว สเกล 0–10 (ดาวละ 2 คะแนน) */
-function SellerStarsRow({ score10 }: { score10: number }) {
-  const s = Math.max(0, Math.min(10, score10))
-  const stars: ReactNode[] = []
-  for (let i = 0; i < 5; i++) {
-    const fullAt = (i + 1) * 2
-    const halfAt = i * 2 + 1
-    if (s >= fullAt) {
-      stars.push(<Icon key={i} name="fa-star" className="text-amber-400" aria-hidden />)
-    } else if (s >= halfAt) {
-      stars.push(<Icon key={i} name="fa-star-half-stroke" className="text-amber-400" aria-hidden />)
-    } else {
-      stars.push(<Icon key={i} name="fa-star" className="text-slate-300" aria-hidden />)
-    }
+  const totalSec = Math.floor((endMs - now) / 1000)
+  if (totalSec >= 86400) {
+    const days = Math.floor(totalSec / 86400)
+    return `${days} วัน`
   }
-  return (
-    <span className="flex shrink-0 items-center gap-0.5 text-[11px] leading-none" title={`คะแนนรีวิวจำลอง ${score10.toFixed(1)}/10`}>
-      {stars}
-    </span>
-  )
+  if (totalSec >= 3600) {
+    const hours = Math.floor(totalSec / 3600)
+    return `${hours} ชม.`
+  }
+  if (totalSec >= 60) {
+    const minutes = Math.floor(totalSec / 60)
+    return `${minutes} นาที`
+  }
+  return `${totalSec} วินาที`
 }
 
 type CardAccent = "orange" | "red" | "purple" | "slate"
@@ -186,9 +134,11 @@ const accentTimer: Record<CardAccent, string> = {
 const AuctionCard = memo(function AuctionCard({
   item,
   imageLoading,
+  viewerCount,
 }: {
   item: PublicAuctionListItem
   imageLoading: "eager" | "lazy"
+  viewerCount: number
 }) {
   const endMs = useMemo(() => new Date(item.end_at).getTime(), [item.end_at])
   const [, setTick] = useState(0)
@@ -203,12 +153,10 @@ const AuctionCard = memo(function AuctionCard({
   const current = Number(item.current_bid ?? 0)
   const start = Number(item.start_price ?? 0)
   const step = Number(item.bid_step ?? 0)
-  const bidders = Number(item.bidder_count ?? 0)
   const showEarlyCloseBadge = Boolean(item.allow_early_close) && endMs > now
-  const mockSeller = useMemo(() => mockSellerForAuctionCard(item.auction_id), [item.auction_id])
 
   const imageBlock = (
-    <div className="relative shrink-0 overflow-hidden bg-slate-100">
+    <div className="relative shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-800">
       <img
         src={coverImageUrl(item.cover_image_url)}
         alt={item.title}
@@ -235,47 +183,39 @@ const AuctionCard = memo(function AuctionCard({
           </div>
         )}
       </div>
+      <span
+        className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-bold tabular-nums text-slate-800 shadow-md ring-1 ring-black/5"
+        title={`${viewerCount.toLocaleString()} คนกำลังดูในห้องประมูล`}
+        aria-label={`${viewerCount.toLocaleString()} คนกำลังดูในห้องประมูล`}
+      >
+        <Icon name="fa-eye" className="text-[0.7rem] text-slate-600" aria-hidden />
+        {viewerCount.toLocaleString()}
+      </span>
     </div>
   )
 
+  const categories = item.category.split("|").filter(Boolean)
+
   const body = (
     <div className="flex min-w-0 flex-1 flex-col p-3 sm:p-4">
-      <h2 className="line-clamp-2 font-display text-sm font-semibold leading-snug text-slate-900 sm:text-base">{item.title}</h2>
-      <p className="mt-1 text-xs text-slate-500">
-        <span className="font-medium text-slate-600">ผู้ประมูล {bidders.toLocaleString()} คน</span>
-        {item.category.split("|").filter(Boolean).length > 0 ? (
-          <>
-            {" "}
-            · {item.category.split("|").filter(Boolean).join(" · ")}
-          </>
-        ) : null}
-      </p>
-      <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">ผู้ขาย</p>
-        <p className="mt-0.5 truncate text-xs font-medium text-slate-800">{mockSeller.fullName}</p>
-        <div
-          className="mt-1.5 flex flex-wrap items-center gap-2"
-          aria-label={`คะแนนรีวิวจำลอง ${mockSeller.score10.toFixed(1)} จาก 10`}
-        >
-          <SellerStarsRow score10={mockSeller.score10} />
-          <span className="text-xs font-semibold tabular-nums text-slate-700">{mockSeller.score10.toFixed(1)}/10</span>
-          <span className="text-[10px] font-medium text-slate-400">(จำลอง)</span>
-        </div>
-      </div>
+      <h2 className="line-clamp-2 font-display text-sm font-semibold leading-snug text-heading sm:text-base">{item.title}</h2>
+      {categories.length > 0 ? (
+        <p className="mt-1 text-xs text-muted">{categories.join(" · ")}</p>
+      ) : null}
       <div className="mt-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">ราคาปัจจุบัน</p>
-          <p className="font-display text-xl font-bold text-brand-600 sm:text-2xl">{current.toLocaleString()} ฿</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted">ราคาปัจจุบัน</p>
+          <p className="font-display text-xl font-bold text-brand-600 dark:text-brand-400 sm:text-2xl">{current.toLocaleString()} ฿</p>
         </div>
         <div className="max-w-[55%] text-right sm:max-w-[50%]">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">เหลือเวลา</p>
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted">เหลือเวลา</p>
           <p className={`mt-0.5 flex items-center justify-end gap-1 font-display text-lg font-bold tabular-nums leading-tight sm:text-xl ${accentTimer[accent]}`}>
             <Icon name="fa-clock" className="shrink-0 text-[0.85em] opacity-80" aria-hidden />
             <span className="text-right">{line}</span>
           </p>
         </div>
       </div>
-      <p className="mt-1 text-[11px] text-slate-500">
+      <p className="mt-1 text-[11px] text-muted">
         เริ่ม {start.toLocaleString()} ฿ · บิดขั้นต่ำ {step.toLocaleString()} ฿
       </p>
       <Link
@@ -289,7 +229,7 @@ const AuctionCard = memo(function AuctionCard({
   )
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm transition-shadow hover:shadow-md">
+    <article className="auction-card">
       {imageBlock}
       {body}
     </article>
@@ -308,17 +248,17 @@ function FilterCheckbox({
   count?: number
 }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg py-1.5 text-sm text-slate-700">
+    <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg py-1.5 text-sm text-body">
       <span className="flex items-center gap-2">
         <input
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
-          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30"
+          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30 dark:border-slate-600 dark:bg-slate-800"
         />
         {label}
       </span>
-      {count != null && <span className="tabular-nums text-slate-400">{count}</span>}
+      {count != null && <span className="tabular-nums text-muted">{count}</span>}
     </label>
   )
 }
@@ -338,6 +278,7 @@ function AuctionsPageInner() {
   const [sortBy, setSortBy] = useState<SortOption>(initialSort)
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
   const [items, setItems] = useState<PublicAuctionListItem[]>([])
+  const [roomCounts, setRoomCounts] = useState<Record<string, number>>({})
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState("")
@@ -449,6 +390,23 @@ function AuctionsPageInner() {
   }, [loadList])
 
   useEffect(() => {
+    if (items.length === 0) {
+      setRoomCounts({})
+      return
+    }
+    const ac = new AbortController()
+    void fetchAuctionRoomPresence(
+      items.map((i) => i.auction_id),
+      { signal: ac.signal },
+    )
+      .then(setRoomCounts)
+      .catch(() => {
+        /* ignore — badge falls back to 0 */
+      })
+    return () => ac.abort()
+  }, [items])
+
+  useEffect(() => {
     const refresh = () => {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return
       void loadList({ bypassCache: true })
@@ -554,7 +512,7 @@ function AuctionsPageInner() {
   const filterPanel = (
     <div className="space-y-5">
       <div>
-        <label className="mb-1.5 block text-xs font-semibold text-slate-600">ค้นหา</label>
+        <label className="mb-1.5 block text-xs font-semibold text-label">ค้นหา</label>
         <input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
@@ -564,7 +522,7 @@ function AuctionsPageInner() {
         />
       </div>
       <div>
-        <label className="mb-1.5 block text-xs font-semibold text-slate-600">หมวดหมู่</label>
+        <label className="mb-1.5 block text-xs font-semibold text-label">หมวดหมู่</label>
         <CategoryMultiSelect
           options={categories.filter((c) => c !== "ทั้งหมด")}
           value={selectedCategories}
@@ -580,26 +538,36 @@ function AuctionsPageInner() {
         />
       </div>
       <div>
-        <p className="mb-1.5 text-xs font-semibold text-slate-600">ช่วงราคา (ราคาปัจจุบัน)</p>
+        <p className="mb-1.5 text-xs font-semibold text-label">ช่วงราคา (ราคาปัจจุบัน)</p>
         <div className="flex gap-2">
           <input
             value={minPrice}
-            onChange={(e) => setMinPrice(e.target.value)}
+            onKeyDown={blockBahtDecimalKey}
+            onChange={(e) => {
+              const v = bahtFromInput(e.target.value)
+              setMinPrice(v > 0 ? String(v) : "")
+            }}
             placeholder="ต่ำสุด"
             type="number"
+            step={1}
             className="form-input text-sm"
           />
           <input
             value={maxPrice}
-            onChange={(e) => setMaxPrice(e.target.value)}
+            onKeyDown={blockBahtDecimalKey}
+            onChange={(e) => {
+              const v = bahtFromInput(e.target.value)
+              setMaxPrice(v > 0 ? String(v) : "")
+            }}
             placeholder="สูงสุด"
             type="number"
+            step={1}
             className="form-input text-sm"
           />
         </div>
       </div>
       <div>
-        <p className="mb-2 text-xs font-semibold text-slate-600">สถานะการประมูล</p>
+        <p className="mb-2 text-xs font-semibold text-label">สถานะการประมูล</p>
         <div className="space-y-0.5">
           <FilterCheckbox checked={stActive} onChange={setStActive} label="กำลังประมูล" />
           <FilterCheckbox checked={stNoBid} onChange={setStNoBid} label="ยังไม่มีการประมูล" />
@@ -607,8 +575,8 @@ function AuctionsPageInner() {
         </div>
       </div>
       <div>
-        <p className="mb-2 text-xs font-semibold text-slate-600">เวลาปิดประมูล</p>
-        <p className="mb-2 text-[11px] text-slate-400">เลือกอย่างน้อยหนึ่งช่วงเพื่อกรอง (ว่าง = ไม่กรองตามเวลา)</p>
+        <p className="mb-2 text-xs font-semibold text-label">เวลาปิดประมูล</p>
+        <p className="mb-2 text-[11px] text-muted">เลือกอย่างน้อยหนึ่งช่วงเพื่อกรอง (ว่าง = ไม่กรองตามเวลา)</p>
         <div className="space-y-0.5">
           <FilterCheckbox checked={closing1h} onChange={setClosing1h} label="ภายใน 1 ชั่วโมง" count={closingStats.c1h} />
           <FilterCheckbox checked={closing24h} onChange={setClosing24h} label="ภายใน 24 ชั่วโมง" count={closingStats.c24h} />
@@ -633,12 +601,12 @@ function AuctionsPageInner() {
     : "—"
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="fixed inset-x-0 top-[65px] z-30 border-b border-violet-100 bg-white/95 shadow-sm backdrop-blur lg:hidden">
-        <div className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-2">
+    <div className="page-shell">
+      <div className="surface-sticky-bar fixed inset-x-0 top-[65px] z-30 lg:hidden">
+        <div className="app-page-container flex items-center gap-2 py-2">
           <button
             type="button"
-            className="flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700"
+            className="flex-1 rounded-xl border border-violet-200 bg-surface-card px-3 py-2.5 text-sm font-medium text-body dark:border-violet-800"
             onClick={() => setIsMobileFilterOpen(true)}
           >
             <Icon name="fa-sliders" className="mr-2 text-brand-600" aria-hidden />
@@ -659,8 +627,8 @@ function AuctionsPageInner() {
       </div>
 
       {/* แถบหมวด + เรียงลำดับ — เต็มความกว้างหน้าจอ พื้นขาว */}
-      <div className="w-full border-b border-slate-200/90 bg-white">
-        <div className="mx-auto max-w-7xl px-4 pb-2.5 pt-20 sm:px-6 sm:pb-2.5 sm:pt-[5.5rem] lg:px-6 lg:pt-2 lg:pb-2.5">
+      <div className="surface-bar w-full">
+        <div className="app-page-container pb-2.5 pt-20 sm:pt-[5.5rem] lg:pt-2">
           <div className="flex items-center justify-between gap-3 sm:gap-4">
             <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {categories.map((c) => {
@@ -670,10 +638,8 @@ function AuctionsPageInner() {
                     key={c}
                     type="button"
                     onClick={() => applyCategoryChange(c)}
-                    className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition sm:px-4 sm:py-2 ${
-                      active
-                        ? "bg-brand-100 text-brand-800 ring-1 ring-brand-200/80"
-                        : "border border-slate-200/90 bg-white text-slate-800 hover:border-slate-300 hover:text-brand-800"
+                    className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium sm:px-4 sm:py-2 ${
+                      active ? "chip-active" : "chip"
                     }`}
                   >
                     {c}
@@ -682,10 +648,10 @@ function AuctionsPageInner() {
               })}
             </div>
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              <label className="hidden min-w-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 pl-3 sm:flex">
-                <span className="whitespace-nowrap text-sm text-slate-600">เรียงตาม</span>
+              <label className="hidden min-w-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-card px-2.5 py-1.5 pl-3 dark:border-slate-700 sm:flex">
+                <span className="whitespace-nowrap text-sm text-label">เรียงตาม</span>
                 <select
-                  className="max-w-[9.5rem] cursor-pointer border-0 bg-transparent py-0.5 text-sm font-semibold text-slate-900 outline-none focus:ring-0 sm:max-w-[11rem]"
+                  className="max-w-[9.5rem] cursor-pointer border-0 bg-transparent py-0.5 text-sm font-semibold text-heading outline-none focus:ring-0 sm:max-w-[11rem]"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as SortOption)}
                 >
@@ -701,13 +667,13 @@ function AuctionsPageInner() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
+      <main className="app-page-inner">
         <section className="relative mt-4 lg:flex lg:flex-row lg:items-start lg:gap-8">
           <aside className="hidden lg:sticky lg:top-24 lg:z-10 lg:block lg:w-72 lg:flex-shrink-0 lg:self-start">
-            <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-soft">
+            <div className="surface-panel p-5">
               <div className="mb-4 flex items-start justify-between gap-2">
-                <h2 className="font-display text-base font-bold text-slate-900">ตัวกรองการค้นหา</h2>
-                <button type="button" className="shrink-0 text-xs font-medium text-slate-500 hover:text-brand-600" onClick={clearFilters}>
+                <h2 className="font-display text-base font-bold text-heading">ตัวกรองการค้นหา</h2>
+                <button type="button" className="shrink-0 text-xs font-medium text-muted hover:text-brand-600 dark:hover:text-brand-400" onClick={clearFilters}>
                   ล้างทั้งหมด
                 </button>
               </div>
@@ -718,17 +684,17 @@ function AuctionsPageInner() {
           <div className="min-w-0 flex-1">
             <div id="auction-results" className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h1 className="font-display text-xl font-bold text-slate-900 sm:text-2xl">
+                <h1 className="font-display text-xl font-bold text-heading sm:text-2xl">
                   พบสินค้า{" "}
-                  <span className="text-brand-600">{listLoading ? "…" : displayedItems.length.toLocaleString()}</span> รายการ
+                  <span className="text-brand-600 dark:text-brand-400">{listLoading ? "…" : displayedItems.length.toLocaleString()}</span> รายการ
                 </h1>
                 {!listLoading && total > items.length ? (
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="mt-0.5 text-xs text-muted">
                     แสดง {items.length.toLocaleString()} รายการล่าสุดจากทั้งหมด {total.toLocaleString()} รายการในระบบ
                   </p>
                 ) : null}
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-500">
+              <div className="flex items-center gap-2 text-xs text-muted">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
@@ -738,20 +704,20 @@ function AuctionsPageInner() {
             </div>
 
             {listError && (
-              <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{listError}</div>
+              <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-200">{listError}</div>
             )}
 
             {listLoading ? (
-              <div className="flex min-h-[280px] items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm">
+              <div className="empty-state min-h-[280px] text-muted">
                 กำลังโหลดรายการประมูล...
               </div>
             ) : listError ? null : displayedItems.length === 0 ? (
-              <div className="flex min-h-[360px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center shadow-sm">
+              <div className="empty-state min-h-[360px] px-6 py-10">
                 <div>
-                  <p className="text-base font-medium text-slate-800">ไม่พบรายการที่ตรงกับตัวกรอง</p>
-                  <p className="mt-1 text-sm text-slate-500">ลองปรับตัวกรองหรือเลือกหมวดอื่น</p>
+                  <p className="text-base font-medium text-heading">ไม่พบรายการที่ตรงกับตัวกรอง</p>
+                  <p className="mt-1 text-sm text-muted">ลองปรับตัวกรองหรือเลือกหมวดอื่น</p>
                   {items.length > 0 ? (
-                    <p className="mt-2 text-xs text-amber-800/90">
+                    <p className="mt-2 text-xs text-amber-800/90 dark:text-amber-300/90">
                       โหลดมาแล้ว {items.length} รายการ แต่ถูกกรองด้านซ้าย (สถานะประมูล / เวลาปิด) จนหมด — ลองปิดตัวเลือก
                       «ภายใน 1 ชม. / 24 ชม. / 7 วัน» หรือปรับสถานะการประมูล
                     </p>
@@ -768,6 +734,7 @@ function AuctionsPageInner() {
                     key={item.auction_id}
                     item={item}
                     imageLoading={index < 8 ? "eager" : "lazy"}
+                    viewerCount={roomCounts[item.auction_id] ?? 0}
                   />
                 ))}
               </section>
@@ -778,16 +745,16 @@ function AuctionsPageInner() {
         {isMobileFilterOpen && (
           <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setIsMobileFilterOpen(false)}>
             <div
-              className="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl"
+              className="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-y-auto rounded-t-2xl bg-surface-card p-5 shadow-2xl dark:shadow-black/50"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-display text-base font-bold text-slate-900">ตัวกรองการค้นหา</h2>
-                <button type="button" className="text-sm font-medium text-slate-500" onClick={() => setIsMobileFilterOpen(false)}>
+                <h2 className="font-display text-base font-bold text-heading">ตัวกรองการค้นหา</h2>
+                <button type="button" className="text-sm font-medium text-muted" onClick={() => setIsMobileFilterOpen(false)}>
                   ปิด
                 </button>
               </div>
-              <button type="button" className="mb-4 text-xs font-medium text-brand-600" onClick={clearFilters}>
+              <button type="button" className="mb-4 text-xs font-medium text-brand-600 dark:text-brand-400" onClick={clearFilters}>
                 ล้างทั้งหมด
               </button>
               {filterPanel}
@@ -803,8 +770,8 @@ export default function AuctionsPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-slate-50">
-          <div className={`${APP_PAGE_INNER_WIDE} py-24 text-center text-slate-500`}>กำลังโหลด...</div>
+        <div className="page-shell">
+          <div className={`${APP_PAGE_INNER_WIDE} py-24 text-center text-muted`}>กำลังโหลด...</div>
         </div>
       }
     >

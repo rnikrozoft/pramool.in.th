@@ -4,23 +4,21 @@ import type { ReactNode } from "react"
 /** พื้นหลัง gradient มาตรฐานของหน้าภายใน (ยกเว้น home / login / register) */
 export function AppPageShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-100/80 via-white to-slate-50/50">{children}</div>
+    <div className="page-shell-gradient flex flex-1 flex-col">{children}</div>
   )
 }
 
-/** คอนเทนเนอร์กว้างมาตรฐาน max-w-6xl */
-export const APP_PAGE_INNER = "mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6 sm:pt-8"
+/** คอนเทนเนอร์มาตรฐาน — class ใน globals.css (align กับ Navbar) */
+export const APP_PAGE_INNER = "app-page-inner"
 
-/** รายการตาราง / ประมูล — กว้างขึ้นเล็กน้อย */
-export const APP_PAGE_INNER_WIDE = "mx-auto max-w-7xl px-4 pb-10 pt-6 sm:px-6 sm:pt-8"
+/** alias ของ APP_PAGE_INNER สำหรับหน้า dashboard / ตาราง */
+export const APP_PAGE_INNER_WIDE = "app-page-inner"
 
 /** หน้าโพสต์ประมูล — มีแถบล่าง fixed บนมือถือ */
-export const APP_PAGE_INNER_SELLER_NEW =
-  "mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 sm:pb-10 sm:pt-8"
+export const APP_PAGE_INNER_SELLER_NEW = "app-page-inner-seller-new"
 
 /** หน้ารายละเอียดประมูล — มีแถบบิดล่าง fixed บนมือถือ */
-export const APP_PAGE_INNER_PRODUCT =
-  "mx-auto max-w-7xl px-4 pb-28 pt-4 sm:px-6 sm:pt-6 lg:pb-6 lg:pt-6"
+export const APP_PAGE_INNER_PRODUCT = "app-page-inner-product"
 
 type AppPageHeaderProps = {
   title: string
@@ -43,22 +41,22 @@ export function AppPageHeader({
 }: AppPageHeaderProps) {
   const iconClass = backVariant === "home" ? "fa-solid fa-house" : "fa-solid fa-arrow-left"
   return (
-    <div className="mb-8 flex flex-col gap-4 border-b border-slate-200/80 pb-6 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-8 flex flex-col gap-4 border-b border-slate-200/80 pb-6 dark:border-slate-700/80 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0 flex-1">
         {backHref ? (
           <Link
             href={backHref}
-            className="mb-2 inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-800"
+            className="mb-2 inline-flex items-center gap-2 text-sm text-muted transition hover:text-slate-800 dark:hover:text-slate-200"
           >
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               <i className={iconClass} aria-hidden />
             </span>
             {backLabel}
           </Link>
         ) : null}
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{title}</h1>
+        <h1 className="text-heading text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
         {description ? (
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">{description}</p>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-body">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="shrink-0">{actions}</div> : null}

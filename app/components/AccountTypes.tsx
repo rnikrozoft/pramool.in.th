@@ -8,7 +8,7 @@ export default function AccountTypes() {
         <h2 className="font-display text-3xl font-bold text-brand-800 md:text-4xl">
           เลือกแพ็กเกจที่เหมาะกับคุณ
         </h2>
-        <p className="mt-3 text-lg text-slate-600">
+        <p className="mt-3 text-lg text-body">
           อัปเกรดเพื่อรับสิทธิประโยชน์และโปรโมชันสำหรับสมาชิก
         </p>
       </div>
@@ -20,7 +20,7 @@ export default function AccountTypes() {
               ฿0
               <span className="text-lg font-normal text-slate-500"> / เดือน</span>
             </p>
-            <ul className="mt-6 space-y-3 text-left text-sm text-slate-600">
+            <ul className="mt-6 space-y-3 text-left text-sm text-body">
               <li className="flex gap-2">
                 <Icon name="fa-check" className="mt-0.5 text-brand-600" aria-hidden />
                 เข้าร่วมประมูลและเปิดรายการได้
@@ -39,7 +39,7 @@ export default function AccountTypes() {
             </button>
           </div>
         </div>
-        <div className="rounded-3xl border-2 border-brand-200 bg-gradient-to-b from-brand-50 to-white p-8 shadow-brand/25">
+        <div className="rounded-3xl border-2 border-brand-200 bg-gradient-to-b from-brand-50 to-white p-8 shadow-brand/25 dark:border-brand-800 dark:from-brand-950/50 dark:to-slate-900">
           <h3 className="font-display text-xl font-semibold text-brand-800">บัญชีพรีเมียม</h3>
           <p className="mt-1 text-sm text-brand-600">แนะนำสำหรับผู้ขายที่เปิดรายการบ่อย</p>
           <div className="mt-6">
@@ -47,7 +47,7 @@ export default function AccountTypes() {
               ฿299
               <span className="text-lg font-normal text-slate-500"> / เดือน</span>
             </p>
-            <ul className="mt-6 space-y-3 text-left text-sm text-slate-600">
+            <ul className="mt-6 space-y-3 text-left text-sm text-body">
               <li className="flex gap-2">
                 <Icon name="fa-check" className="mt-0.5 text-brand-600" aria-hidden />
                 ไฮไลต์รายการและรายงานเพิ่มเติม
@@ -70,16 +70,16 @@ export default function AccountTypes() {
       <h3 className="mb-6 text-center font-display text-2xl font-bold text-brand-800">
         เปรียบเทียบความคุ้มค่า
       </h3>
-      <div className="overflow-x-auto rounded-3xl border border-violet-100 bg-white shadow-sm">
+      <div className="data-table-shell overflow-x-auto rounded-3xl">
         <table className="min-w-full text-center text-sm">
-          <thead className="bg-brand-50">
+          <thead className="table-header-row">
             <tr className="text-brand-900">
               <th className="px-4 py-4 text-left font-display font-semibold" />
               <th className="px-4 py-4 font-display font-semibold">บัญชีทั่วไป</th>
               <th className="px-4 py-4 font-display font-semibold">บัญชีพรีเมียม</th>
             </tr>
           </thead>
-          <tbody className="text-slate-700">
+          <tbody className="text-body">
             {[
               "เข้าถึงการประมูลทั่วไป",
               "เปิดรายการประมูล",

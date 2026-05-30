@@ -11,9 +11,9 @@ export default function BackModal({ isOpen, onClose }: Props) {
         <Dialog open={isOpen} onClose={onClose} className="relative z-50">
             <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
             <div className="fixed inset-0 flex items-center justify-center p-4">
-                <DialogPanel className="w-full max-w-md rounded-xl bg-white p-5 shadow-lg">
-                    <DialogTitle className="text-lg font-semibold text-slate-900">ย้อนการบิดล่าสุด</DialogTitle>
-                    <p className="mt-3 text-sm text-slate-600">
+                <DialogPanel className="w-full max-w-md rounded-xl bg-surface-card p-5 shadow-lg dark:shadow-black/40">
+                    <DialogTitle className="text-lg font-semibold text-heading">ย้อนการบิดล่าสุด</DialogTitle>
+                    <p className="mt-3 text-sm text-body">
                         ระบบจะยกเลิกรายการบิดล่าสุดของคุณในรายการนี้
                     </p>
                     <div className="mt-6 flex justify-end gap-2">

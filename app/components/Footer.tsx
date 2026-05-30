@@ -31,7 +31,7 @@ const footerMenus = [
 export default function Footer() {
   return (
     <div className="relative z-0 border-t border-[#241653] bg-[#2D1B69] text-white">
-      <footer className="mx-auto max-w-7xl px-5 py-12 sm:px-8 sm:py-14 lg:px-10 xl:px-14 2xl:px-16">
+      <footer className="app-page-container py-12 sm:py-14">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           <div className="sm:col-span-2 lg:col-span-1">
             <p className="font-display text-xl font-bold text-white">Pramool.in.th</p>
@@ -97,9 +97,15 @@ export default function Footer() {
         </div>
       </footer>
       <div className="border-t border-[#1f1454] bg-[#241653]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-4 text-xs text-white sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10 xl:px-14 2xl:px-16">
+        <div className="app-page-container flex flex-col gap-3 py-4 text-xs text-white sm:flex-row sm:items-center sm:justify-between">
           <p className="text-white/95">© 2026 Pramool.in.th — สงวนลิขสิทธิ์</p>
           <div className="flex flex-wrap items-center gap-4">
+            <Link href="/terms/fees" className="text-white hover:underline">
+              ค่าธรรมเนียมและเครดิต
+            </Link>
+            <span className="hidden text-white/45 sm:inline" aria-hidden>
+              |
+            </span>
             <a href="#" className="text-white hover:underline">
               นโยบายความเป็นส่วนตัว
             </a>

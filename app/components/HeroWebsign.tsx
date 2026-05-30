@@ -4,7 +4,7 @@ import Icon from "@/app/components/Icon"
 
 export default function HeroWebsign() {
   return (
-    <section className="relative overflow-hidden border-b border-slate-100 bg-gradient-to-b from-violet-50/70 via-white to-white">
+    <section className="relative overflow-hidden border-b border-slate-100 bg-gradient-to-b from-violet-50/70 via-white to-white dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950">
       <div className="home-dot-grid pointer-events-none absolute inset-0 -z-[1] opacity-[0.35]" aria-hidden />
       <div
         className="pointer-events-none absolute inset-x-0 top-0 -z-[1] h-24 bg-gradient-to-r from-brand-100/35 via-fuchsia-100/30 to-amber-100/35"
@@ -40,22 +40,22 @@ export default function HeroWebsign() {
                 เริ่มต้น 99 บาท
               </span>
             </div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-brand-200/80 bg-white/70 px-3.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm backdrop-blur-sm">
+            <span className="inline-flex items-center gap-2 rounded-full border border-brand-200/80 bg-white/70 px-3.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm backdrop-blur-sm dark:border-brand-800/60 dark:bg-slate-800/70 dark:text-brand-300">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-500 opacity-70" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-600" />
               </span>
               แพลตฟอร์มประมูลออนไลน์
             </span>
-            <h1 className="font-display mt-4 text-4xl font-bold leading-[1.04] tracking-tight text-slate-900 md:text-5xl lg:text-[3.15rem]">
-              <span className="bg-gradient-to-r from-brand-600 via-violet-500 to-fuchsia-500 bg-clip-text text-transparent">
+            <h1 className="font-display mt-4 text-4xl font-bold leading-[1.04] tracking-tight text-slate-900 dark:text-slate-100 md:text-5xl lg:text-[3.15rem]">
+              <span className="bg-gradient-to-r from-brand-600 via-violet-500 to-fuchsia-500 bg-clip-text text-transparent dark:from-brand-500 dark:via-violet-400 dark:to-fuchsia-400">
                 ประมูลง่าย
               </span>
               <br className="hidden sm:block" />
-              <span className="text-slate-900"> ได้ของชัวร์</span>
+              <span className="text-slate-900 dark:text-slate-100"> ได้ของชัวร์</span>
               <span className="text-brand-600"> .</span>
             </h1>
-            <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-600 md:text-lg">
+            <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-600 dark:text-slate-400 md:text-lg">
               ค้นหาสินค้าคุณภาพ ลุ้นราคาที่ใช่ในที่เดียว — โปร่งใส ปลอดภัย ตรวจสอบได้ทุกขั้นตอน
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
@@ -72,7 +72,7 @@ export default function HeroWebsign() {
               </Link>
               <Link
                 href="/how-it-works"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-brand-200 bg-white/80 px-7 py-3.5 text-base font-semibold text-brand-700 backdrop-blur-sm transition hover:border-brand-300 hover:bg-brand-50"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-brand-200 bg-white/80 px-7 py-3.5 text-base font-semibold text-brand-700 backdrop-blur-sm transition hover:border-brand-300 hover:bg-brand-50 dark:border-brand-800 dark:bg-slate-800/80 dark:text-brand-300 dark:hover:border-brand-700 dark:hover:bg-slate-800"
               >
                 <Icon name="fa-circle-play" className="text-sm" aria-hidden />
                 วิธีการประมูล
@@ -114,7 +114,7 @@ export default function HeroWebsign() {
               ].map((b) => (
                 <li
                   key={b.t}
-                  className="flex items-center gap-2.5 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 backdrop-blur-sm"
+                  className="flex items-center gap-2.5 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 backdrop-blur-sm dark:border-slate-700/80 dark:bg-slate-800/80 dark:text-slate-300"
                 >
                   <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ring-1 shadow-sm ${b.tone}`}>
                     <Icon name={b.icon} className="text-lg" aria-hidden />
@@ -146,7 +146,7 @@ export default function HeroWebsign() {
               aria-hidden
             />
             <div className="relative z-[1] w-full max-w-[30rem]">
-              <article className="relative overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl shadow-brand-900/15 ring-1 ring-slate-100">
+              <article className="relative overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl shadow-brand-900/15 ring-1 ring-slate-100 dark:border-slate-700/70 dark:bg-slate-900 dark:shadow-black/40 dark:ring-slate-800">
                 <div className="relative">
                   <Image
                     src="https://images.unsplash.com/photo-1523170335258-f5ed11844a49?q=80&w=600&auto=format&fit=crop"
@@ -170,31 +170,31 @@ export default function HeroWebsign() {
                   </span>
                   <button
                     type="button"
-                    className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-slate-500 shadow-md ring-1 ring-slate-200/80 transition hover:scale-105 hover:text-rose-500"
+                    className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-surface-card/95 text-muted shadow-md ring-1 ring-slate-200/80 transition hover:scale-105 hover:text-rose-500 dark:ring-slate-600"
                     aria-label="รายการโปรด"
                   >
                     <Icon name="fa-heart" aria-hidden />
                   </button>
-                  <span className="absolute right-3 top-14 inline-flex items-center gap-1 rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-semibold text-slate-700 ring-1 ring-slate-200/80">
+                  <span className="absolute right-3 top-14 inline-flex items-center gap-1 rounded-full bg-surface-card/95 px-2 py-0.5 text-[10px] font-semibold text-body ring-1 ring-slate-200/80 dark:ring-slate-600">
                     <Icon name="fa-eye" className="text-[10px] text-sky-600" aria-hidden />
                     2.1k
                   </span>
                 </div>
                 <div className="p-4 sm:p-5">
-                  <h2 className="font-display text-base font-bold text-slate-900 sm:text-lg">นาฬิกาแบรนด์เนมคัดพิเศษ</h2>
-                  <p className="mt-1 text-xs text-slate-500">รายการตัวอย่าง — ดูรายการจริงได้ที่หน้ารายการสินค้า</p>
+                  <h2 className="font-display text-base font-bold text-slate-900 dark:text-slate-100 sm:text-lg">นาฬิกาแบรนด์เนมคัดพิเศษ</h2>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">รายการตัวอย่าง — ดูรายการจริงได้ที่หน้ารายการสินค้า</p>
                   <div className="mt-4 flex items-end justify-between">
                     <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">ราคาปัจจุบัน</p>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">ราคาปัจจุบัน</p>
                       <p className="font-display bg-gradient-to-r from-brand-600 to-fuchsia-600 bg-clip-text text-2xl font-bold text-transparent">
                         12,500 ฿
                       </p>
                     </div>
-                    <p className="text-xs text-slate-500">
-                      เหลือเวลา <span className="font-semibold text-orange-600">2 ชม. 14 นาที</span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      เหลือเวลา <span className="font-semibold text-orange-600 dark:text-orange-400">2 ชม. 14 นาที</span>
                     </p>
                   </div>
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                     <div className="h-full w-[72%] rounded-full bg-gradient-to-r from-orange-400 to-rose-500" />
                   </div>
                   <Link
@@ -207,7 +207,7 @@ export default function HeroWebsign() {
                 </div>
               </article>
               <div
-                className="absolute -bottom-4 -left-4 hidden items-center gap-2 rounded-2xl border border-white/70 bg-white/90 px-3.5 py-2.5 shadow-xl shadow-brand-900/10 backdrop-blur-sm sm:flex"
+                className="absolute -bottom-4 -left-4 hidden items-center gap-2 rounded-2xl border border-white/70 bg-white/90 px-3.5 py-2.5 shadow-xl shadow-brand-900/10 backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-800/90 dark:shadow-black/30 sm:flex"
                 aria-hidden
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-600 ring-1 ring-emerald-200">
@@ -215,11 +215,11 @@ export default function HeroWebsign() {
                 </span>
                 <div>
                   <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">ผู้ประมูลขณะนี้</p>
-                  <p className="text-sm font-bold text-slate-800">245 คน</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">245 คน</p>
                 </div>
               </div>
               <div
-                className="absolute -right-5 bottom-20 hidden items-center gap-2 rounded-2xl border border-white/70 bg-white/95 px-3 py-2 shadow-xl shadow-brand-900/10 backdrop-blur-sm sm:flex"
+                className="absolute -right-5 bottom-20 hidden items-center gap-2 rounded-2xl border border-white/70 bg-white/95 px-3 py-2 shadow-xl shadow-brand-900/10 backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-800/95 dark:shadow-black/30 sm:flex"
                 aria-hidden
               >
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-100 to-orange-50 text-amber-600 ring-1 ring-amber-200">
@@ -227,7 +227,7 @@ export default function HeroWebsign() {
                 </span>
                 <div>
                   <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">บิดล่าสุด</p>
-                  <p className="text-xs font-bold text-slate-800">12,450 ฿</p>
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">12,450 ฿</p>
                 </div>
               </div>
             </div>

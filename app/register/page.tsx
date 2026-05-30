@@ -2,10 +2,11 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import React, { useContext, useState } from "react"
+import React, { useContext, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { UserContext } from "../context/UserContext"
-import { signup } from "../lib/api/user"
+import { ONBOARDING_ADDRESS_PATH } from "@/app/lib/onboarding"
+import { getMyOnboardingStatus, signup } from "../lib/api/user"
 import { runPostAuthRedirect } from "../lib/postAuthRedirect"
 import { notify, queueNotify } from "../lib/utils/notify"
 import { userFacingMessage } from "../lib/utils/userFacingMessage"
@@ -36,7 +37,7 @@ function isValidEmailFormat(value: string): boolean {
 
 export default function RegisterPage() {
   const router = useRouter()
-  const { refreshSession } = useContext(UserContext)
+  const { user, loading, refreshSession } = useContext(UserContext)
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
@@ -50,6 +51,27 @@ export default function RegisterPage() {
   const handleSocial = (provider: string) => {
     notify("info", `การสมัครด้วย ${provider} จะเปิดให้ใช้งานเร็วๆ นี้`)
   }
+
+  /** Already logged in: continue onboarding or go to profile (middleware no longer blocks /register). */
+  useEffect(() => {
+    if (loading || !user) return
+    let cancelled = false
+    void getMyOnboardingStatus()
+      .then((status) => {
+        if (cancelled) return
+        if (status.is_first_registration) {
+          router.replace(ONBOARDING_ADDRESS_PATH)
+          return
+        }
+        router.replace("/")
+      })
+      .catch(() => {
+        /* allow form if status check fails */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [loading, user, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -107,37 +129,37 @@ export default function RegisterPage() {
         return
       }
 
-      await refreshSession()
+      await refreshSession({ force: true })
       queueNotify("success", "สมัครสมาชิกสำเร็จ")
-      void runPostAuthRedirect(router, { phoneForOnboarding: t })
+      await runPostAuthRedirect(router, { phoneForOnboarding: t })
     } catch {
       notify("error")
     }
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-violet-50/80 via-white to-violet-50/40 pb-16 pt-8 sm:pt-10">
+    <div className="auth-page-shell">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10 xl:px-14 2xl:px-16">
         <div className="grid items-start gap-12 lg:grid-cols-2 lg:gap-16 xl:gap-20">
           <div className="order-2 flex flex-col justify-center lg:order-1">
-            <h1 className="font-display text-3xl font-bold leading-tight text-brand-700 md:text-4xl lg:text-[2.75rem]">
+            <h1 className="font-display text-3xl font-bold leading-tight text-brand-700 dark:text-brand-400 md:text-4xl lg:text-[2.75rem]">
               สมัครสมาชิก
             </h1>
-            <p className="font-display mt-2 text-xl font-semibold text-slate-800 md:text-2xl">
+            <p className="font-display mt-2 text-xl font-semibold text-heading md:text-2xl">
               เริ่มต้นประมูลง่าย ได้ของชัวร์
             </p>
-            <p className="mt-4 max-w-lg text-sm leading-relaxed text-slate-600 md:text-base">
+            <p className="mt-4 max-w-lg text-sm leading-relaxed text-body md:text-base">
               เข้าร่วมชุมชนผู้ซื้อและผู้ขายที่โปร่งใส ค้นหาสินค้าคุณภาพและลุ้นราคาที่เหมาะกับคุณ
             </p>
             <ul className="mt-10 space-y-6">
               {features.map((f) => (
                 <li key={f.title} className="flex gap-4">
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-600 ring-2 ring-brand-100/80">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-600 ring-2 ring-brand-100/80 dark:bg-brand-950/60 dark:text-brand-300 dark:ring-brand-900/50">
                     <Icon name={f.icon} aria-hidden />
                   </span>
                   <div>
-                    <p className="font-display font-bold text-slate-900">{f.title}</p>
-                    <p className="mt-0.5 text-sm text-slate-600">{f.desc}</p>
+                    <p className="font-display font-bold text-heading">{f.title}</p>
+                    <p className="mt-0.5 text-sm text-body">{f.desc}</p>
                   </div>
                 </li>
               ))}
@@ -155,16 +177,16 @@ export default function RegisterPage() {
           </div>
 
           <div className="order-1 lg:order-2">
-            <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8">
+            <div className="auth-card">
               <div className="text-center sm:text-left">
-                <h2 className="font-display text-xl font-bold text-slate-900 sm:text-2xl">สร้างบัญชีใหม่</h2>
-                <p className="mt-1 text-sm text-slate-600">กรอกข้อมูลเพื่อสมัครสมาชิก</p>
+                <h2 className="font-display text-xl font-bold text-heading sm:text-2xl">สร้างบัญชีใหม่</h2>
+                <p className="mt-1 text-sm text-body">กรอกข้อมูลเพื่อสมัครสมาชิก</p>
               </div>
 
               <form className="mt-8 space-y-4" noValidate onSubmit={handleSubmit}>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label htmlFor="reg-first" className="mb-1.5 block text-sm font-medium text-slate-700">
+                    <label htmlFor="reg-first" className="mb-1.5 block text-sm font-medium text-label">
                       ชื่อ <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -178,7 +200,7 @@ export default function RegisterPage() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="reg-last" className="mb-1.5 block text-sm font-medium text-slate-700">
+                    <label htmlFor="reg-last" className="mb-1.5 block text-sm font-medium text-label">
                       นามสกุล <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -194,7 +216,7 @@ export default function RegisterPage() {
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label htmlFor="reg-email" className="mb-1.5 block text-sm font-medium text-slate-700">
+                    <label htmlFor="reg-email" className="mb-1.5 block text-sm font-medium text-label">
                       อีเมล
                     </label>
                     <input
@@ -208,7 +230,7 @@ export default function RegisterPage() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="reg-tel" className="mb-1.5 block text-sm font-medium text-slate-700">
+                    <label htmlFor="reg-tel" className="mb-1.5 block text-sm font-medium text-label">
                       หมายเลขโทรศัพท์ <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -227,7 +249,7 @@ export default function RegisterPage() {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="reg-password" className="mb-1.5 block text-sm font-medium text-slate-700">
+                  <label htmlFor="reg-password" className="mb-1.5 block text-sm font-medium text-label">
                     รหัสผ่าน <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -251,7 +273,7 @@ export default function RegisterPage() {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="reg-confirm" className="mb-1.5 block text-sm font-medium text-slate-700">
+                  <label htmlFor="reg-confirm" className="mb-1.5 block text-sm font-medium text-label">
                     ยืนยันรหัสผ่าน <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -275,20 +297,20 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
-                <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-600">
+                <label className="flex cursor-pointer items-start gap-3 text-sm text-body">
                   <input
                     type="checkbox"
-                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30 dark:border-slate-600 dark:bg-slate-800"
                     checked={acceptTerms}
                     onChange={(e) => setAcceptTerms(e.target.checked)}
                   />
                   <span>
                     ฉันยอมรับ{" "}
-                    <Link href="#" className="font-medium text-brand-600 underline hover:text-brand-700">
+                    <Link href="#" className="font-medium text-brand-600 underline hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                       ข้อกำหนดการใช้งาน
                     </Link>{" "}
                     และ{" "}
-                    <Link href="#" className="font-medium text-brand-600 underline hover:text-brand-700">
+                    <Link href="#" className="font-medium text-brand-600 underline hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                       นโยบายความเป็นส่วนตัว
                     </Link>{" "}
                     <span className="text-red-500">*</span>
@@ -306,10 +328,10 @@ export default function RegisterPage() {
 
               <div className="relative my-8">
                 <div className="absolute inset-0 flex items-center" aria-hidden>
-                  <div className="w-full border-t border-slate-200" />
+                  <div className="w-full border-t border-slate-200 dark:border-slate-700" />
                 </div>
-                <div className="relative flex justify-center text-xs font-medium text-slate-500">
-                  <span className="bg-white px-3">หรือสมัครด้วย</span>
+                <div className="relative flex justify-center text-xs font-medium text-muted">
+                  <span className="auth-divider-label">หรือสมัครด้วย</span>
                 </div>
               </div>
 
@@ -317,7 +339,7 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={() => handleSocial("Google")}
-                  className="flex flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                  className="auth-social-btn"
                 >
                   <i className="fa-brands fa-google shrink-0 text-lg text-red-500" aria-hidden />
                   Google
@@ -325,7 +347,7 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={() => handleSocial("Facebook")}
-                  className="flex flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                  className="auth-social-btn"
                 >
                   <i className="fa-brands fa-facebook shrink-0 text-lg text-[#1877F2]" aria-hidden />
                   Facebook
@@ -333,16 +355,16 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={() => handleSocial("Apple")}
-                  className="flex flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                  className="auth-social-btn"
                 >
-                  <i className="fa-brands fa-apple shrink-0 text-xl text-slate-900" aria-hidden />
+                  <i className="fa-brands fa-apple shrink-0 text-xl text-slate-900 dark:text-slate-100" aria-hidden />
                   Apple
                 </button>
               </div>
 
-              <p className="mt-8 text-center text-sm text-slate-600">
+              <p className="mt-8 text-center text-sm text-body">
                 มีบัญชีอยู่แล้ว?{" "}
-                <Link href="/login" className="font-semibold text-brand-600 hover:text-brand-700 hover:underline">
+                <Link href="/login" className="font-semibold text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-400 dark:hover:text-brand-300">
                   เข้าสู่ระบบ
                 </Link>
               </p>

@@ -48,7 +48,7 @@ const steps: {
 
 export default function HomeHowItWorks() {
   return (
-    <section className="relative overflow-hidden border-y border-slate-100 bg-gradient-to-b from-slate-50 via-violet-50/40 to-slate-50 py-16 sm:py-20">
+    <section className="relative overflow-hidden border-y border-slate-100 bg-gradient-to-b from-slate-50 via-violet-50/40 to-slate-50 py-16 dark:border-slate-800 dark:from-slate-950 dark:via-violet-950/30 dark:to-slate-950 sm:py-20">
       <div className="home-dot-grid-soft pointer-events-none absolute inset-0 opacity-[0.5]" aria-hidden />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
         <div className="text-center">
@@ -56,10 +56,10 @@ export default function HomeHowItWorks() {
             <Icon name="fa-circle-check" className="text-[10px]" aria-hidden />
             ขั้นตอนง่ายๆ
           </span>
-          <h2 className="font-display mt-3 text-2xl font-bold text-slate-900 md:text-3xl lg:text-4xl">
+          <h2 className="font-display mt-3 text-2xl font-bold text-heading md:text-3xl lg:text-4xl">
             <span className="home-gradient-text">วิธีการประมูล</span>
           </h2>
-          <p className="mx-auto mt-3 max-w-2xl text-sm text-slate-600 sm:text-base">
+          <p className="mx-auto mt-3 max-w-2xl text-sm text-body sm:text-base">
             เริ่มต้นใน 5 ขั้นตอน — โปร่งใส ปลอดภัย ตลอดการใช้งาน
           </p>
         </div>
@@ -85,12 +85,12 @@ export default function HomeHowItWorks() {
                   >
                     <Icon name={step.icon} className="text-xl lg:text-2xl" aria-hidden />
                   </div>
-                  <span className="absolute -right-2 -top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white bg-white text-[11px] font-bold text-brand-700 shadow-md ring-1 ring-brand-100">
+                  <span className="absolute -right-2 -top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white bg-surface-card text-[11px] font-bold text-brand-700 shadow-md ring-1 ring-brand-100 dark:border-slate-600 dark:ring-brand-900/50">
                     {i + 1}
                   </span>
                 </div>
-                <h3 className="font-display mt-5 text-sm font-bold text-slate-900 sm:text-base">{step.title}</h3>
-                <p className="mt-1.5 text-xs leading-relaxed text-slate-600 sm:text-sm">{step.desc}</p>
+                <h3 className="font-display mt-5 text-sm font-bold text-heading sm:text-base">{step.title}</h3>
+                <p className="mt-1.5 text-xs leading-relaxed text-body sm:text-sm">{step.desc}</p>
               </div>
             </React.Fragment>
           ))}
@@ -98,7 +98,7 @@ export default function HomeHowItWorks() {
         <div className="mt-12 flex justify-center">
           <Link
             href="/how-it-works"
-            className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-brand-200 bg-white px-7 py-3 text-sm font-semibold text-brand-700 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:bg-brand-50 hover:shadow-md"
+            className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-brand-200 bg-surface-card px-7 py-3 text-sm font-semibold text-brand-700 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:bg-brand-50 hover:shadow-md dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950/50"
           >
             อ่านรายละเอียดเพิ่มเติม
             <Icon name="fa-arrow-right" className="text-xs" aria-hidden />

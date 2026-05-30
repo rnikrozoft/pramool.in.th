@@ -59,7 +59,7 @@ const categories: {
 
 export default function HomeCategoryBar() {
   return (
-    <div className="relative w-full border-y border-slate-200/80 bg-gradient-to-b from-white via-violet-50/40 to-white">
+    <div className="relative w-full border-y border-slate-200/80 bg-gradient-to-b from-white via-violet-50/40 to-white dark:border-slate-800 dark:from-slate-900 dark:via-violet-950/30 dark:to-slate-900">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4 sm:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-2">
           {categories.map((c) => (
@@ -73,7 +73,7 @@ export default function HomeCategoryBar() {
               >
                 <Icon name={c.icon} className="text-base sm:text-lg" aria-hidden />
               </span>
-              <span className="max-w-[4.5rem] truncate text-[11px] font-semibold text-slate-700 transition group-hover:text-brand-700 sm:max-w-none sm:text-xs">
+              <span className="max-w-[4.5rem] truncate text-[11px] font-semibold text-body transition group-hover:text-brand-700 dark:group-hover:text-brand-400 sm:max-w-none sm:text-xs">
                 {c.label}
               </span>
             </Link>
@@ -81,7 +81,7 @@ export default function HomeCategoryBar() {
         </div>
         <Link
           href="/auctions"
-          className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border-2 border-brand-200 bg-white px-3.5 py-2 text-sm font-semibold text-brand-700 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:bg-brand-50 hover:shadow-md"
+          className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border-2 border-brand-200 bg-surface-card px-3.5 py-2 text-sm font-semibold text-brand-700 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:bg-brand-50 hover:shadow-md dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950/50"
         >
           <Icon name="fa-table-cells" className="text-sm" aria-hidden />
           ดูหมวดทั้งหมด

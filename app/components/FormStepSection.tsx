@@ -13,17 +13,17 @@ export type FormStepSectionProps = {
  */
 export function FormStepSection({ step, title, description, children }: FormStepSectionProps) {
   return (
-    <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm ring-1 ring-slate-100 sm:p-6">
+    <section className="form-section-card">
       <div className="mb-5 flex gap-3">
         <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-800"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
           aria-hidden
         >
           {step}
         </span>
         <div>
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-          {description ? <p className="mt-0.5 text-sm text-slate-500">{description}</p> : null}
+          <h2 className="text-base font-semibold text-heading">{title}</h2>
+          {description ? <p className="mt-0.5 text-sm text-muted">{description}</p> : null}
         </div>
       </div>
       {children}

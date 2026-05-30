@@ -19,6 +19,7 @@ async function fetchOnce(): Promise<SessionUser | null> {
             credit: Number(data.credit ?? 0),
             withdrawalBlocked: Boolean(data.withdrawal_blocked),
             withdrawalBlockReason: typeof data.withdrawal_block_reason === "string" ? data.withdrawal_block_reason : undefined,
+            pendingSellerShipCount: Number(data.pending_seller_ship_count ?? 0),
         }
     } catch {
         return null

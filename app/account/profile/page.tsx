@@ -10,13 +10,9 @@ import subDistricts from "@/app/data/sub-districts.json"
 import districts from "@/app/data/districts.json"
 import provinces from "@/app/data/provinces.json"
 import { recordOTPTimeout, requestOTP, verifyOTP } from "@/app/lib/api/otp"
-import {
-  ZipcodeInput,
-  ProvinceSelect,
-  DistrictSelect,
-  SubDistrictSelect,
-  BankSelect,
-} from "@/app/components/LocationSelector"
+import { BankSelect } from "@/app/components/LocationSelector"
+import AddressLocationFields from "@/app/components/AddressLocationFields"
+import type { AddressLocationValue } from "@/app/lib/locationCascade"
 import { FormStepSection } from "@/app/components/FormStepSection"
 import Icon from "@/app/components/Icon"
 
@@ -229,7 +225,7 @@ export default function ProfilePage() {
       timer: 10000,
       customClass: {
         popup: "rounded-2xl",
-        title: "text-2xl font-semibold text-slate-900",
+        title: "text-2xl font-semibold text-heading",
         htmlContainer: "text-sm text-slate-500",
         actions: "gap-2",
         confirmButton: "btn-primary min-w-[110px]",
@@ -382,27 +378,27 @@ export default function ProfilePage() {
   return (
     <AppPageShell>
       <main className={APP_PAGE_INNER}>
-        <div className="mb-8 flex flex-col gap-4 border-b border-slate-200/80 pb-6">
+        <div className="mb-8 flex flex-col gap-4 border-b border-slate-200/80 pb-6 dark:border-slate-700/80">
           <div>
             <Link
               href="/"
-              className="mb-2 inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-800"
+              className="mb-2 inline-flex items-center gap-2 text-sm text-muted transition hover:text-slate-800 dark:hover:text-slate-200"
             >
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 <Icon name="fa-house" aria-hidden />
               </span>
               กลับหน้าหลัก
             </Link>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">โปรไฟล์ของฉัน</h1>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
+            <h1 className="text-heading text-2xl font-bold tracking-tight sm:text-3xl">โปรไฟล์ของฉัน</h1>
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-body">
               อัปเดตข้อมูลส่วนตัว ที่อยู่ และบัญชีธนาคาร
             </p>
           </div>
         </div>
 
         {loading ? (
-          <div className="rounded-2xl border border-slate-200/90 bg-white p-8 shadow-sm ring-1 ring-slate-100">
-            <p className="text-sm text-slate-500">กำลังโหลดข้อมูล...</p>
+          <div className="form-section-card p-8">
+            <p className="text-sm text-muted">กำลังโหลดข้อมูล...</p>
           </div>
         ) : (
           <form
@@ -415,11 +411,11 @@ export default function ProfilePage() {
                 <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">รหัสผู้ใช้</label>
-                      <input className="form-input bg-slate-50" value={userID} disabled />
+                      <label className="mb-1 block text-sm font-medium text-label">รหัสผู้ใช้</label>
+                      <input className="form-input bg-slate-50 dark:bg-slate-800/80" value={userID} disabled />
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">เบอร์โทรศัพท์</label>
+                      <label className="mb-1 block text-sm font-medium text-label">เบอร์โทรศัพท์</label>
                       <input
                         className="form-input"
                         value={tel}
@@ -433,12 +429,12 @@ export default function ProfilePage() {
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">ชื่อ</label>
+                      <label className="mb-1 block text-sm font-medium text-label">ชื่อ</label>
                       <input name="first_name" className="form-input" value={form.first_name} onChange={handleChange} />
                       {errors.first_name && <p className="mt-1 text-xs text-rose-600">{errors.first_name}</p>}
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">นามสกุล</label>
+                      <label className="mb-1 block text-sm font-medium text-label">นามสกุล</label>
                       <input name="last_name" className="form-input" value={form.last_name} onChange={handleChange} />
                       {errors.last_name && <p className="mt-1 text-xs text-rose-600">{errors.last_name}</p>}
                     </div>
@@ -450,84 +446,48 @@ export default function ProfilePage() {
                 <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">ที่อยู่ 1</label>
+                      <label className="mb-1 block text-sm font-medium text-label">ที่อยู่ 1</label>
                       <input name="address_primary" className="form-input" value={form.address_primary} onChange={handleChange} />
                       {errors.address_primary && <p className="mt-1 text-xs text-rose-600">{errors.address_primary}</p>}
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">ที่อยู่ 2</label>
+                      <label className="mb-1 block text-sm font-medium text-label">ที่อยู่ 2</label>
                       <input name="address" className="form-input" value={form.address} onChange={handleChange} />
                     </div>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">ซอย</label>
+                      <label className="mb-1 block text-sm font-medium text-label">ซอย</label>
                       <input name="soi" className="form-input" value={form.soi} onChange={handleChange} />
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">ถนน</label>
+                      <label className="mb-1 block text-sm font-medium text-label">ถนน</label>
                       <input name="road" className="form-input" value={form.road} onChange={handleChange} />
                     </div>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">หมายเลขไปรษณีย์</label>
-                      <ZipcodeInput
-                        value={zipcode}
-                        onChange={(zip) => {
-                          setZipcode(zip)
-                          setForm((prev) => ({ ...prev, zip_code: zip }))
-                          setErrors((prev) => ({ ...prev, zip_code: "" }))
-                          setProvinceId(null)
-                          setDistrictId(null)
-                          setSubDistrictId(null)
-                        }}
-                      />
-                      {errors.zip_code && <p className="mt-1 text-xs text-rose-600">{errors.zip_code}</p>}
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">จังหวัด</label>
-                      <ProvinceSelect
-                        zipcode={zipcode}
-                        value={provinceId}
-                        onChange={(id) => {
-                          setProvinceId(id || null)
-                          setDistrictId(null)
-                          setSubDistrictId(null)
-                          setErrors((prev) => ({ ...prev, province: "" }))
-                        }}
-                        disabled={!zipcode}
-                      />
-                      {errors.province && <p className="mt-1 text-xs text-rose-600">{errors.province}</p>}
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">เขต/อำเภอ</label>
-                      <DistrictSelect
-                        provinceId={provinceId}
-                        value={districtId}
-                        onChange={(id) => {
-                          setDistrictId(id || null)
-                          setSubDistrictId(null)
-                          setErrors((prev) => ({ ...prev, district: "" }))
-                        }}
-                        disabled={!provinceId}
-                      />
-                      {errors.district && <p className="mt-1 text-xs text-rose-600">{errors.district}</p>}
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">แขวง/ตำบล</label>
-                      <SubDistrictSelect
-                        districtId={districtId}
-                        value={subDistrictId}
-                        onChange={(id) => {
-                          setSubDistrictId(id || null)
-                          setErrors((prev) => ({ ...prev, sub_district: "" }))
-                        }}
-                        disabled={!districtId}
-                      />
-                      {errors.sub_district && <p className="mt-1 text-xs text-rose-600">{errors.sub_district}</p>}
-                    </div>
-                  </div>
+                  <AddressLocationFields
+                    value={{ subDistrictId, districtId, provinceId, zipcode }}
+                    onChange={(next: AddressLocationValue) => {
+                      setSubDistrictId(next.subDistrictId)
+                      setDistrictId(next.districtId)
+                      setProvinceId(next.provinceId)
+                      setZipcode(next.zipcode)
+                      setForm((prev) => ({ ...prev, zip_code: next.zipcode }))
+                      setErrors((prev) => ({
+                        ...prev,
+                        sub_district: "",
+                        district: "",
+                        province: "",
+                        zip_code: "",
+                      }))
+                    }}
+                    errors={{
+                      subDistrictId: errors.sub_district,
+                      districtId: errors.district,
+                      provinceId: errors.province,
+                      zipcode: errors.zip_code,
+                    }}
+                  />
                 </div>
               </FormStepSection>
 
@@ -568,11 +528,11 @@ export default function ProfilePage() {
 
             <aside className="mt-10 flex flex-col lg:col-span-5 lg:mt-0">
               <div className="lg:sticky lg:top-20 lg:z-10 lg:h-fit lg:w-full">
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-md ring-1 ring-slate-100 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto">
+                <div className="sidebar-panel">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">สรุปก่อนบันทึก</h3>
-                  <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+                  <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-800/80">
                     <p className="text-xs font-medium uppercase tracking-wide text-slate-500">ชื่อที่แสดง</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">{displayName}</p>
+                    <p className="mt-1 text-sm font-semibold text-heading">{displayName}</p>
                     {tel.trim() ? (
                       <p className="mt-2 text-xs text-slate-600">
                         <span className="text-slate-400">โทร </span>

@@ -1,13 +1,10 @@
 /**
- * กลยุทธ์เรียลไทม์สำหรับรายการประมูล (หน้า bids/active + seller/auctions):
- * - REST โพลแบบปรับช่วงตามเวลาที่เหลือและสถานะแท็บ (แท็บซ่อน → โพลช้า, ใกล้ปิด → โพลถี่)
- * - เมื่อกลับมาโฟกัสแท็บ → ดึงรายการทันที 1 ครั้ง
- * - WebSocket สูงสุด 6 ห้อง ต่อรายการที่ยังเปิด เรียงจากใกล้ปิดก่อน — รับ snapshot/bid_update แก้ราคาใน state
- *   เมื่อได้ auction_state (ปิด/เปิดใหม่) → ดึง REST ครั้งเต็มเพื่อฟิลด์ที่ WS ไม่ส่ง
- * - ฝั่งหน้า: คำขอลิสต์แบบ silent ที่ซ้อนกันใช้ promise เดียว (กัน GET ซ้อนเวลาโพล+โฟกัส+กดซิงก์)
- * ไม่เปิด WS ทุกรายการเพื่อไม่ให้ connection และ backend หนักเกินไป
+ * กลยุทธ์เรียลไทม์สำหรับรายการประมูล (หน้า bids/active):
+ * - REST โพลแบบปรับช่วงตามเวลาที่เหลือ (แท็บซ่อน → โพลช้า, ใกล้ปิด → โพลถี่)
+ * - WebSocket สูงสุด 6 ห้อง — snapshot/bid_update; auction_state → ดึง REST เต็ม
+ * หน้า seller/auctions ใช้โหลดครั้งเดียว + ปุ่ม «อัปเดตราคาล่าสุด» (ไม่โพล / ไม่ WS)
  */
-import type { MyActiveBidItem, SellerAuctionItem } from "@/app/lib/api/auction"
+import type { MyActiveBidItem } from "@/app/lib/api/auction"
 
 /** เปิด mock ตารางประมูล — ตั้ง NEXT_PUBLIC_DEV_AUCTION_TABLE_MOCKS=1 ใน .env.local */
 export function devAuctionTableMocksEnabled(): boolean {
@@ -31,27 +28,6 @@ export function computeActiveBidsPollIntervalMs(
   let minLeft = Infinity
   for (const i of open) {
     const left = endMs(i) - now
-    if (left > 0 && left < minLeft) minLeft = left
-  }
-  if (!Number.isFinite(minLeft)) return 15_000
-  if (minLeft < 60_000) return 2500
-  if (minLeft < 5 * 60_000) return 5000
-  if (minLeft < 30 * 60_000) return 8000
-  return 15_000
-}
-
-export function computeSellerAuctionsPollIntervalMs(
-  now: number,
-  rows: { endAtMs: number; isClosed: boolean }[],
-  documentHidden: boolean,
-  isRowDisplayClosed: (r: { endAtMs: number; isClosed: boolean }, t: number) => boolean,
-): number {
-  if (documentHidden) return 60_000
-  const open = rows.filter((r) => !isRowDisplayClosed(r, now))
-  if (open.length === 0) return 45_000
-  let minLeft = Infinity
-  for (const r of open) {
-    const left = r.endAtMs - now
     if (left > 0 && left < minLeft) minLeft = left
   }
   if (!Number.isFinite(minLeft)) return 15_000
@@ -103,6 +79,9 @@ export function patchMyActiveBidFromWsMessage(
     next.current_bid = cb
     next.next_minimum_bid = cb + (item.bid_step || 0)
   }
+  if (typeof p.end_at === "string" && p.end_at) {
+    next.end_at = p.end_at
+  }
 
   if (t === "bid_update" && typeof p.current_bid === "number") {
     const cb = p.current_bid
@@ -120,17 +99,6 @@ export function patchMyActiveBidFromWsMessage(
     next.bidding_paused_until = p.bidding_paused_until
   }
 
-  return next
-}
-
-export function patchSellerAuctionFromWsMessage(item: SellerAuctionItem, p: AuctionWSClientPayload): SellerAuctionItem {
-  if (p.type !== "snapshot" && p.type !== "bid_update") return item
-  const next = { ...item }
-  if (typeof p.current_bid === "number") next.current_bid = p.current_bid
-  if (typeof p.total_bids === "number") next.total_bids = Number(p.total_bids)
-  if (p.type === "snapshot" && typeof p.bidding_paused_until === "string") {
-    next.bidding_paused_until = p.bidding_paused_until
-  }
   return next
 }
 

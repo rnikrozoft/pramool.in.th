@@ -68,13 +68,13 @@ export default function ProductCard({ item }: Props) {
                         <Icon name="fa-undo" />
                     </button>
                     <BackModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
-                    <span className="rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-brand-800 shadow-sm ring-1 ring-violet-100">
+                    <span className="rounded-full bg-surface-card/95 px-2.5 py-1 text-xs font-semibold text-brand-800 shadow-sm ring-1 ring-violet-100 dark:ring-violet-900/50">
                         <Icon name="fa-eye" /> 99+
                     </span>
                 </div>
             </div>
             <div className="mt-2 space-y-1" data-countdown={item.countdown}>
-                <p className="text-sm font-medium text-slate-800">{item.name}</p>
+                <p className="text-sm font-medium text-heading">{item.name}</p>
                 <div className="flex items-center justify-between text-sm">
                     <strong className="font-display text-brand-700">{item.price}</strong>
                     {timeLeft > 0 ? formatTimeLeft(timeLeft) : "หมดเวลาแล้ว"}

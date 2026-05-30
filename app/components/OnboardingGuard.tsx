@@ -4,31 +4,42 @@ import { useContext, useEffect, useRef } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { UserContext } from "@/app/context/UserContext"
 import { getMyOnboardingStatus } from "@/app/lib/api/user"
+import { isOnboardingAddressPath, ONBOARDING_ADDRESS_PATH } from "@/app/lib/onboarding"
 
 export default function OnboardingGuard() {
   const { user, loading } = useContext(UserContext)
   const pathname = usePathname()
   const router = useRouter()
-  const fetchedOnceRef = useRef(false)
+  const checkSeqRef = useRef(0)
 
   useEffect(() => {
     if (loading || !user) return
-    if (fetchedOnceRef.current) return
-    fetchedOnceRef.current = true
 
-    getMyOnboardingStatus()
+    const seq = ++checkSeqRef.current
+    let cancelled = false
+
+    void getMyOnboardingStatus()
       .then((status) => {
-        if (status.is_first_registration && pathname !== "/register/address") {
-          router.replace("/register/address")
+        if (cancelled || seq !== checkSeqRef.current) return
+
+        if (status.is_first_registration) {
+          if (!isOnboardingAddressPath(pathname)) {
+            router.replace(ONBOARDING_ADDRESS_PATH)
+          }
           return
         }
-        if (!status.is_first_registration && pathname.startsWith("/register/address")) {
+
+        if (isOnboardingAddressPath(pathname)) {
           router.replace("/")
         }
       })
       .catch(() => {
-        // Ignore guard failures to avoid blocking navigation on transient API errors.
+        // Ignore transient API errors so navigation is not permanently blocked.
       })
+
+    return () => {
+      cancelled = true
+    }
   }, [loading, user, pathname, router])
 
   return null

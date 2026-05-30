@@ -34,13 +34,13 @@ const reasons: {
 
 export default function HomeWhyPramool() {
   return (
-    <section className="relative overflow-hidden border-t border-slate-100 bg-white py-16 sm:py-20">
+    <section className="relative overflow-hidden border-t border-slate-100 bg-surface-page py-16 sm:py-20 dark:border-slate-800">
       <div
-        className="pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-gradient-to-br from-violet-100/60 via-fuchsia-100/30 to-transparent blur-3xl"
+        className="pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-gradient-to-br from-violet-100/60 via-fuchsia-100/30 to-transparent blur-3xl dark:from-violet-950/40 dark:via-fuchsia-950/20"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute -right-24 bottom-0 h-72 w-72 rounded-full bg-gradient-to-br from-amber-100/50 via-orange-100/30 to-transparent blur-3xl"
+        className="pointer-events-none absolute -right-24 bottom-0 h-72 w-72 rounded-full bg-gradient-to-br from-amber-100/50 via-orange-100/30 to-transparent blur-3xl dark:from-amber-950/30 dark:via-orange-950/20"
         aria-hidden
       />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
@@ -49,11 +49,11 @@ export default function HomeWhyPramool() {
             <Icon name="fa-shield-halved" className="text-[10px]" aria-hidden />
             เลือกแพลตฟอร์มที่ไว้ใจได้
           </span>
-          <h2 className="font-display mt-3 text-2xl font-bold text-slate-900 md:text-3xl lg:text-4xl">
+          <h2 className="font-display mt-3 text-2xl font-bold text-heading md:text-3xl lg:text-4xl">
             ทำไมต้องใช้
             <span className="home-gradient-text"> Pramool.in.th</span>
           </h2>
-          <p className="mt-3 text-sm text-slate-600 sm:text-base">
+          <p className="mt-3 text-sm text-body sm:text-base">
             เรามุ่งทำให้การประมูลออนไลน์เป็นเรื่องง่าย ปลอดภัย และเข้าถึงได้สำหรับทุกคน
           </p>
         </div>
@@ -61,7 +61,7 @@ export default function HomeWhyPramool() {
           {reasons.map((item) => (
             <li
               key={item.title}
-              className="group relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-200 hover:shadow-xl hover:shadow-brand-900/10"
+              className="home-card home-card-hover group relative overflow-hidden p-6"
             >
               <div
                 className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gradient-to-br from-violet-50 to-transparent opacity-0 transition group-hover:opacity-100"
@@ -72,8 +72,8 @@ export default function HomeWhyPramool() {
               >
                 <Icon name={item.icon} className="text-xl" aria-hidden />
               </span>
-              <h3 className="font-display relative mt-4 text-base font-bold text-slate-900">{item.title}</h3>
-              <p className="relative mt-2 text-sm leading-relaxed text-slate-600">{item.desc}</p>
+              <h3 className="font-display relative mt-4 text-base font-bold text-heading">{item.title}</h3>
+              <p className="relative mt-2 text-sm leading-relaxed text-body">{item.desc}</p>
             </li>
           ))}
         </ul>

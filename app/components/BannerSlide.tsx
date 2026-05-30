@@ -56,7 +56,7 @@ export default function BannerSlide() {
         </p>
       </div>
       <button
-        className="absolute left-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-brand-700 shadow-md transition hover:bg-white"
+        className="absolute left-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-surface-card/90 text-brand-700 shadow-md transition hover:bg-surface-card"
         type="button"
         onClick={goPrev}
         aria-label="สไลด์ก่อนหน้า"
@@ -64,7 +64,7 @@ export default function BannerSlide() {
         <Icon name="fa-chevron-left" aria-hidden />
       </button>
       <button
-        className="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-brand-700 shadow-md transition hover:bg-white"
+        className="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-surface-card/90 text-brand-700 shadow-md transition hover:bg-surface-card"
         type="button"
         onClick={goNext}
         aria-label="สไลด์ถัดไป"

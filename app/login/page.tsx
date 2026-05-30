@@ -78,9 +78,9 @@ export default function LoginPage() {
         }
       }
       persistPhoneForOnboarding(id)
-      await refreshSession()
+      await refreshSession({ force: true })
       queueNotify("success", "เข้าสู่ระบบสำเร็จ")
-      void runPostAuthRedirect(router)
+      await runPostAuthRedirect(router)
     } catch {
       notify("error")
     } finally {
@@ -89,25 +89,25 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-violet-50/80 via-white to-violet-50/40 pb-16 pt-8 sm:pt-10">
+    <div className="auth-page-shell">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10 xl:px-14 2xl:px-16">
         <div className="grid items-start gap-12 lg:grid-cols-2 lg:gap-16 xl:gap-20">
           <div className="order-2 flex flex-col justify-center lg:order-1">
-            <h1 className="font-display text-3xl font-bold leading-tight text-brand-700 md:text-4xl lg:text-[2.75rem]">
+            <h1 className="font-display text-3xl font-bold leading-tight text-brand-700 dark:text-brand-400 md:text-4xl lg:text-[2.75rem]">
               ประมูลง่าย ได้ของชัวร์
             </h1>
-            <p className="mt-4 max-w-lg text-sm leading-relaxed text-slate-600 md:text-base">
+            <p className="mt-4 max-w-lg text-sm leading-relaxed text-body md:text-base">
               แพลตฟอร์มประมูลออนไลน์ที่เชื่อถือได้ ปลอดภัย โปร่งใส ได้ของจริง 100%
             </p>
             <ul className="mt-10 space-y-6">
               {features.map((f) => (
                 <li key={f.title} className="flex gap-4">
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-600 ring-2 ring-brand-100/80">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-600 ring-2 ring-brand-100/80 dark:bg-brand-950/60 dark:text-brand-300 dark:ring-brand-900/50">
                     <Icon name={f.icon} aria-hidden />
                   </span>
                   <div>
-                    <p className="font-display font-bold text-slate-900">{f.title}</p>
-                    <p className="mt-0.5 text-sm text-slate-600">{f.desc}</p>
+                    <p className="font-display font-bold text-heading">{f.title}</p>
+                    <p className="mt-0.5 text-sm text-body">{f.desc}</p>
                   </div>
                 </li>
               ))}
@@ -125,15 +125,15 @@ export default function LoginPage() {
           </div>
 
           <div className="order-1 lg:order-2">
-            <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8">
+            <div className="auth-card">
               <div className="text-center sm:text-left">
-                <h2 className="font-display text-xl font-bold text-slate-900 sm:text-2xl">เข้าสู่ระบบ</h2>
-                <p className="mt-1 text-sm text-slate-600">ยินดีต้อนรับกลับมา</p>
+                <h2 className="font-display text-xl font-bold text-heading sm:text-2xl">เข้าสู่ระบบ</h2>
+                <p className="mt-1 text-sm text-body">ยินดีต้อนรับกลับมา</p>
               </div>
 
               <form className="mt-8 space-y-4" noValidate onSubmit={handleSubmit}>
                 <div>
-                  <label htmlFor="login-id" className="mb-1.5 block text-sm font-medium text-slate-700">
+                  <label htmlFor="login-id" className="mb-1.5 block text-sm font-medium text-label">
                     เบอร์โทรศัพท์หรืออีเมล <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -155,7 +155,7 @@ export default function LoginPage() {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium text-slate-700">
+                  <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium text-label">
                     รหัสผ่าน
                   </label>
                   <div className="relative">
@@ -183,16 +183,16 @@ export default function LoginPage() {
                       <Icon name={showPassword ? "fa-eye-slash" : "fa-eye"} aria-hidden />
                     </button>
                   </div>
-                  <p className="mt-1.5 text-xs text-slate-500">
+                  <p className="mt-1.5 text-xs text-muted">
                     บัญชีที่ยังไม่ได้ตั้งรหัสผ่านสามารถเว้นว่างได้ (เข้าด้วยเบอร์อย่างเดียว)
                   </p>
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-body">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30"
+                      className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30 dark:border-slate-600 dark:bg-slate-800"
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
                     />
@@ -200,7 +200,7 @@ export default function LoginPage() {
                   </label>
                   <button
                     type="button"
-                    className="text-sm font-medium text-brand-600 hover:text-brand-700 hover:underline"
+                    className="text-sm font-medium text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-400 dark:hover:text-brand-300"
                     onClick={() => notify("info", "ฟีเจอร์ลืมรหัสผ่านจะเปิดให้ใช้งานเร็วๆ นี้")}
                   >
                     ลืมรหัสผ่าน?
@@ -218,10 +218,10 @@ export default function LoginPage() {
 
               <div className="relative my-8">
                 <div className="absolute inset-0 flex items-center" aria-hidden>
-                  <div className="w-full border-t border-slate-200" />
+                  <div className="w-full border-t border-slate-200 dark:border-slate-700" />
                 </div>
-                <div className="relative flex justify-center text-xs font-medium text-slate-500">
-                  <span className="bg-white px-3">หรือเข้าสู่ระบบด้วย</span>
+                <div className="relative flex justify-center text-xs font-medium text-muted">
+                  <span className="auth-divider-label">หรือเข้าสู่ระบบด้วย</span>
                 </div>
               </div>
 
@@ -229,7 +229,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => handleSocial("Google")}
-                  className="flex flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                  className="auth-social-btn"
                 >
                   <i className="fa-brands fa-google shrink-0 text-lg text-red-500" aria-hidden />
                   Google
@@ -237,7 +237,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => handleSocial("Facebook")}
-                  className="flex flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                  className="auth-social-btn"
                 >
                   <i className="fa-brands fa-facebook shrink-0 text-lg text-[#1877F2]" aria-hidden />
                   Facebook
@@ -245,16 +245,16 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => handleSocial("Apple")}
-                  className="flex flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                  className="auth-social-btn"
                 >
-                  <i className="fa-brands fa-apple shrink-0 text-xl text-slate-900" aria-hidden />
+                  <i className="fa-brands fa-apple shrink-0 text-xl text-slate-900 dark:text-slate-100" aria-hidden />
                   Apple
                 </button>
               </div>
 
-              <p className="mt-8 text-center text-sm text-slate-600">
+              <p className="mt-8 text-center text-sm text-body">
                 ยังไม่มีบัญชี?{" "}
-                <Link href="/register" className="font-semibold text-brand-600 hover:text-brand-700 hover:underline">
+                <Link href="/register" className="font-semibold text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-400 dark:hover:text-brand-300">
                   สมัครสมาชิก
                 </Link>
               </p>

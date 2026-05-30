@@ -26,8 +26,8 @@ export default function Features() {
   ];
 
   return (
-    <section className="rounded-3xl border border-violet-100 bg-white/80 px-6 py-10 shadow-soft md:px-10 md:py-12">
-      <h2 className="font-display border-b border-violet-100 pb-3 text-2xl font-bold text-brand-800 md:text-3xl">
+    <section className="card-elevated px-6 py-10 md:px-10 md:py-12">
+      <h2 className="font-display border-b border-violet-100 pb-3 text-2xl font-bold text-brand-800 dark:border-violet-900/50 md:text-3xl">
         ทำไมต้อง Pramool.in.th
       </h2>
       <div className="grid items-start gap-10 py-8 md:grid-cols-2 md:py-10">
@@ -35,7 +35,7 @@ export default function Features() {
           <h3 className="font-display text-2xl font-bold text-brand-800 md:text-3xl">
             บริการของเรา
           </h3>
-          <p className="leading-relaxed text-slate-600">
+          <p className="leading-relaxed text-body">
             แพลตฟอร์มประมูลออนไลน์ที่เน้นความโปร่งใสและประสบการณ์ผู้ใช้ — ทั้งผู้ขายและผู้ซื้อเข้าถึงข้อมูลสำคัญได้ง่าย
             และมีเครื่องมือช่วยจัดการการชำระเงินอย่างเป็นระบบ
           </p>
@@ -53,7 +53,7 @@ export default function Features() {
                 <i className={`fas ${row.icon}`} aria-hidden />
               </div>
               <h4 className="mb-2 font-display font-semibold text-brand-900">{row.title}</h4>
-              <p className="text-sm leading-relaxed text-slate-600">{row.desc}</p>
+              <p className="text-sm leading-relaxed text-body">{row.desc}</p>
             </div>
           ))}
         </div>

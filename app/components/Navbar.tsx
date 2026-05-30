@@ -6,9 +6,13 @@ import React, { useContext, useEffect, useRef, useState } from 'react'
 import { UserContext } from '../context/UserContext'
 import { logout } from '../lib/api/user'
 import type { PublicAuctionListItem } from '../lib/api/auction'
+import { getMyActiveBids } from '../lib/api/auction'
 import { listPublicAuctionsCached } from '../lib/data/publicAuctionsCache'
+import { onPendingConfirmChanged } from '../lib/pendingConfirmBadgeSync'
+import { onPendingShipChanged } from '../lib/pendingShipBadgeSync'
 import { openTopupCreditSwal } from '../lib/utils/topupCreditSwal'
 import Icon from "@/app/components/Icon"
+import ThemeToggle from "@/app/components/ThemeToggle"
 
 export default function Navbar() {
     type SearchSuggestion = Pick<PublicAuctionListItem, "auction_id" | "title" | "current_bid" | "cover_image_url">
@@ -41,16 +45,54 @@ export default function Navbar() {
         setClientReady(true)
     }, [])
 
+    const [pendingConfirmCount, setPendingConfirmCount] = useState(0)
+
+    const refreshPendingConfirmCount = React.useCallback(async () => {
+        if (!user) {
+            setPendingConfirmCount(0)
+            return
+        }
+        try {
+            const res = await getMyActiveBids({ limit: 1 })
+            setPendingConfirmCount(res.closed_count)
+        } catch {
+            setPendingConfirmCount(0)
+        }
+    }, [user])
+
+    useEffect(() => {
+        void refreshPendingConfirmCount()
+    }, [refreshPendingConfirmCount, pathname])
+
+    useEffect(() => {
+        return onPendingConfirmChanged(() => {
+            void refreshPendingConfirmCount()
+        })
+    }, [refreshPendingConfirmCount])
+
+    const pendingSellerShipCount = Number(user?.pendingSellerShipCount ?? 0)
+
+    useEffect(() => {
+        if (!user) return
+        void refreshSession({ force: true, silent: true })
+    }, [pathname, user?.userId, refreshSession])
+
+    useEffect(() => {
+        return onPendingShipChanged(() => {
+            void refreshSession({ force: true, silent: true })
+        })
+    }, [refreshSession])
+
     const navItems = [
         { href: '/', label: 'หน้าแรก' },
         { href: '/auctions', label: 'รายการสินค้า' },
     ]
     const userMenuItems = [
-        { href: '/notifications', label: 'การแจ้งเตือน' },
-        { href: '/seller/auctions', label: 'รายการที่ฉันเปิดประมูล' },
-        { href: '/bids/active', label: 'รายการที่ฉันกำลังประมูล' },
+        { href: '/seller/auctions', label: 'รายการที่ฉันเปิดประมูล', shipBadge: true },
+        { href: '/bids/active', label: 'รายการที่ฉันกำลังประมูล', confirmBadge: true },
         { href: '/bids/history', label: 'ประวัติการประมูล' },
         { href: '/wallet/transactions', label: 'ประวัติเครดิต' },
+        { href: '/wallet/withdraw', label: 'ถอนเครดิต' },
         { href: '/account/profile', label: 'โปรไฟล์ของฉัน' },
         { href: '/account/kyc', label: 'การยืนยันตัวตน (KYC)' },
     ]
@@ -174,22 +216,22 @@ export default function Navbar() {
         const q = searchKeyword.trim()
         if (!isSearchOpen || q.length < 2) return null
         return (
-            <div className="absolute left-0 right-0 top-[calc(100%+0.4rem)] z-40 overflow-hidden rounded-xl border border-violet-100 bg-white shadow-xl">
+            <div className="absolute left-0 right-0 top-[calc(100%+0.4rem)] z-40 overflow-hidden rounded-xl border border-violet-100 bg-surface-card shadow-xl dark:border-violet-900/60 dark:shadow-black/40">
                 {searchLoading ? (
-                    <div className="px-3 py-2.5 text-sm text-slate-500">กำลังค้นหา...</div>
+                    <div className="px-3 py-2.5 text-sm text-muted">กำลังค้นหา...</div>
                 ) : searchSuggestions.length === 0 ? (
-                    <div className="px-3 py-2.5 text-sm text-slate-500">ไม่พบรายการที่ตรงกับคำค้น</div>
+                    <div className="px-3 py-2.5 text-sm text-muted">ไม่พบรายการที่ตรงกับคำค้น</div>
                 ) : (
                     <div className="max-h-80 overflow-y-auto">
                         {searchSuggestions.map((it) => (
                             <button
                                 key={it.auction_id}
                                 type="button"
-                                className="block w-full border-b border-slate-100 px-3 py-2 text-left hover:bg-brand-50 last:border-0"
+                                className="block w-full border-b border-slate-100 px-3 py-2 text-left hover:bg-brand-50 last:border-0 dark:border-slate-700 dark:hover:bg-brand-950/40"
                                 onClick={() => handleSearchSuggestionPick(it.auction_id)}
                             >
-                                <p className="truncate text-sm font-medium text-slate-800">{it.title}</p>
-                                <p className="mt-0.5 text-xs text-slate-500">
+                                <p className="truncate text-sm font-medium text-heading">{it.title}</p>
+                                <p className="mt-0.5 text-xs text-muted">
                                     {it.auction_id} · {Number(it.current_bid ?? 0).toLocaleString()} ฿
                                 </p>
                             </button>
@@ -198,7 +240,7 @@ export default function Navbar() {
                 )}
                 <button
                     type="button"
-                    className="block w-full border-t border-violet-100 bg-violet-50/60 px-3 py-2 text-center text-xs font-semibold text-brand-700 hover:bg-violet-100/60"
+                    className="block w-full border-t border-violet-100 bg-violet-50/60 px-3 py-2 text-center text-xs font-semibold text-brand-700 hover:bg-violet-100/60 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-brand-300 dark:hover:bg-violet-900/40"
                     onClick={() => {
                         setIsSearchOpen(false)
                         router.push(`/auctions?q=${encodeURIComponent(q)}`)
@@ -247,10 +289,53 @@ export default function Navbar() {
         })
     }
 
+    const pendingConfirmBadgeLabel = `${pendingConfirmCount} รายการรอยืนยันรับของ`
+    const pendingConfirmBadgeCount = pendingConfirmCount > 9 ? "9+" : pendingConfirmCount
+
+    const pendingConfirmBadgeMenu = pendingConfirmCount > 0 ? (
+        <span
+            className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white"
+            aria-label={pendingConfirmBadgeLabel}
+        >
+            {pendingConfirmBadgeCount}
+        </span>
+    ) : null
+
+    const pendingShipBadgeLabel = `${pendingSellerShipCount} รายการรอบันทึกส่งของ`
+    const pendingShipBadgeCount = pendingSellerShipCount > 9 ? "9+" : pendingSellerShipCount
+
+    const pendingShipBadgeMenu = pendingSellerShipCount > 0 ? (
+        <span
+            className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white"
+            aria-label={pendingShipBadgeLabel}
+        >
+            {pendingShipBadgeCount}
+        </span>
+    ) : null
+
+    const userMenuPendingCornerCount = pendingConfirmCount + pendingSellerShipCount
+    const userMenuPendingCornerLabel = [
+        pendingSellerShipCount > 0 ? `${pendingSellerShipCount} รายการรอบันทึกส่งของ` : "",
+        pendingConfirmCount > 0 ? `${pendingConfirmCount} รายการรอยืนยันรับของ` : "",
+    ].filter(Boolean).join(", ")
+    const userMenuPendingCornerDisplay = userMenuPendingCornerCount > 9 ? "9+" : userMenuPendingCornerCount
+
+    const userMenuPendingCornerBadge = userMenuPendingCornerCount > 0 ? (
+        <span
+            className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4"
+            aria-label={userMenuPendingCornerLabel}
+        >
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" aria-hidden />
+            <span className="relative inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-0.5 text-[9px] font-bold leading-none text-white ring-2 ring-white dark:ring-slate-900">
+                {userMenuPendingCornerDisplay}
+            </span>
+        </span>
+    ) : null
+
     return (
         <>
-            <nav ref={mobileNavRef} className="fixed inset-x-0 top-0 z-40 border-b border-violet-100/90 bg-white/95 backdrop-blur-md lg:hidden">
-                <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
+            <nav ref={mobileNavRef} className="fixed inset-x-0 top-0 z-40 border-b border-violet-100/90 bg-white/95 backdrop-blur-md dark:border-violet-900/50 dark:bg-slate-900/95 lg:hidden">
+                <div className="app-page-container py-3">
                     <div className="flex items-center gap-2">
                         <button
                             className="rounded-2xl border border-violet-200 p-2.5 text-brand-700"
@@ -265,7 +350,7 @@ export default function Navbar() {
                             <form className="relative" onSubmit={handleSearchSubmit}>
                                 <input
                                     type="text"
-                                    className="form-input border-slate-200 bg-slate-100 pr-10 placeholder:text-slate-500 focus:border-brand-500 focus:bg-white"
+                                    className="form-input border-slate-200 bg-slate-100 pr-10 placeholder:text-slate-500 focus:border-brand-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:focus:bg-slate-800"
                                     placeholder="ค้นหาชื่อสินค้า..."
                                     aria-label="Search product"
                                     value={searchKeyword}
@@ -280,10 +365,11 @@ export default function Navbar() {
                             </form>
                             {renderSearchSuggestions()}
                         </div>
+                        <ThemeToggle size="sm" />
                         {clientReady && !loading && user && (
                             <button
                                 type="button"
-                                className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-900"
+                                className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
                                 onClick={handleOpenTopup}
                                 aria-label="เครดิตคงเหลือ"
                             >
@@ -298,13 +384,13 @@ export default function Navbar() {
                         )}
                     </div>
                     {isOpen && (
-                        <div className="mt-3 space-y-2 rounded-2xl border border-violet-100 bg-white/95 p-3 shadow-sm">
+                        <div className="mt-3 space-y-2 rounded-2xl border border-violet-100 bg-white/95 p-3 shadow-sm dark:border-violet-900/50 dark:bg-slate-800/95">
                             {navItems.map((item) => (
-                                <Link key={item.label} className="block rounded-xl px-2 py-1.5 text-sm text-slate-700 hover:bg-brand-50" href={item.href} onClick={() => setIsOpen(false)}>
+                                <Link key={item.label} className="block rounded-xl px-2 py-1.5 text-sm text-body hover:bg-brand-50 dark:hover:bg-brand-950/40" href={item.href} onClick={() => setIsOpen(false)}>
                                     {item.label}
                                 </Link>
                             ))}
-                            <Link href="/how-it-works" onClick={() => setIsOpen(false)} className="block rounded-xl px-2 py-1.5 text-sm text-slate-700 hover:bg-brand-50">
+                            <Link href="/how-it-works" onClick={() => setIsOpen(false)} className="block rounded-xl px-2 py-1.5 text-sm text-body hover:bg-brand-50 dark:hover:bg-brand-950/40">
                                 วิธีใช้งาน
                             </Link>
                             {!clientReady ? (
@@ -320,7 +406,7 @@ export default function Navbar() {
                                             <Link
                                                 href="/login"
                                                 onClick={() => setIsOpen(false)}
-                                                className="block rounded-full border border-slate-200 bg-white px-4 py-2.5 text-center text-sm font-semibold text-brand-900 transition hover:bg-slate-50"
+                                                className="block rounded-full border border-slate-200 bg-surface-card px-4 py-2.5 text-center text-sm font-semibold text-brand-900 transition hover:bg-slate-50 dark:border-slate-600 dark:text-brand-200 dark:hover:bg-slate-700"
                                             >
                                                 เข้าสู่ระบบ
                                             </Link>
@@ -334,7 +420,7 @@ export default function Navbar() {
                                         </div>
                                     )}
                                     {!loading && user && (
-                                        <div className="space-y-2 border-t border-violet-100 pt-2 text-sm text-slate-700">
+                                        <div className="space-y-2 border-t border-violet-100 pt-2 text-sm text-body dark:border-violet-900/50">
                                             <Link
                                                 href="/seller/auctions/new"
                                                 className="block rounded-2xl bg-brand-600 px-2 py-2.5 text-center text-xs font-semibold leading-snug text-white shadow-md shadow-brand-600/20 hover:bg-brand-700"
@@ -347,20 +433,22 @@ export default function Navbar() {
                                                     <Link
                                                         key={item.href}
                                                         href={item.href}
-                                                        className="block rounded-xl px-2 py-2 text-xs text-slate-700 hover:bg-brand-50"
+                                                        className="flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-xs text-body hover:bg-brand-50 dark:hover:bg-brand-950/40"
                                                         onClick={() => setIsOpen(false)}
                                                     >
-                                                        {item.label}
+                                                        <span>{item.label}</span>
+                                                        {"shipBadge" in item && item.shipBadge ? pendingShipBadgeMenu : null}
+                                                        {"confirmBadge" in item && item.confirmBadge ? pendingConfirmBadgeMenu : null}
                                                     </Link>
                                                 ))}
                                             </div>
                                             <div className="flex items-center justify-between gap-3 border-t border-violet-100 px-2 pt-2">
-                                                <p className="min-w-0 truncate text-xs text-slate-600">
+                                                <p className="min-w-0 truncate text-xs text-muted">
                                                     {`${user.firstName || "ผู้ใช้งาน"} ${user.lastName || ""}`}
                                                 </p>
                                                 <button
                                                     type="button"
-                                                    className="shrink-0 text-xs text-slate-700 hover:text-slate-900"
+                                                    className="shrink-0 text-xs text-body hover:text-slate-900 dark:hover:text-slate-200"
                                                     onClick={handleLogout}
                                                     disabled={isLoggingOut}
                                                 >
@@ -376,22 +464,22 @@ export default function Navbar() {
                 </div>
             </nav>
             <div className="h-[73px] lg:hidden" aria-hidden="true"></div>
-            <header className="sticky top-0 z-50 hidden border-b border-violet-100 bg-white shadow-sm lg:block">
-                <div className="relative mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
-                    <Link href="/" className="flex items-center gap-3 text-brand-900">
+            <header className="sticky top-0 z-50 hidden border-b border-violet-100 bg-white shadow-sm dark:border-violet-900/50 dark:bg-slate-900 dark:shadow-slate-950/40 lg:block">
+                <div className="relative app-page-container flex items-center gap-4 py-3">
+                    <Link href="/" className="flex items-center gap-3 text-brand-900 dark:text-brand-100">
                         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-600 text-lg text-white shadow-md shadow-brand-600/30">
                             <Icon name="fa-gavel" aria-hidden />
                         </span>
                         <span className="flex flex-col leading-tight">
                             <span className="font-display text-xl font-bold tracking-tight">Pramool</span>
-                            <span className="text-xs font-medium text-brand-600">ประมูลง่าย · ได้ของชัวร์</span>
+                            <span className="text-xs font-medium text-brand-600 dark:text-brand-400">ประมูลง่าย · ได้ของชัวร์</span>
                         </span>
                     </Link>
                     <div ref={desktopSearchWrapRef} className="relative mx-auto max-w-xl flex-1">
                         <form className="relative" onSubmit={handleSearchSubmit}>
                             <input
                                 type="search"
-                                className="form-input border-slate-200 bg-slate-100 py-2.5 pl-4 pr-11 placeholder:text-slate-500 focus:border-brand-500 focus:bg-white"
+                                className="form-input border-slate-200 bg-slate-100 py-2.5 pl-4 pr-11 placeholder:text-slate-500 focus:border-brand-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:focus:bg-slate-800"
                                 placeholder="ค้นหาชื่อสินค้า..."
                                 aria-label="ค้นหา"
                                 value={searchKeyword}
@@ -423,7 +511,7 @@ export default function Navbar() {
                                     className={
                                         active
                                             ? "inline-flex min-h-10 items-center border-b-2 border-brand-600 py-2 font-semibold text-brand-700"
-                                            : "inline-flex min-h-10 items-center border-b-2 border-transparent py-2 font-medium text-slate-600 transition hover:text-brand-700"
+                                            : "inline-flex min-h-10 items-center border-b-2 border-transparent py-2 font-medium text-slate-600 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400"
                                     }
                                 >
                                     {item.label}
@@ -435,14 +523,15 @@ export default function Navbar() {
                             className={
                                 pathname.startsWith("/how-it-works")
                                     ? "inline-flex min-h-10 items-center border-b-2 border-brand-600 py-2 font-semibold text-brand-700"
-                                    : "inline-flex min-h-10 items-center border-b-2 border-transparent py-2 font-medium text-slate-600 transition hover:text-brand-700"
+                                    : "inline-flex min-h-10 items-center border-b-2 border-transparent py-2 font-medium text-slate-600 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400"
                             }
                         >
                             วิธีใช้งาน
                         </Link>
                     </nav>
+                    <ThemeToggle />
                     <span
-                        className="hidden shrink-0 select-none px-0.5 text-sm font-light text-slate-300 lg:inline lg:self-center"
+                        className="hidden shrink-0 select-none px-0.5 text-sm font-light text-slate-300 dark:text-slate-600 lg:inline lg:self-center"
                         aria-hidden
                     >
                         |
@@ -458,7 +547,7 @@ export default function Navbar() {
                                 <div className="flex shrink-0 items-center gap-2">
                                     <Link
                                         href="/login"
-                                        className="inline-flex min-h-10 items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-brand-900 transition hover:bg-slate-50"
+                                        className="inline-flex min-h-10 items-center justify-center rounded-full border border-slate-200 bg-surface-card px-5 py-2 text-sm font-semibold text-brand-900 transition hover:bg-slate-50 dark:border-slate-600 dark:text-brand-200 dark:hover:bg-slate-700"
                                     >
                                         เข้าสู่ระบบ
                                     </Link>
@@ -482,14 +571,15 @@ export default function Navbar() {
                                     <div ref={userMenuRef} className="relative">
                                     <button
                                         type="button"
-                                        className="flex items-center gap-2 rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm"
+                                        className="relative flex items-center gap-2 rounded-full border border-violet-200 bg-surface-card px-4 py-2 text-sm font-medium text-body shadow-sm dark:border-violet-800"
                                         onClick={() => setIsUserMenuOpen((prev) => !prev)}
                                     >
                                         <span>{`${user.firstName || "ผู้ใช้งาน"} ${user.lastName || ""}`}</span>
                                         <Icon name="fa-chevron-down" className="text-xs" />
+                                        {userMenuPendingCornerBadge}
                                     </button>
                                     {isUserMenuOpen && (
-                                        <div className="absolute right-0 top-11 z-30 w-64 rounded-2xl border border-violet-100 bg-white p-2 shadow-xl shadow-violet-200/40">
+                                        <div className="absolute right-0 top-11 z-30 w-64 rounded-2xl border border-violet-100 bg-surface-card p-2 shadow-xl shadow-violet-200/40 dark:border-violet-900/60 dark:shadow-black/40">
                                             <Link
                                                 href="/seller/auctions/new"
                                                 className="block rounded-xl px-3 py-2 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50"
@@ -502,16 +592,18 @@ export default function Navbar() {
                                                 <Link
                                                     key={item.href}
                                                     href={item.href}
-                                                    className="block rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-brand-50"
+                                                    className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm text-body hover:bg-brand-50 dark:hover:bg-brand-950/40"
                                                     onClick={() => setIsUserMenuOpen(false)}
                                                 >
-                                                    {item.label}
+                                                    <span>{item.label}</span>
+                                                    {"shipBadge" in item && item.shipBadge ? pendingShipBadgeMenu : null}
+                                                    {"confirmBadge" in item && item.confirmBadge ? pendingConfirmBadgeMenu : null}
                                                 </Link>
                                             ))}
                                             <div className="my-1 border-t border-violet-100"></div>
                                             <button
                                                 type="button"
-                                                className="w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-violet-50"
+                                                className="w-full rounded-xl px-3 py-2 text-left text-sm text-body hover:bg-violet-50 dark:hover:bg-violet-950/40"
                                                 onClick={handleLogout}
                                                 disabled={isLoggingOut}
                                             >

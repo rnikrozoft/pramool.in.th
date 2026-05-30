@@ -61,15 +61,15 @@ export function CategoryMultiSelect({ options, value, onChange, max = 5 }: Props
 
     return (
         <div ref={rootRef} className="relative">
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                หมวดหมู่ <span className="font-normal text-slate-500">(เลือกได้สูงสุด {max} หมวด)</span>
+            <label className="mb-1.5 block text-sm font-medium text-body">
+                หมวดหมู่ <span className="font-normal text-muted">(เลือกได้สูงสุด {max} หมวด)</span>
             </label>
 
             <div
-                className={`flex min-h-[2.75rem] w-full items-start gap-1 rounded-lg border bg-white px-2 py-1.5 shadow-sm transition ${
+                className={`flex min-h-[2.75rem] w-full items-start gap-1 rounded-lg border bg-surface-card px-2 py-1.5 shadow-sm transition ${
                     atLimit
-                        ? "cursor-not-allowed border-slate-200 bg-slate-50"
-                        : "border-slate-300 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20"
+                        ? "cursor-not-allowed border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/80"
+                        : "border-slate-300 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 dark:border-slate-600 dark:focus-within:border-emerald-400"
                 }`}
                 onMouseDown={(e) => {
                     if (atLimit) return
@@ -86,7 +86,7 @@ export function CategoryMultiSelect({ options, value, onChange, max = 5 }: Props
                     {value.map((c) => (
                         <span
                             key={c}
-                            className="inline-flex max-w-full items-center gap-0.5 rounded-md border border-emerald-200 bg-emerald-50 pl-2 pr-1 py-0.5 text-xs font-medium text-emerald-900"
+                            className="inline-flex max-w-full items-center gap-0.5 rounded-md border border-emerald-200 bg-emerald-50 pl-2 pr-1 py-0.5 text-xs font-medium text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
                         >
                             <span className="truncate">{c}</span>
                             <button
@@ -106,8 +106,8 @@ export function CategoryMultiSelect({ options, value, onChange, max = 5 }: Props
                     <input
                         ref={inputRef}
                         type="text"
-                        className={`min-h-[1.75rem] min-w-[6rem] flex-1 border-0 bg-transparent py-0.5 text-sm outline-none ring-0 placeholder:text-slate-400 ${
-                            atLimit ? "cursor-not-allowed text-slate-400" : "text-slate-900"
+                        className={`min-h-[1.75rem] min-w-[6rem] flex-1 border-0 bg-transparent py-0.5 text-sm outline-none ring-0 placeholder:text-slate-400 dark:placeholder:text-slate-500 ${
+                            atLimit ? "cursor-not-allowed text-slate-400" : "text-heading"
                         }`}
                         placeholder={
                             atLimit
@@ -139,7 +139,7 @@ export function CategoryMultiSelect({ options, value, onChange, max = 5 }: Props
                     {value.length > 0 && (
                         <button
                             type="button"
-                            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
                             title="ล้างหมวดทั้งหมด"
                             aria-label="ล้างหมวดทั้งหมด"
                             onMouseDown={(e) => e.preventDefault()}
@@ -154,7 +154,7 @@ export function CategoryMultiSelect({ options, value, onChange, max = 5 }: Props
                     <button
                         type="button"
                         tabIndex={-1}
-                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
                         aria-label={open ? "ปิดรายการหมวด" : "เปิดรายการหมวด"}
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={(e) => {
@@ -172,16 +172,16 @@ export function CategoryMultiSelect({ options, value, onChange, max = 5 }: Props
                 <ul
                     id="category-multiselect-listbox"
                     role="listbox"
-                    className="absolute z-30 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                    className="absolute z-30 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-slate-200 bg-surface-card py-1 shadow-lg dark:border-slate-700 dark:shadow-black/40"
                 >
                     {filtered.length === 0 ? (
-                        <li className="px-3 py-2 text-sm text-slate-500">ไม่พบหมวดที่ตรงกับการค้นหา</li>
+                        <li className="px-3 py-2 text-sm text-muted">ไม่พบหมวดที่ตรงกับการค้นหา</li>
                     ) : (
                         filtered.map((opt) => (
                             <li key={opt} role="option">
                                 <button
                                     type="button"
-                                    className="w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-emerald-50"
+                                    className="w-full px-3 py-2 text-left text-sm text-body hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
                                     onMouseDown={(e) => e.preventDefault()}
                                     onClick={() => add(opt)}
                                 >

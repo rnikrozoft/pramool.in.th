@@ -16,7 +16,7 @@ export default function Ad({ title, image }: Props) {
             width={160}
             height={96}
             unoptimized
-            className="h-24 w-full rounded-2xl object-cover ring-1 ring-violet-100"
+            className="h-24 w-full rounded-2xl object-cover ring-1 ring-violet-100 dark:ring-violet-900/50"
             alt={title}
           />
         </div>

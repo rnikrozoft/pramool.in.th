@@ -51,7 +51,7 @@ const showcaseItems: ShowcaseItem[] = [
 
 export default function Home() {
   return (
-    <main className="bg-white">
+    <main className="bg-surface-page">
       <HeroWebsign />
       <HomeCategoryBar />
       <HomeAuctionShowcase items={showcaseItems} />

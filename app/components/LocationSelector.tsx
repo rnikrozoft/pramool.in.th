@@ -8,10 +8,13 @@ import Icon from "@/app/components/Icon"
 
 type SearchOption = {
     id: number
+    /** ข้อความในรายการ dropdown และใช้ค้นหา */
     label: string
+    /** ข้อความในช่อง input หลังเลือกแล้ว (ถ้าไม่ระบุใช้ label) */
+    displayLabel?: string
 }
 
-function SearchableSelect({
+export function SearchableSelect({
     options,
     value,
     onChange,
@@ -33,9 +36,13 @@ function SearchableSelect({
         [options, value],
     )
 
+    const selectedDisplay = selectedOption
+        ? (selectedOption.displayLabel ?? selectedOption.label)
+        : ""
+
     useEffect(() => {
-        setQuery(selectedOption?.label ?? "")
-    }, [selectedOption])
+        setQuery(selectedDisplay)
+    }, [selectedDisplay])
 
     useEffect(() => {
         function handleOutsideClick(event: MouseEvent) {
@@ -85,19 +92,19 @@ function SearchableSelect({
                 <Icon name={open ? "fa-chevron-up" : "fa-chevron-down"} className="text-xs" />
             </button>
             {open && !disabled && (
-                <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-surface-card py-1 shadow-lg dark:border-slate-700 dark:shadow-black/40">
                     {filteredOptions.length === 0 ? (
-                        <p className="px-3 py-2 text-sm text-slate-500">ไม่พบข้อมูล</p>
+                        <p className="px-3 py-2 text-sm text-muted">ไม่พบข้อมูล</p>
                     ) : (
                         filteredOptions.map((option) => (
                             <button
                                 key={option.id}
                                 type="button"
-                                className={`block w-full px-3 py-2 text-left text-sm hover:bg-slate-100 ${value === option.id ? "bg-slate-100 text-slate-900" : "text-slate-700"}`}
+                                className={`block w-full px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${value === option.id ? "bg-slate-100 text-heading dark:bg-slate-800" : "text-body"}`}
                                 onMouseDown={(event) => event.preventDefault()}
                                 onClick={() => {
                                     onChange(option.id)
-                                    setQuery(option.label)
+                                    setQuery(option.displayLabel ?? option.label)
                                     setOpen(false)
                                 }}
                             >
@@ -114,50 +121,48 @@ function SearchableSelect({
 export function ZipcodeInput({
     value,
     onChange,
+    readOnly = false,
 }: {
     value: string
     onChange: (value: string) => void
+    readOnly?: boolean
 }) {
     return (
         <input
             type="text"
-            className="form-input"
-            placeholder="พิมพ์รหัสไปรษณีย์"
+            className={`form-input ${readOnly ? "bg-slate-100 text-body dark:bg-slate-800/80" : ""}`}
+            placeholder={readOnly ? "เลือกแขวง/ตำบลเพื่อกรอกอัตโนมัติ" : "พิมพ์รหัสไปรษณีย์"}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             maxLength={5}
             pattern="\d*"
             inputMode="numeric"
+            readOnly={readOnly}
+            disabled={readOnly}
         />
     )
 }
 
 export function ProvinceSelect({
-    zipcode,
+    districtId,
     value,
     onChange,
     disabled,
 }: {
-    zipcode: string
+    /** เมื่อมีเขต/อำเภอแล้ว จำกัดจังหวัดให้ตรงกับเขตนั้น */
+    districtId?: number | null
     value: number | null
     onChange: (value: number | null) => void
     disabled?: boolean
 }) {
     const filteredProvinces = useMemo(() => {
-        if (zipcode.length !== 5) return []
-        const provinceIds = new Set(
-            subDistricts
-                .filter((s) => s.zipcode.toString() === zipcode)
-                .map((s) => {
-                    const district = districts.find((d) => d.district_id === s.district_id)
-                    return district?.province_id
-                })
-                .filter((id): id is number => id !== undefined)
-        )
-        return provinces.filter((p) => provinceIds.has(p.province_id))
-    }, [zipcode])
-
-    const isDisabled = zipcode.length !== 5 || filteredProvinces.length === 0 || disabled
+        if (districtId) {
+            const district = districts.find((d) => d.district_id === districtId)
+            if (!district) return []
+            return provinces.filter((p) => p.province_id === district.province_id)
+        }
+        return provinces
+    }, [districtId])
 
     return (
         <SearchableSelect
@@ -165,10 +170,12 @@ export function ProvinceSelect({
             value={value}
             onChange={onChange}
             placeholder="-- เลือกจังหวัด --"
-            disabled={isDisabled}
+            disabled={disabled || filteredProvinces.length === 0}
         />
     )
 }
+
+/** @deprecated ใช้ SearchableSelect + allSubDistrictOptions แทน */
 
 export function DistrictSelect({
     provinceId,
@@ -191,7 +198,7 @@ export function DistrictSelect({
             options={filteredDistricts.map((d) => ({ id: d.district_id, label: d.name_th }))}
             value={value}
             onChange={onChange}
-            placeholder="-- เลือกอำเภอ --"
+            placeholder="-- เลือกเขต/อำเภอ --"
             disabled={disabled}
         />
     )

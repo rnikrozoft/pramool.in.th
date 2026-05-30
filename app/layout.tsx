@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Kanit, Noto_Sans_Thai } from "next/font/google";
+import "sweetalert2/dist/sweetalert2.css";
 import "./globals.css";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
@@ -9,6 +10,8 @@ import OnboardingGuard from "./components/OnboardingGuard";
 import RouteWarmup from "./components/RouteWarmup";
 import SwalThemeInit from "./components/SwalThemeInit";
 import QueuedToast from "./components/QueuedToast";
+import ThemeScript from "./components/ThemeScript";
+import { ThemeProvider } from "./context/ThemeContext";
 
 const noto = Noto_Sans_Thai({
   subsets: ["latin", "thai"],
@@ -34,16 +37,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th">
+    <html lang="th" suppressHydrationWarning>
       <head>
+        <ThemeScript />
         <link
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
           rel="stylesheet"
         />
       </head>
       <body
-        className={`${noto.variable} ${kanit.variable} min-h-screen bg-surface-page font-sans text-slate-800 antialiased`}
+        className={`${noto.variable} ${kanit.variable} flex min-h-screen flex-col bg-surface-page font-sans text-slate-800 antialiased transition-colors duration-200 dark:text-slate-200`}
       >
+        <ThemeProvider>
         <UserProvider>
           <SwalThemeInit />
           <QueuedToast />
@@ -52,15 +57,16 @@ export default function RootLayout({
           <Suspense
             fallback={
               <header
-                className="h-16 w-full border-b border-violet-100 bg-white/90"
+                className="h-16 w-full border-b border-violet-100 bg-white/90 dark:border-violet-900/50 dark:bg-slate-900/90"
                 aria-hidden
               />
             }
           >
             <Navbar />
           </Suspense>
-          {children}
+          <main className="flex flex-1 flex-col">{children}</main>
         </UserProvider>
+        </ThemeProvider>
         <Footer />
       </body>
     </html>

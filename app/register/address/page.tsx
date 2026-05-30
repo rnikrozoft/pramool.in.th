@@ -4,13 +4,9 @@ import React, { useContext, useEffect, useState } from 'react'
 import subDistricts from '../../data/sub-districts.json';
 import districts from '../../data/districts.json';
 import provinces from '../../data/provinces.json';
-import {
-    ZipcodeInput,
-    ProvinceSelect,
-    DistrictSelect,
-    SubDistrictSelect,
-    BankSelect,
-} from "@/app/components/LocationSelector"
+import AddressLocationFields from "@/app/components/AddressLocationFields"
+import { BankSelect } from "@/app/components/LocationSelector"
+import type { AddressLocationValue } from "@/app/lib/locationCascade"
 import { getMyOnboardingStatus } from "@/app/lib/api/user"
 import { callPostAPI } from '@/app/lib/utils/call-api';
 import { callGetAPI } from '@/app/lib/utils/call-api';
@@ -178,10 +174,17 @@ export default function AddressPage() {
                 return
             }
 
-            await refreshSession()
-            localStorage.removeItem("phone");
-            router.push('/');
-            return;
+            await refreshSession({ force: true })
+            localStorage.removeItem("phone")
+
+            const onboardingStatus = await getMyOnboardingStatus()
+            if (onboardingStatus.is_first_registration) {
+                notify("error", "บันทึกข้อมูลยังไม่ครบ กรุณาตรวจสอบและลองใหม่")
+                return
+            }
+
+            router.push("/")
+            return
 
         } catch (error) {
             console.error(error)
@@ -259,15 +262,15 @@ export default function AddressPage() {
             <div>
                 <Link
                     href="/"
-                    className="mb-2 inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-800"
-                >
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
+                    className="mb-2 inline-flex items-center gap-2 text-sm text-muted transition hover:text-slate-800 dark:hover:text-slate-200"
+            >
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                         <Icon name="fa-house" aria-hidden />
                     </span>
                     กลับหน้าหลัก
                 </Link>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">ข้อมูลสมัครสมาชิก</h1>
-                <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
+                <h1 className="text-heading text-2xl font-bold tracking-tight sm:text-3xl">ข้อมูลสมัครสมาชิก</h1>
+                <p className="mt-2 max-w-xl text-sm leading-relaxed text-body">
                     กรอกข้อมูลตามขั้นตอนด้านล่างเพื่อเปิดใช้งานบัญชีสำหรับซื้อขายและประมูล
                 </p>
             </div>
@@ -284,15 +287,15 @@ export default function AddressPage() {
                         <div className="space-y-4">
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div>
-                                    <label className="mb-1 block text-sm font-medium text-slate-700">หมายเลขบัตรประชาชน <span className="text-red-500">*</span></label>
+                                    <label className="mb-1 block text-sm font-medium text-label">หมายเลขบัตรประชาชน <span className="text-red-500">*</span></label>
                                     <input type="text" className="form-input" name='user_id' value={formData.user_id} onChange={handleChange} inputMode="numeric" maxLength={13} />
                                     {errors.user_id && <p className="mt-1 text-xs text-red-500">{errors.user_id}</p>}
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-sm font-medium text-slate-700">เบอร์โทรศัพท์ <span className="text-red-500">*</span></label>
+                                    <label className="mb-1 block text-sm font-medium text-label">เบอร์โทรศัพท์ <span className="text-red-500">*</span></label>
                                     <input
                                         type="text"
-                                        className="form-input bg-slate-100 text-slate-600"
+                                        className="form-input bg-slate-100 text-body dark:bg-slate-800/80"
                                         value={verifiedTel}
                                         placeholder="08xxxxxxxx"
                                         inputMode="numeric"
@@ -302,12 +305,12 @@ export default function AddressPage() {
                             </div>
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div>
-                                    <label htmlFor="firstName" className="mb-1 block text-sm font-medium text-slate-700">ชื่อ <span className="text-red-500">*</span></label>
+                                    <label htmlFor="firstName" className="mb-1 block text-sm font-medium text-label">ชื่อ <span className="text-red-500">*</span></label>
                                     <input type="text" className="form-input" name='first_name' value={formData.first_name} onChange={handleChange} />
                                     {errors.first_name && <p className="mt-1 text-xs text-red-500">{errors.first_name}</p>}
                                 </div>
                                 <div>
-                                    <label htmlFor="lastName" className="mb-1 block text-sm font-medium text-slate-700">นามสกุล <span className="text-red-500">*</span></label>
+                                    <label htmlFor="lastName" className="mb-1 block text-sm font-medium text-label">นามสกุล <span className="text-red-500">*</span></label>
                                     <input type="text" className="form-input" name='last_name' value={formData.last_name} onChange={handleChange} />
                                     {errors.last_name && <p className="mt-1 text-xs text-red-500">{errors.last_name}</p>}
                                 </div>
@@ -320,90 +323,55 @@ export default function AddressPage() {
                         <div className="space-y-4">
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div>
-                                    <label htmlFor="address2" className="mb-1 block text-sm font-medium text-slate-700">ที่อยู่ 1 <span className="text-red-500">*</span></label>
+                                    <label htmlFor="address2" className="mb-1 block text-sm font-medium text-label">ที่อยู่ 1 <span className="text-red-500">*</span></label>
                                     <input type="text" className="form-input" placeholder='บ้านเลขที่ หมู่ที่ หมู่บ้าน' name='address_primary' value={formData.address_primary} onChange={handleChange} />
                                     {errors.address_primary && <p className="mt-1 text-xs text-red-500">{errors.address_primary}</p>}
                                 </div>
                                 <div>
-                                    <label htmlFor="address2" className="mb-1 block text-sm font-medium text-slate-700">ที่อยู่ 2</label>
+                                    <label htmlFor="address2" className="mb-1 block text-sm font-medium text-label">ที่อยู่ 2</label>
                                     <input type="text" className="form-input" placeholder='อาคาร ชั้น เลขที่ห้อง' name='address' value={formData.address} onChange={handleChange} />
                                 </div>
                             </div>
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div>
-                                    <label htmlFor="address" className="mb-1 block text-sm font-medium text-slate-700">ซอย</label>
+                                    <label htmlFor="address" className="mb-1 block text-sm font-medium text-label">ซอย</label>
                                     <input type="text" className="form-input" name='soi' value={formData.soi} onChange={handleChange} />
                                 </div>
                                 <div>
-                                    <label htmlFor="address" className="mb-1 block text-sm font-medium text-slate-700">ถนน</label>
+                                    <label htmlFor="address" className="mb-1 block text-sm font-medium text-label">ถนน</label>
                                     <input type="text" className="form-input" name='road' value={formData.road} onChange={handleChange} />
                                 </div>
                             </div>
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <div>
-                                    <label htmlFor="zip" className="mb-1 block text-sm font-medium text-slate-700">หมายเลขไปรษณีย์ <span className="text-red-500">*</span></label>
-                                    <ZipcodeInput
-                                        value={zipcode}
-                                        onChange={(zip) => {
-                                            setZipcode(zip)
-                                            setErrors((prev) => ({ ...prev, zipcode: "" }))
-                                            setProvinceId(null)
-                                            setDistrictId(null)
-                                            setSubDistrictId(null)
-                                        }}
-                                    />
-                                    {errors.zipcode && <p className="mt-1 text-xs text-red-500">{errors.zipcode}</p>}
-                                </div>
-                                <div>
-                                    <label htmlFor="address" className="mb-1 block text-sm font-medium text-slate-700">จังหวัด <span className="text-red-500">*</span></label>
-                                    <ProvinceSelect
-                                        zipcode={zipcode}
-                                        value={provinceId}
-                                        onChange={(id) => {
-                                            setProvinceId(id)
-                                            setErrors((prev) => ({ ...prev, provinceId: "" }))
-                                            setDistrictId(null)
-                                            setSubDistrictId(null)
-                                        }}
-                                        disabled={!zipcode}
-                                    />
-                                    {errors.provinceId && <p className="mt-1 text-xs text-red-500">{errors.provinceId}</p>}
-                                </div>
-                                <div>
-                                    <label htmlFor="address" className="mb-1 block text-sm font-medium text-slate-700">เขต/อำเภอ <span className="text-red-500">*</span></label>
-                                    <DistrictSelect
-                                        provinceId={provinceId}
-                                        value={districtId}
-                                        onChange={(id) => {
-                                            setDistrictId(id)
-                                            setErrors((prev) => ({ ...prev, districtId: "" }))
-                                            setSubDistrictId(null)
-                                        }}
-                                        disabled={!provinceId}
-                                    />
-                                    {errors.districtId && <p className="mt-1 text-xs text-red-500">{errors.districtId}</p>}
-                                </div>
-                                <div>
-                                    <label htmlFor="address" className="mb-1 block text-sm font-medium text-slate-700">แขวง/ตำบล <span className="text-red-500">*</span></label>
-                                    <SubDistrictSelect
-                                        districtId={districtId}
-                                        value={subDistrictId}
-                                        onChange={(id) => {
-                                            setSubDistrictId(id)
-                                            setErrors((prev) => ({ ...prev, subDistrictId: "" }))
-                                        }}
-                                        disabled={!districtId}
-                                    />
-                                    {errors.subDistrictId && <p className="mt-1 text-xs text-red-500">{errors.subDistrictId}</p>}
-                                </div>
-                            </div>
+                            <AddressLocationFields
+                                value={{ subDistrictId, districtId, provinceId, zipcode }}
+                                onChange={(next: AddressLocationValue) => {
+                                    setSubDistrictId(next.subDistrictId)
+                                    setDistrictId(next.districtId)
+                                    setProvinceId(next.provinceId)
+                                    setZipcode(next.zipcode)
+                                    setFormData((prev) => ({ ...prev, zip_code: next.zipcode }))
+                                    setErrors((prev) => ({
+                                        ...prev,
+                                        subDistrictId: "",
+                                        districtId: "",
+                                        provinceId: "",
+                                        zipcode: "",
+                                    }))
+                                }}
+                                errors={{
+                                    subDistrictId: errors.subDistrictId,
+                                    districtId: errors.districtId,
+                                    provinceId: errors.provinceId,
+                                    zipcode: errors.zipcode,
+                                }}
+                            />
                         </div>
                     </FormStepSection>
 
                     <FormStepSection step={3} title="ข้อมูลติดต่อ" description="ใช้สำหรับช่องทางติดต่อหลักของบัญชีผู้ใช้งาน">
                         <div className="space-y-4">
                             <div>
-                                <label className="mb-1 block text-sm font-medium text-slate-700">Facebook</label>
+                                <label className="mb-1 block text-sm font-medium text-label">Facebook</label>
                                 <input type="text" className="form-input" name="facebook" value={contactForm.facebook} onChange={handleContactChange} placeholder="facebook.com/username" />
                             </div>
                         </div>
@@ -412,7 +380,7 @@ export default function AddressPage() {
                     <FormStepSection step={4} title="ข้อมูลบัญชีธนาคาร" description="ใช้สำหรับการรับเงินหลังการขายหรือปิดประมูล">
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div>
-                                <label className="mb-1 block text-sm font-medium text-slate-700">ชื่อธนาคาร <span className="text-red-500">*</span></label>
+                                <label className="mb-1 block text-sm font-medium text-label">ชื่อธนาคาร <span className="text-red-500">*</span></label>
                                 <BankSelect
                                     banks={banks}
                                     value={contactForm.bank_id}
@@ -424,7 +392,7 @@ export default function AddressPage() {
                                 {errors.bank_id && <p className="mt-1 text-xs text-red-500">{errors.bank_id}</p>}
                             </div>
                             <div>
-                                <label className="mb-1 block text-sm font-medium text-slate-700">ชื่อบัญชี <span className="text-red-500">*</span></label>
+                                <label className="mb-1 block text-sm font-medium text-label">ชื่อบัญชี <span className="text-red-500">*</span></label>
                                 <input
                                     type="text"
                                     className="form-input"
@@ -436,7 +404,7 @@ export default function AddressPage() {
                                 {errors.bank_account_name && <p className="mt-1 text-xs text-red-500">{errors.bank_account_name}</p>}
                             </div>
                             <div>
-                                <label className="mb-1 block text-sm font-medium text-slate-700">เลขบัญชีธนาคาร <span className="text-red-500">*</span></label>
+                                <label className="mb-1 block text-sm font-medium text-label">เลขบัญชีธนาคาร <span className="text-red-500">*</span></label>
                                 <input
                                     type="text"
                                     className="form-input"
@@ -454,17 +422,17 @@ export default function AddressPage() {
                     <FormStepSection step={5} title="เอกสารยืนยันตัวตน (KYC)" description="เพิ่มความน่าเชื่อถือและความปลอดภัย กรุณาอัปโหลดเอกสารให้ครบ">
                         <div className="space-y-4">
                             <div>
-                                <label className="mb-1 block text-sm font-medium text-slate-700">บัตรประชาชนด้านหน้า</label>
+                                <label className="mb-1 block text-sm font-medium text-label">บัตรประชาชนด้านหน้า</label>
                                 <input type="file" className="form-input file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1 file:text-sm" accept="image/*,.pdf" onChange={(e) => handleKycFileChange(e, "idCardFront")} />
                                 {kycErrors.idCardFront && <p className="mt-1 text-xs text-red-500">{kycErrors.idCardFront}</p>}
                             </div>
                             <div>
-                                <label className="mb-1 block text-sm font-medium text-slate-700">บัตรประชาชนด้านหลัง</label>
+                                <label className="mb-1 block text-sm font-medium text-label">บัตรประชาชนด้านหลัง</label>
                                 <input type="file" className="form-input file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1 file:text-sm" accept="image/*,.pdf" onChange={(e) => handleKycFileChange(e, "idCardBack")} />
                                 {kycErrors.idCardBack && <p className="mt-1 text-xs text-red-500">{kycErrors.idCardBack}</p>}
                             </div>
                             <div>
-                                <label className="mb-1 block text-sm font-medium text-slate-700">รูปถ่ายถือบัตรคู่หน้า</label>
+                                <label className="mb-1 block text-sm font-medium text-label">รูปถ่ายถือบัตรคู่หน้า</label>
                                 <input type="file" className="form-input file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1 file:text-sm" accept="image/*" onChange={(e) => handleKycFileChange(e, "selfieWithCard")} />
                                 {kycErrors.selfieWithCard && <p className="mt-1 text-xs text-red-500">{kycErrors.selfieWithCard}</p>}
                             </div>
@@ -474,20 +442,20 @@ export default function AddressPage() {
 
             <aside className="mt-10 flex flex-col lg:col-span-5 lg:mt-0">
                 <div className="lg:sticky lg:top-20 lg:z-10 lg:h-fit lg:w-full">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-md ring-1 ring-slate-100 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto sm:p-6">
-                        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">สรุปก่อนบันทึก</h3>
-                        <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">ชื่อที่แสดง</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-900">{displayName}</p>
+                    <div className="sidebar-panel sm:p-6">
+                        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">สรุปก่อนบันทึก</h3>
+                        <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-800/80">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted">ชื่อที่แสดง</p>
+                            <p className="mt-1 text-sm font-semibold text-heading">{displayName}</p>
                             {verifiedTel.trim() ? (
-                                <p className="mt-2 text-xs text-slate-600">
-                                    <span className="text-slate-400">โทร </span>
+                                <p className="mt-2 text-xs text-body">
+                                    <span className="text-muted">โทร </span>
                                     {verifiedTel.trim()}
                                 </p>
                             ) : null}
                         </div>
 
-                        <ul className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-xs text-slate-600">
+                        <ul className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-xs text-body dark:border-slate-700">
                             <li className="flex gap-2">
                                 <span className="mt-0.5 shrink-0 text-emerald-600">
                                     <Icon name="fa-circle-check" aria-hidden />
@@ -517,7 +485,7 @@ export default function AddressPage() {
                         >
                             {isSubmitting ? "กำลังบันทึก..." : "บันทึกข้อมูลทั้งหมด"}
                         </button>
-                        <p className="mt-3 text-xs text-slate-500">ช่องที่มี <span className="text-red-500">*</span> จำเป็นต้องกรอก</p>
+                        <p className="mt-3 text-xs text-muted">ช่องที่มี <span className="text-red-500">*</span> จำเป็นต้องกรอก</p>
                     </div>
                 </div>
             </aside>

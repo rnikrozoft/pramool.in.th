@@ -2,6 +2,7 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: ["./app/**/*.{js,ts,jsx,tsx,mdx}"],
+  darkMode: "class",
   theme: {
     extend: {
       fontFamily: {
@@ -10,19 +11,22 @@ const config: Config = {
       },
       colors: {
         surface: {
-          page: "#f7f4ff",
-          card: "#ffffff",
-          muted: "#ede9fe",
+          page: "rgb(var(--surface-page) / <alpha-value>)",
+          card: "rgb(var(--surface-card) / <alpha-value>)",
+          muted: "rgb(var(--surface-muted) / <alpha-value>)",
         },
         brand: {
           50: "#f5f3ff",
           100: "#ede9fe",
           200: "#ddd6fe",
+          300: "#c4b5fd",
+          400: "#a78bfa",
           500: "#7c3aed",
           600: "#6d28d9",
           700: "#5b21b6",
           800: "#4c1d95",
           900: "#3b0764",
+          950: "#1e0a3c",
         },
         accent: {
           300: "#fcd34d",
