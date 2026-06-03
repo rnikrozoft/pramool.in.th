@@ -23,6 +23,7 @@ export function onAuthSessionRevalidate(handler: () => void): () => void {
 function shouldIgnore401ForSessionInvalidate(apiPath: string): boolean {
   const p = apiPath.split("?")[0] || ""
   if (p === "/login/tel" || p === "/logout") return true
+  if (p.startsWith("/auth/forgot-password")) return true
   if (p.startsWith("/otp/")) return true
   return false
 }

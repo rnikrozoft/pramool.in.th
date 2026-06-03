@@ -5,6 +5,11 @@ import "sweetalert2/dist/sweetalert2.css";
 import "./globals.css";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import CookieBanner from "./components/CookieBanner";
+import AnalyticsScripts from "./components/AnalyticsScripts";
+import AccountRestrictionBanner from "./components/AccountRestrictionBanner";
+import CreditDebtBanner from "./components/CreditDebtBanner";
+import SiteAnnouncementBanner from "./components/SiteAnnouncementBanner";
 import { UserProvider } from "./context/UserContext";
 import OnboardingGuard from "./components/OnboardingGuard";
 import RouteWarmup from "./components/RouteWarmup";
@@ -29,6 +34,14 @@ export const metadata: Metadata = {
   title: "Pramool.in.th — ประมูลง่าย ได้ของชัวร์",
   description:
     "แพลตฟอร์มประมูลออนไลน์ ของดี ราคาดี เริ่มต้นเพียง 1 บาท ปลอดภัย โปร่งใส",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/apple-icon.png", type: "image/png", sizes: "180x180" }],
+  },
 };
 
 export default function RootLayout({
@@ -64,10 +77,15 @@ export default function RootLayout({
           >
             <Navbar />
           </Suspense>
+          <AccountRestrictionBanner />
+          <CreditDebtBanner />
+          <SiteAnnouncementBanner />
           <main className="flex flex-1 flex-col">{children}</main>
         </UserProvider>
         </ThemeProvider>
         <Footer />
+        <AnalyticsScripts />
+        <CookieBanner />
       </body>
     </html>
   );

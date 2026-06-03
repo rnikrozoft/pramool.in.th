@@ -7,12 +7,22 @@ import {
   CreditActivityItem,
   getCreditActivity,
 } from "@/app/lib/api/wallet"
-import { withdrawStatusLabel } from "@/app/lib/withdrawStatus"
+import {
+  topupStatusLabel,
+  topupStatusVisual,
+  withdrawStatusLabel,
+  withdrawStatusVisual,
+} from "@/app/lib/withdrawStatus"
 import { getCoreApiBaseUrl } from "@/app/lib/constants/common"
-import { AppPageShell, APP_PAGE_INNER } from "@/app/components/AppPageShell"
+import { AppPageShell, APP_PAGE_INNER, AppPageHeader } from "@/app/components/AppPageShell"
+import { PAGE_BACK } from "@/app/lib/pageNav"
 import Icon from "@/app/components/Icon"
+import { SortableTableHead } from "@/app/components/SortableTableHead"
+import type { CreditActivitySortKey } from "@/app/lib/api/wallet"
+import { toggleTableSort, type TableSortState } from "@/app/lib/tableSort"
 
-const PAGE_SIZE = 10
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
+type PageSize = (typeof PAGE_SIZE_OPTIONS)[number]
 
 function coverSrc(url: string | undefined): string {
   if (!url?.trim()) return "https://placehold.co/120x120/e2e8f0/64748b?text=Auction"
@@ -42,12 +52,38 @@ function entryTypeLabel(t: string): string {
       return "คืนมัดจำประกาศ"
     case "early_close_hold_refund":
       return "คืนมัดจำปิดก่อนเวลา"
+    case "listing_deposit_forfeit":
+      return "ริบมัดจำประกาศ (ไม่จัดส่ง)"
     case "listing_deposit_hold":
       return "หักมัดจำประกาศ (เปิดโพส)"
     case "seller_sale_share":
       return "ส่วนแบ่งจากการประมูล"
     case "withdraw":
       return "ถอนเครดิต"
+    case "report_reward":
+      return "รางวัลการร้องเรียน"
+    case "bid_cancel_refund":
+      return "คืนเงินจากการยกเลิกบิด"
+    case "auto_renew_option_hold":
+      return "หักมัดจำต่ออายุอัตโนมัติ"
+    case "auto_renew_option_refund":
+      return "คืนมัดจำต่ออายุอัตโนมัติ"
+    case "auto_renew_option_consumed":
+      return "มัดจำต่ออายุ (มีผู้ชนะ)"
+    case "auto_renew_option_forfeit":
+      return "ริบมัดจำต่ออายุ (ไม่ส่งของ)"
+    case "auto_renew_option_fee":
+      return "ค่าเปิดต่ออายุโพสอัตโนมัติ (เก่า)"
+    case "bid_cancel_option_fee":
+      return "ค่าเปิดให้ยกเลิกบิดได้ (เก่า)"
+    case "bid_cancel_option_hold":
+      return "หักมัดจำยกเลิกบิดได้"
+    case "bid_cancel_option_refund":
+      return "คืนมัดจำยกเลิกบิดได้"
+    case "bid_cancel_option_consumed":
+      return "มัดจำยกเลิกบิด (มีผู้ชนะ)"
+    case "bid_cancel_option_forfeit":
+      return "ริบมัดจำยกเลิกบิด (ไม่ส่งของ)"
     default:
       return t
   }
@@ -64,7 +100,10 @@ function describeRow(row: CreditActivityItem): string {
   }
   if (row.entry_type === "withdraw") {
     const label = withdrawStatusLabel(row.status)
-    return label ? `ถอนเครดิต — ${label}` : row.note?.trim() || "ถอนเครดิต"
+    return label ? `ถอนเครดิต — ${label}` : "ถอนเครดิต"
+  }
+  if (row.entry_type === "report_reward") {
+    return row.note?.trim() || "รางวัลการร้องเรียนรายการที่ฝ่าฝืนกฎ"
   }
   const title = row.auction_title?.trim()
   if (title) return title
@@ -79,6 +118,9 @@ function amountDisplay(row: CreditActivityItem): { text: string; tone: string } 
     return { text: `${Number(row.ledger_amount).toLocaleString()} ฿`, tone: "text-red-600" }
   }
   if (row.entry_type === "listing_deposit_hold" && row.bid_amount != null) {
+    return { text: `−${Number(row.bid_amount).toLocaleString()} ฿`, tone: "text-red-600" }
+  }
+  if (row.entry_type === "auto_renew_option_hold" && row.bid_amount != null) {
     return { text: `−${Number(row.bid_amount).toLocaleString()} ฿`, tone: "text-red-600" }
   }
   if (row.entry_type === "bid_hold") {
@@ -105,13 +147,53 @@ function rowKey(item: CreditActivityItem): string {
   return `${item.entry_type}-${item.charge_id ?? item.bid_tx_id ?? item.created_at}`
 }
 
+function PageSizeSelect({
+  pageSize,
+  loading,
+  onChange,
+  compact,
+}: {
+  pageSize: PageSize
+  loading: boolean
+  onChange: (size: PageSize) => void
+  compact?: boolean
+}) {
+  return (
+    <label
+      className={`flex items-center gap-2 text-slate-500 ${compact ? "text-xs" : "text-sm"}`}
+    >
+      <span className={compact ? "hidden sm:inline" : ""}>แสดงครั้งละ</span>
+      <select
+        value={pageSize}
+        onChange={(e) => onChange(Number(e.target.value) as PageSize)}
+        disabled={loading}
+        className={`rounded-lg border border-slate-200 bg-surface-card font-medium text-body shadow-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:opacity-50 dark:border-slate-600 dark:focus:ring-brand-900/40 ${
+          compact ? "h-11 px-2.5 text-sm" : "px-2 py-1.5 text-sm"
+        }`}
+        aria-label="จำนวนรายการต่อหน้า"
+      >
+        {PAGE_SIZE_OPTIONS.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </select>
+      <span className={compact ? "hidden sm:inline" : ""}>รายการ</span>
+    </label>
+  )
+}
+
 export default function WalletTransactionsPage() {
   const [items, setItems] = useState<CreditActivityItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
   const [listError, setListError] = useState("")
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all")
+  const [pageSize, setPageSize] = useState<PageSize>(10)
   const [page, setPage] = useState(1)
+  const [sort, setSort] = useState<TableSortState<CreditActivitySortKey>>({
+    key: "created_at",
+    order: "desc",
+  })
   const [total, setTotal] = useState(0)
   const [filterTotals, setFilterTotals] = useState({
     all: 0,
@@ -135,27 +217,22 @@ export default function WalletTransactionsPage() {
     }
   }, [])
 
-  const loadItems = useCallback(
-    async (opts?: { silent?: boolean; showSyncing?: boolean }) => {
-      if (opts?.showSyncing) setSyncing(true)
-      else if (!opts?.silent) setLoading(true)
-      setListError("")
-      try {
-        const response = await getCreditActivity(PAGE_SIZE, (page - 1) * PAGE_SIZE, activityFilter)
-        setItems(response.items)
-        setTotal(response.total)
-        setFilterTotals((prev) => ({ ...prev, [activityFilter]: response.total }))
-      } catch {
-        setListError("ไม่สามารถโหลดประวัติเครดิตได้")
-        setItems([])
-        setTotal(0)
-      } finally {
-        setSyncing(false)
-        if (!opts?.silent) setLoading(false)
-      }
-    },
-    [activityFilter, page],
-  )
+  const loadItems = useCallback(async () => {
+    setLoading(true)
+    setListError("")
+    try {
+      const response = await getCreditActivity(pageSize, (page - 1) * pageSize, activityFilter, sort)
+      setItems(response.items)
+      setTotal(response.total)
+      setFilterTotals((prev) => ({ ...prev, [activityFilter]: response.total }))
+    } catch {
+      setListError("ไม่สามารถโหลดประวัติเครดิตได้")
+      setItems([])
+      setTotal(0)
+    } finally {
+      setLoading(false)
+    }
+  }, [activityFilter, page, pageSize, sort])
 
   useEffect(() => {
     void loadFilterTotals()
@@ -165,19 +242,24 @@ export default function WalletTransactionsPage() {
     void loadItems()
   }, [loadItems])
 
+  const handleSortColumn = (key: CreditActivitySortKey) => {
+    setSort((prev) => toggleTableSort(prev, key))
+    setPage(1)
+  }
+
   const totalSuccessTopup = useMemo(() => {
     return items
       .filter((item) => item.entry_type === "topup" && item.paid && item.credited)
       .reduce((sum, item) => sum + Number(item.topup_amount ?? 0), 0)
   }, [items])
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const pageStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
-  const pageEnd = Math.min(page * PAGE_SIZE, total)
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const pageStart = total === 0 ? 0 : (page - 1) * pageSize + 1
+  const pageEnd = Math.min(page * pageSize, total)
 
-  const refreshAll = () => {
-    void loadFilterTotals()
-    void loadItems({ silent: true, showSyncing: true })
+  const handlePageSizeChange = (size: PageSize) => {
+    setPageSize(size)
+    setPage(1)
   }
 
   const tabButton = (key: ActivityFilter, label: string, count: number) => (
@@ -250,41 +332,24 @@ export default function WalletTransactionsPage() {
     <AppPageShell>
       <main className={APP_PAGE_INNER}>
         <div className="min-w-0">
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex gap-3">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-100 text-brand-600">
-                <Icon name="fa-credit-card" className="text-lg" aria-hidden />
-              </span>
-              <div>
-                <h1 className="font-display text-2xl font-bold tracking-tight text-heading sm:text-3xl">
-                  ประวัติเครดิต
-                </h1>
-                <p className="mt-1 text-sm text-slate-600">
-                  เติมเงิน PromptPay, การประมูล, การคืนมัดจำ และการถอนเครดิต —{" "}
-                  <Link href="/terms/fees" className="text-brand-600 underline dark:text-brand-400">
-                    นโยบายค่าธรรมเนียม
-                  </Link>
-                </p>
-              </div>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-              <button
-                type="button"
-                className="hidden min-h-[48px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-surface-card px-4 py-3 text-base font-semibold text-body shadow-sm transition hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-800 sm:flex sm:min-h-0 sm:py-2.5 sm:text-sm"
-                onClick={refreshAll}
-                disabled={syncing || !!listError}
-              >
-                <i
-                  className={`fa-solid fa-arrows-rotate text-brand-600 ${syncing ? "animate-spin" : ""}`}
-                  aria-hidden
-                />
-                <span>{syncing ? "กำลังอัปเดต…" : "รีเฟรชรายการ"}</span>
-              </button>
-              <Link href="/wallet/withdraw" className="btn-outline text-center text-sm">
+          <AppPageHeader
+            title="ประวัติเครดิต"
+            description={
+              <>
+                เติมเงิน PromptPay, การประมูล, การคืนมัดจำ และการถอนเครดิต —{" "}
+                <Link href="/terms/fees" className="text-brand-600 underline dark:text-brand-400">
+                  นโยบายค่าธรรมเนียม
+                </Link>
+              </>
+            }
+            icon="fa-credit-card"
+            {...PAGE_BACK.home}
+            actions={
+              <Link href="/wallet/withdraw" className="btn-outline w-full text-center text-sm sm:w-auto">
                 ถอนเครดิต
               </Link>
-            </div>
-          </div>
+            }
+          />
 
           {listError && (
             <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -351,20 +416,16 @@ export default function WalletTransactionsPage() {
                     {tabButton("auction", "ประมูล/คืน", filterTotals.auction)}
                     {tabButton("withdraw", "ถอนเครดิต", filterTotals.withdraw)}
                   </div>
-                  <div className="flex w-full min-w-0 items-stretch gap-2 sm:w-auto sm:shrink-0 sm:items-end">
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                    <PageSizeSelect
+                      pageSize={pageSize}
+                      loading={loading}
+                      onChange={handlePageSizeChange}
+                      compact
+                    />
                     <button
                       type="button"
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-surface-card text-lg text-brand-600 shadow-sm transition hover:bg-slate-50 active:bg-slate-100 disabled:pointer-events-none disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-800 sm:hidden"
-                      aria-label="รีเฟรชรายการ"
-                      title="รีเฟรชรายการ"
-                      onClick={refreshAll}
-                      disabled={syncing || !!listError}
-                    >
-                      <Icon name="fa-arrows-rotate" className={syncing ? "animate-spin" : ""} aria-hidden />
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-surface-card px-3 text-sm font-semibold text-body shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-800 sm:flex-initial"
+                      className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-surface-card px-3 text-sm font-semibold text-body shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-800 sm:w-auto"
                       onClick={exportCSV}
                       disabled={items.length === 0}
                     >
@@ -377,11 +438,35 @@ export default function WalletTransactionsPage() {
                   <table className="w-full min-w-[920px] text-left text-sm text-slate-800">
                     <thead>
                       <tr className="table-header-row">
-                        <th className="px-4 py-3 pl-5">วันที่/เวลา</th>
-                        <th className="px-4 py-3">ประเภท</th>
-                        <th className="px-4 py-3">รายการ / สินค้า</th>
-                        <th className="px-4 py-3 text-center">จำนวนเงิน</th>
-                        <th className="px-4 py-3 pr-5 text-center">สถานะ</th>
+                        <SortableTableHead
+                          label="วันที่/เวลา"
+                          sortKey="created_at"
+                          sort={sort}
+                          onSort={handleSortColumn}
+                          className="pl-5"
+                        />
+                        <SortableTableHead
+                          label="ประเภท"
+                          sortKey="entry_type"
+                          sort={sort}
+                          onSort={handleSortColumn}
+                        />
+                        <SortableTableHead label="รายการ / สินค้า" sortable={false} />
+                        <SortableTableHead
+                          label="จำนวนเงิน"
+                          sortKey="amount"
+                          sort={sort}
+                          onSort={handleSortColumn}
+                          align="center"
+                        />
+                        <SortableTableHead
+                          label="สถานะ"
+                          sortKey="status"
+                          sort={sort}
+                          onSort={handleSortColumn}
+                          align="center"
+                          className="pr-5"
+                        />
                       </tr>
                     </thead>
                     <tbody>
@@ -404,6 +489,10 @@ export default function WalletTransactionsPage() {
                       {!loading &&
                         items.map((item) => {
                           const amount = amountDisplay(item)
+                          const topupVisual =
+                            item.entry_type === "topup" ? topupStatusVisual(item) : null
+                          const withdrawVisual =
+                            item.entry_type === "withdraw" ? withdrawStatusVisual(item.status) : null
                           return (
                             <tr
                               key={rowKey(item)}
@@ -456,40 +545,33 @@ export default function WalletTransactionsPage() {
                                 {amount.text}
                               </td>
                               <td className="px-4 py-4 pr-5 align-middle">
-                                {item.entry_type === "topup" ? (
+                                {item.entry_type === "topup" && topupVisual ? (
                                   <div className="flex flex-col items-center gap-1.5 text-center">
                                     <span
-                                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                                        item.paid && item.credited
-                                          ? "bg-emerald-100 text-emerald-600"
-                                          : "bg-amber-100 text-amber-600"
-                                      }`}
+                                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${topupVisual.ringClass}`}
                                     >
-                                      <Icon
-                                        name={item.paid && item.credited ? "fa-circle-check" : "fa-clock"}
-                                        className="text-xs"
-                                        aria-hidden
-                                      />
+                                      <Icon name={topupVisual.icon} className="text-xs" aria-hidden />
                                     </span>
                                     <div>
-                                      <p className="text-sm font-medium text-heading">{item.status ?? "—"}</p>
+                                      <p className="text-sm font-medium text-heading">
+                                        {topupStatusLabel(item.status)}
+                                      </p>
                                       <p className="text-xs text-slate-500">
                                         เครดิตเข้า: {item.credited ? "แล้ว" : "รอ"}
                                       </p>
                                     </div>
                                   </div>
-                                ) : item.entry_type === "withdraw" ? (
+                                ) : item.entry_type === "withdraw" && withdrawVisual ? (
                                   <div className="flex flex-col items-center gap-1.5 text-center">
-                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
-                                      <Icon name="fa-hand-holding-dollar" className="text-xs" aria-hidden />
+                                    <span
+                                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${withdrawVisual.ringClass}`}
+                                    >
+                                      <Icon name={withdrawVisual.icon} className="text-xs" aria-hidden />
                                     </span>
                                     <div>
                                       <p className="text-sm font-medium text-heading">
-                                        {withdrawStatusLabel(item.status) || "ถอนเครดิต"}
+                                        {withdrawStatusLabel(item.status)}
                                       </p>
-                                      {item.note ? (
-                                        <p className="text-xs leading-snug text-slate-500">{item.note}</p>
-                                      ) : null}
                                     </div>
                                   </div>
                                 ) : (
@@ -512,16 +594,19 @@ export default function WalletTransactionsPage() {
                 </div>
 
                 <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100/90 bg-slate-50/30 px-5 py-4 dark:border-slate-700/90 dark:bg-slate-800/30 sm:flex-row">
-                  <p className="text-xs text-slate-500">
-                    ทั้งหมด {total.toLocaleString()} รายการ
-                    {total > 0 ? (
-                      <>
-                        {" "}
-                        · แสดง {pageStart.toLocaleString()}–{pageEnd.toLocaleString()}
-                      </>
-                    ) : null}
-                  </p>
-                  {total > PAGE_SIZE ? (
+                  <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 sm:justify-start">
+                    <p className="text-xs text-slate-500">
+                      ทั้งหมด {total.toLocaleString()} รายการ
+                      {total > 0 ? (
+                        <>
+                          {" "}
+                          · แสดง {pageStart.toLocaleString()}–{pageEnd.toLocaleString()}
+                        </>
+                      ) : null}
+                    </p>
+                    <PageSizeSelect pageSize={pageSize} loading={loading} onChange={handlePageSizeChange} />
+                  </div>
+                  {total > pageSize ? (
                     <div className="flex items-center gap-2 text-sm text-body">
                       <button
                         type="button"

@@ -1,12 +1,12 @@
 import Link from "next/link"
+import PramoolLogo from "@/app/components/PramoolLogo"
 
 const footerMenus = [
   {
     title: "เมนูหลัก",
     items: [
-      { label: "หน้าแรก", href: "/" },
       { label: "รายการสินค้า", href: "/auctions" },
-      { label: "วิธีใช้งาน", href: "/how-it-works" },
+      { label: "วิธีการประมูล", href: "/how-it-works" },
     ],
   },
   {
@@ -22,7 +22,7 @@ const footerMenus = [
     items: [
       { label: "รายการที่กำลังประมูล", href: "/bids/active" },
       { label: "ประวัติการประมูล", href: "/bids/history" },
-      { label: "รายการที่ฉันเปิดประมูล", href: "/seller/auctions" },
+      { label: "รายการที่เปิดประมูล", href: "/seller/auctions" },
       { label: "ประวัติเครดิต", href: "/wallet/transactions" },
     ],
   },
@@ -34,8 +34,8 @@ export default function Footer() {
       <footer className="app-page-container py-12 sm:py-14">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           <div className="sm:col-span-2 lg:col-span-1">
-            <p className="font-display text-xl font-bold text-white">Pramool.in.th</p>
-            <p className="mt-2 text-sm leading-relaxed text-white/90">
+            <PramoolLogo markSize={28} className="text-white [&_span]:text-white [&_.text-brand-600]:text-violet-200" />
+            <p className="mt-3 text-sm leading-relaxed text-white/90">
               ประมูลง่าย ได้ของชัวร์ — แพลตฟอร์มประมูลออนไลน์ที่โปร่งใสและปลอดภัย
             </p>
             <div className="mt-5 flex gap-3">
@@ -106,15 +106,21 @@ export default function Footer() {
             <span className="hidden text-white/45 sm:inline" aria-hidden>
               |
             </span>
-            <a href="#" className="text-white hover:underline">
-              นโยบายความเป็นส่วนตัว
-            </a>
+            <Link href="/cookies" className="text-white hover:underline">
+              นโยบายคุกกี้
+            </Link>
             <span className="hidden text-white/45 sm:inline" aria-hidden>
               |
             </span>
-            <a href="#" className="text-white hover:underline">
+            <Link href="/privacy" className="text-white hover:underline">
+              นโยบายความเป็นส่วนตัว
+            </Link>
+            <span className="hidden text-white/45 sm:inline" aria-hidden>
+              |
+            </span>
+            <Link href="/terms" className="text-white hover:underline">
               ข้อกำหนดการใช้งาน
-            </a>
+            </Link>
           </div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 "use client"
 
 import Swal from "sweetalert2"
-import { createPromptPayTopup, getCreditActivity } from "@/app/lib/api/wallet"
+import { createPromptPayTopup, getCreditActivity, getPendingPromptPayTopup, syncPromptPayTopupStatus, type PromptPayTopupResponse } from "@/app/lib/api/wallet"
 import { notifyCreditChanged } from "@/app/lib/creditSync"
 import {
   getWalletFees,
@@ -40,10 +40,6 @@ function formHtml(amount: string, fees: ActiveWalletFees): string {
     Number.isFinite(g) && g >= fees.minTopupGrossThb ? breakdownHtml(Math.floor(g), fees) : ""
   return `
 <div class="swal-topup-credit">
-  <p class="swal-topup-intro text-sm text-slate-600">
-    ค่าธรรมเนียมชำระเงินผ่าน Omise เป็นภาระของผู้ใช้ — แพลตฟอร์มไม่หักเพิ่มจากยอดชำระนี้
-    <a href="/terms/fees" target="_blank" rel="noopener" class="text-brand-600 underline">อ่านรายละเอียด</a>
-  </p>
   <label for="swal-topup-amount" class="swal-topup-label">ยอดชำระผ่าน PromptPay (บาท)</label>
   <input id="swal-topup-amount" type="number" min="${fees.minTopupGrossThb}" step="1" value="${esc(amount)}" class="swal-topup-input" inputmode="numeric" />
   <div id="swal-topup-preview" class="swal-topup-preview">${preview}</div>
@@ -57,27 +53,48 @@ function formHtml(amount: string, fees: ActiveWalletFees): string {
 </div>`
 }
 
+function formatExpiresAt(iso?: string): string {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ""
+  return d.toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
+}
+
 function qrHtml(
   qrUrl: string,
   chargeId: string,
-  status: "pending" | "paid" | "failed",
+  status: "pending" | "paid" | "failed" | "expired" | "disputed",
   paid: number,
   fee: number,
   credit: number,
   fees: ActiveWalletFees,
+  expiresAt?: string,
 ): string {
   const st =
     status === "paid"
       ? `<p class="swal-topup-status swal-topup-status--ok">ชำระเงินสำเร็จ — เพิ่มเครดิต ${credit.toLocaleString()} ฿ แล้ว</p>`
       : status === "failed"
         ? `<p class="swal-topup-status swal-topup-status--bad">ชำระเงินไม่สำเร็จ</p>`
-        : `<p class="swal-topup-status swal-topup-status--pending">หลังชำระเงิน ระบบจะเพิ่มเครดิตสุทธิอัตโนมัติ</p>`
+        : status === "expired"
+          ? `<p class="swal-topup-status swal-topup-status--bad">QR หมดอายุแล้ว — ปิดหน้าต่างนี้แล้วสร้าง QR ใหม่</p>`
+          : status === "disputed"
+            ? `<p class="swal-topup-status swal-topup-status--bad">รายการถูกโต้แย้ง (Dispute) — รอผลจาก Omise ระบบอาจหักเครดิตหากแพ้</p>`
+            : `<p class="swal-topup-status swal-topup-status--pending">หลังชำระเงิน ระบบจะเพิ่มเครดิตสุทธิอัตโนมัติ</p>`
+  const expiryLine =
+    status === "pending" && expiresAt
+      ? `<p class="swal-topup-qr-expiry">ใช้ได้ถึง ${esc(formatExpiresAt(expiresAt))}</p>`
+      : ""
+  const qrBlock =
+    status === "expired" || status === "disputed"
+      ? ""
+      : `<div class="swal-topup-qr-wrap">
+    <img src="${esc(qrUrl)}" alt="PromptPay QR" class="swal-topup-qr-img" />
+  </div>`
   return `
 <div class="swal-topup-credit swal-topup-credit--qr">
-  <div class="swal-topup-qr-wrap">
-    <img src="${esc(qrUrl)}" alt="PromptPay QR" class="swal-topup-qr-img" />
-  </div>
+  ${qrBlock}
   <p class="swal-topup-qr-meta">รหัสธุรกรรม: ${esc(chargeId)}</p>
+  ${expiryLine}
   ${st}
   <div class="swal-topup-qr-breakdown">${breakdownHtml(paid, fees)}</div>
   <p class="swal-topup-qr-foot">ถอนเครดิตมีค่าธรรมเนียมโอนประมาณ ${fees.omiseTransferFeeThb} ฿/ครั้ง</p>
@@ -123,12 +140,118 @@ function openTopupCreditSwalWithFees(opts: TopupCreditSwalOptions, fees: ActiveW
     }
   }
 
+  const finishExpired = (paid?: number, fee?: number, credit?: number) => {
+    stopPoll()
+    if (qrCodeURL && chargeID && paid != null && fee != null && credit != null) {
+      Swal.update({ html: qrHtml(qrCodeURL, chargeID, "expired", paid, fee, credit, fees) })
+    }
+  }
+
+  const finishDisputeLost = (paid?: number, fee?: number, credit?: number) => {
+    stopPoll()
+    notifyCreditChanged()
+    if (qrCodeURL && chargeID && paid != null && fee != null && credit != null) {
+      Swal.update({
+        html: qrHtml(qrCodeURL, chargeID, "failed", paid, fee, credit, fees) +
+          `<p class="swal-topup-status swal-topup-status--bad">รายการโต้แย้งแพ้ — หักเครดิตที่เติมแล้ว</p>`,
+      })
+    }
+  }
+
+  const mapTopupUiStatus = (
+    res: { status?: string; expired?: boolean; dispute_status?: string; paid?: boolean; credited?: boolean },
+  ): "pending" | "paid" | "failed" | "expired" | "disputed" => {
+    const ds = (res.dispute_status ?? "").toLowerCase()
+    if (ds === "open" || ds === "pending" || res.status === "disputed") return "disputed"
+    if (res.status === "dispute_lost" || ds === "lost") return "failed"
+    if (res.expired || res.status === "expired") return "expired"
+    if (res.status === "successful" || res.status === "paid" || (res.paid && res.credited)) return "paid"
+    if (res.status === "failed") return "failed"
+    return "pending"
+  }
+
+  const applyQrFromResponse = (res: PromptPayTopupResponse, gross: number) => {
+    chargeID = res.charge_id
+    qrCodeURL = res.qr_code_url
+    const paid = res.paid_amount ?? gross
+    const feeAmt = res.fee_amount ?? topupFee(gross, fees)
+    const credited = res.credit_amount ?? topupNetCredit(gross, fees)
+    expectedCredit = opts.getCreditBalance() + credited
+    const uiStatus = mapTopupUiStatus(res)
+    Swal.update({
+      html: qrHtml(qrCodeURL, chargeID, uiStatus, paid, feeAmt, credited, fees, res.expires_at),
+    })
+    if (uiStatus === "paid") {
+      finishPaid()
+      return
+    }
+    if (uiStatus === "expired") {
+      return
+    }
+    if (uiStatus === "disputed") {
+      startPoll()
+      return
+    }
+    if (uiStatus === "failed") {
+      finishFailed(true, paid, feeAmt, credited)
+      return
+    }
+    startPoll()
+  }
+
+  const tryResumePendingQR = async (gross: number) => {
+    if (!gross || gross < fees.minTopupGrossThb) return
+    try {
+      const pending = await getPendingPromptPayTopup(gross)
+      if (!pending?.charge_id || !pending?.qr_code_url) return
+      applyQrFromResponse(pending, gross)
+    } catch {
+      /* keep amount form */
+    }
+  }
+
   const startPoll = () => {
     stopPoll()
     let attempts = 0
     pollTimer = window.setInterval(async () => {
       attempts += 1
       try {
+        if (chargeID) {
+          const synced = await syncPromptPayTopupStatus(chargeID)
+          const uiStatus = mapTopupUiStatus(synced)
+          if (uiStatus === "expired") {
+            finishExpired(synced.paid_amount, synced.fee_amount, synced.credit_amount)
+            return
+          }
+          if (uiStatus === "disputed") {
+            Swal.update({
+              html: qrHtml(
+                qrCodeURL,
+                chargeID,
+                "disputed",
+                synced.paid_amount,
+                synced.fee_amount,
+                synced.credit_amount,
+                fees,
+                synced.expires_at,
+              ),
+            })
+          }
+          if (synced.status === "dispute_lost" || synced.dispute_status === "lost") {
+            await opts.refreshSession({ silent: true })
+            finishDisputeLost(synced.paid_amount, synced.fee_amount, synced.credit_amount)
+            return
+          }
+          if (synced.paid && synced.credited && synced.status === "successful") {
+            finishPaid()
+            return
+          }
+          if (synced.status === "failed") {
+            finishFailed(true, synced.paid_amount, synced.fee_amount, synced.credit_amount)
+            return
+          }
+        }
+
         await opts.refreshSession({ silent: true })
         await new Promise((r) => setTimeout(r, 50))
         const bal = opts.getCreditBalance()
@@ -162,7 +285,7 @@ function openTopupCreditSwalWithFees(opts: TopupCreditSwalOptions, fees: ActiveW
     html: formHtml(opts.initialAmount ?? String(fees.minTopupGrossThb), fees),
     width: 520,
     showConfirmButton: false,
-    showCloseButton: true,
+    showCloseButton: false,
     focusConfirm: false,
     customClass: {
       popup: "swal-topup-credit-popup",
@@ -207,9 +330,12 @@ function openTopupCreditSwalWithFees(opts: TopupCreditSwalOptions, fees: ActiveW
           if (input && v) {
             input.value = v
             refreshPreview()
+            void tryResumePendingQR(floorBaht(v))
           }
         })
       })
+
+      void tryResumePendingQR(floorBaht(opts.initialAmount ?? input?.value ?? String(fees.minTopupGrossThb)))
 
       submitBtn?.addEventListener("click", async () => {
         if (errEl) {
@@ -237,14 +363,7 @@ function openTopupCreditSwalWithFees(opts: TopupCreditSwalOptions, fees: ActiveW
         submitBtn.textContent = "กำลังสร้าง QR..."
         try {
           const res = await createPromptPayTopup(gross)
-          chargeID = res.charge_id
-          qrCodeURL = res.qr_code_url
-          const paid = res.paid_amount ?? gross
-          const feeAmt = res.fee_amount ?? topupFee(gross, fees)
-          const credited = res.credit_amount ?? credit
-          expectedCredit = opts.getCreditBalance() + credited
-          Swal.update({ html: qrHtml(qrCodeURL, chargeID, "pending", paid, feeAmt, credited, fees) })
-          startPoll()
+          applyQrFromResponse(res, gross)
         } catch (e) {
           const msg = userFacingErrorMessage(e, "ไม่สามารถสร้าง QR เติมเงินได้ กรุณาลองใหม่")
           void Swal.fire({ icon: "error", title: "เติมเงินไม่สำเร็จ", text: msg, confirmButtonText: "ตกลง" })

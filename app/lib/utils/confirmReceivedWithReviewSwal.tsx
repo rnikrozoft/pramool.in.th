@@ -4,50 +4,88 @@ import Swal from "sweetalert2"
 import { createRoot, type Root } from "react-dom/client"
 import { useState } from "react"
 import { SellerStarRating } from "@/app/components/SellerStarRating"
+import { SWAL_ICON, withSwalIcon } from "@/app/lib/utils/swalIcons"
 
-function RatingPicker({ onRatingChange }: { onRatingChange: (r: number) => void }) {
+const MAX_COMMENT_LENGTH = 500
+
+export type ConfirmReceivedReviewInput = {
+  rating: number
+  comment: string
+}
+
+function ReviewForm({
+  onRatingChange,
+  onCommentChange,
+}: {
+  onRatingChange: (r: number) => void
+  onCommentChange: (text: string) => void
+}) {
   const [rating, setRating] = useState(0)
-  const set = (r: number) => {
+  const [comment, setComment] = useState("")
+
+  const setRatingValue = (r: number) => {
     setRating(r)
     onRatingChange(r)
   }
-  return <SellerStarRating value={rating} onChange={set} />
+
+  const setCommentValue = (text: string) => {
+    const next = text.slice(0, MAX_COMMENT_LENGTH)
+    setComment(next)
+    onCommentChange(next)
+  }
+
+  return (
+    <div className="py-2 text-left">
+      <p className="mb-4 text-center text-sm text-slate-600">
+        ให้คะแนนผู้ขายและยืนยันรับของ (ไม่บังคับสำหรับการโอนเงิน) — รับ +1 คะแนนชื่อเสียง
+      </p>
+      <SellerStarRating value={rating} onChange={setRatingValue} />
+      <label className="mt-5 block">
+        <span className="mb-1.5 block text-sm font-medium text-slate-700">ความคิดเห็น (ไม่บังคับ)</span>
+        <textarea
+          className="input min-h-[88px] w-full resize-y text-sm"
+          placeholder="เล่าประสบการณ์ซื้อขาย เช่น ส่งเร็ว แพ็กดี"
+          value={comment}
+          maxLength={MAX_COMMENT_LENGTH}
+          onChange={(e) => setCommentValue(e.target.value)}
+        />
+        <span className="mt-1 block text-right text-xs text-slate-500">
+          {comment.length}/{MAX_COMMENT_LENGTH}
+        </span>
+      </label>
+    </div>
+  )
 }
 
 /**
- * เปิด Swal ให้ผู้ซื้อให้คะแนนผู้ขายก่อนยืนยันรับของ
- * @returns คะแนนดาว (0.5–5) หรือ null ถ้ายกเลิก
+ * เปิด Swal ให้ผู้ซื้อให้คะแนนและความคิดเห็นผู้ขายก่อนยืนยันรับของ
  */
-export async function openConfirmReceivedWithReviewSwal(): Promise<number | null> {
+export async function openConfirmReceivedWithReviewSwal(): Promise<ConfirmReceivedReviewInput | null> {
   let rating = 0
+  let comment = ""
   let reactRoot: Root | null = null
 
   const result = await Swal.fire({
     title: "ให้คะแนนผู้ขาย",
     html: '<div id="swal-seller-rating-root"></div>',
-    icon: "info",
+    ...withSwalIcon(SWAL_ICON.sellerRating, { htmlContainer: "swal-confirm-received-html" }),
     showCancelButton: true,
     confirmButtonText: "ยืนยันรับสินค้า",
     cancelButtonText: "ยกเลิก",
     focusConfirm: false,
-    customClass: {
-      htmlContainer: "swal-confirm-received-html",
-    },
     didOpen: () => {
       const el = document.getElementById("swal-seller-rating-root")
       if (!el) return
       reactRoot = createRoot(el)
       reactRoot.render(
-        <div className="py-2">
-          <p className="mb-4 text-center text-sm text-slate-600">
-            ต้องให้คะแนนผู้ขายก่อน ระบบจึงจะโอนเครดิตให้ผู้ขายหลังยืนยันรับของ
-          </p>
-          <RatingPicker
-            onRatingChange={(r) => {
-              rating = r
-            }}
-          />
-        </div>,
+        <ReviewForm
+          onRatingChange={(r) => {
+            rating = r
+          }}
+          onCommentChange={(text) => {
+            comment = text
+          }}
+        />,
       )
     },
     willClose: () => {
@@ -59,12 +97,19 @@ export async function openConfirmReceivedWithReviewSwal(): Promise<number | null
         Swal.showValidationMessage("กรุณาให้คะแนนผู้ขายก่อน (กดดาว 0.5–5)")
         return false
       }
-      return rating
+      return { rating, comment: comment.trim() }
     },
   })
 
-  if (!result.isConfirmed || typeof result.value !== "number") {
+  if (!result.isConfirmed || !result.value || typeof result.value !== "object") {
     return null
   }
-  return result.value
+  const value = result.value as ConfirmReceivedReviewInput
+  if (typeof value.rating !== "number" || value.rating < 0.5) {
+    return null
+  }
+  return {
+    rating: value.rating,
+    comment: typeof value.comment === "string" ? value.comment.trim() : "",
+  }
 }

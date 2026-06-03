@@ -9,6 +9,10 @@
     --surface-muted: 237 233 254;
     --app-page-max-width: 80rem;
     --app-page-padding-x: 1rem;
+    /** ความสูงแถบ navbar มือถือ (py-3 + แถวค้นหา) — ใช้กับ spacer + sticky bar */
+    --mobile-nav-height: 4.1875rem;
+    /** ความสูงแถบตัวกรองมือถือ หน้ารายการประมูล */
+    --mobile-auction-filter-height: 3.875rem;
   }
 
   @media (min-width: 640px) {
@@ -43,6 +47,24 @@
 .overflow-hidden-scroll {
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+/** แถบข้อความไหลหน้าแรก — หยุดเมื่อ hover */
+@keyframes home-auction-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.home-auction-ticker-track {
+  animation: home-auction-ticker 45s linear infinite;
+}
+
+.home-auction-ticker:hover .home-auction-ticker-track {
+  animation-play-state: paused;
 }
 
 /** ปุ่มปิดประมูลทันที — กระเด้งทุก 5 วินาที */
@@ -192,6 +214,31 @@
 
   .table-header-row {
     @apply border-b border-slate-100 bg-surface-card text-xs font-semibold uppercase tracking-wide text-muted dark:border-slate-700;
+  }
+
+  .table-col-actions {
+    @apply whitespace-nowrap px-3 pr-6 text-center;
+  }
+
+  .list-auction-table {
+    @apply w-full table-fixed text-sm text-slate-800;
+    min-width: 920px;
+  }
+
+  .list-auction-table col.col-product {
+    width: 17rem;
+  }
+
+  .list-auction-table col.col-actions {
+    width: 5.5rem;
+  }
+
+  .table-sort-btn {
+    @apply inline-flex items-center gap-1 rounded-md px-1 py-0.5 font-semibold uppercase tracking-wide text-muted transition hover:bg-slate-100 hover:text-heading dark:hover:bg-slate-800;
+  }
+
+  .table-sort-btn[data-active="true"] {
+    @apply text-brand-700 dark:text-brand-300;
   }
 
   .sidebar-panel {
@@ -355,7 +402,11 @@
 }
 
 /* --- SweetAlert icons: stat-card style (modal + toast) --- */
-.swal2-popup .swal2-icon {
+.swal2-popup .swal2-icon.swal2-success,
+.swal2-popup .swal2-icon.swal2-error,
+.swal2-popup .swal2-icon.swal2-warning,
+.swal2-popup .swal2-icon.swal2-info,
+.swal2-popup .swal2-icon.swal2-question {
   position: relative;
   display: flex !important;
   align-items: center !important;
@@ -365,6 +416,16 @@
   font-size: 0 !important;
   line-height: 1 !important;
   animation: none !important;
+}
+
+/* SweetAlert keeps an empty .swal2-icon in DOM (display:none) — don't let site CSS resurrect it */
+.swal2-popup:not(.swal2-toast) .swal2-icon:not(.swal2-success):not(.swal2-error):not(.swal2-warning):not(.swal2-info):not(.swal2-question) {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
 }
 
 .swal2-popup .swal2-icon > *,
@@ -386,24 +447,45 @@
   -webkit-font-smoothing: antialiased;
 }
 
-.swal2-popup:not(.swal2-toast) .swal2-icon {
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-success,
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-error,
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-warning,
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-info,
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-question {
   margin: 0 auto 1rem !important;
   width: 2.75rem !important;
   height: 2.75rem !important;
   border-radius: 0.75rem !important;
 }
 
-.swal2-popup:not(.swal2-toast) .swal2-icon::before {
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-success::before,
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-error::before,
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-warning::before,
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-info::before,
+.swal2-popup:not(.swal2-toast) .swal2-icon.swal2-question::before {
   font-size: 1.125rem;
 }
 
-.swal2-popup.swal2-toast .swal2-icon {
+.swal2-popup.swal2-toast .swal2-icon.swal2-success,
+.swal2-popup.swal2-toast .swal2-icon.swal2-error,
+.swal2-popup.swal2-toast .swal2-icon.swal2-warning,
+.swal2-popup.swal2-toast .swal2-icon.swal2-info,
+.swal2-popup.swal2-toast .swal2-icon.swal2-question {
+  position: relative;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   flex-shrink: 0 !important;
   width: 2.25rem !important;
   height: 2.25rem !important;
   min-width: 2.25rem !important;
   margin: 0 0.75rem 0 0 !important;
   border-radius: 0.625rem !important;
+  box-sizing: border-box !important;
+  border: none !important;
+  font-size: 0 !important;
+  line-height: 1 !important;
+  animation: none !important;
 }
 
 .swal2-popup.swal2-toast .swal2-icon::before {
@@ -453,6 +535,78 @@
 
 .swal2-popup .swal2-icon.swal2-question::before {
   content: "\f059";
+}
+
+/* Contextual modal icons — override default glyph + tint per action */
+.swal2-popup .swal2-icon.swal-icon-bid {
+  background: rgb(237 233 254) !important;
+  color: rgb(109 40 217) !important;
+}
+
+.swal2-popup .swal2-icon.swal-icon-bid::before {
+  content: "\f0e3";
+}
+
+.swal2-popup .swal2-icon.swal-icon-star {
+  background: rgb(254 243 199) !important;
+  color: rgb(217 119 6) !important;
+}
+
+.swal2-popup .swal2-icon.swal-icon-star::before {
+  content: "\f005";
+}
+
+.swal2-popup .swal2-icon.swal-icon-stop {
+  background: rgb(254 226 226) !important;
+  color: rgb(220 38 38) !important;
+}
+
+.swal2-popup .swal2-icon.swal-icon-stop::before {
+  content: "\f04d";
+}
+
+.swal2-popup .swal2-icon.swal-icon-undo::before {
+  content: "\f0e2";
+}
+
+.swal2-popup .swal2-icon.swal-icon-trash {
+  background: rgb(254 226 226) !important;
+  color: rgb(220 38 38) !important;
+}
+
+.swal2-popup .swal2-icon.swal-icon-trash::before {
+  content: "\f1f8";
+}
+
+.swal2-popup .swal2-icon.swal-icon-flag::before {
+  content: "\f024";
+}
+
+.swal2-popup .swal2-icon.swal-icon-reopen {
+  background: rgb(209 250 229) !important;
+  color: rgb(5 150 105) !important;
+}
+
+.swal2-popup .swal2-icon.swal-icon-reopen::before {
+  content: "\f2f1";
+}
+
+.swal2-popup .swal2-icon.swal-icon-truck {
+  background: rgb(224 242 254) !important;
+  color: rgb(2 132 199) !important;
+}
+
+.swal2-popup .swal2-icon.swal-icon-truck::before {
+  content: "\f0d1";
+}
+
+.swal2-popup .swal2-icon.swal-icon-appeal {
+  background: rgb(237 233 254) !important;
+  color: rgb(109 40 217) !important;
+}
+
+.swal2-popup .swal2-icon.swal-icon-appeal::before {
+  content: "\f24e";
 }
 
 .swal2-popup:not(.swal2-toast) .swal2-actions {
@@ -526,6 +680,39 @@
   text-align: left !important;
 }
 
+/* notify() error toast with title + description on separate lines */
+.swal2-popup.swal2-toast.swal-notify-toast--stacked {
+  align-items: flex-start !important;
+  min-height: auto !important;
+}
+
+.swal2-popup.swal2-toast.swal-notify-toast--stacked .swal2-icon {
+  margin-top: 0.05rem !important;
+}
+
+.swal2-popup.swal2-toast.swal-notify-toast--stacked .swal2-html-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+.swal-notify-stack__title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: rgb(17 24 39);
+  line-height: 1.35;
+}
+
+.swal-notify-stack__text {
+  margin: 0.125rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: rgb(107 114 128);
+  line-height: 1.35;
+}
+
 .swal2-popup.swal2-toast .swal2-close {
   color: rgb(148 163 184) !important;
   font-size: 1.8rem !important;
@@ -542,13 +729,21 @@
 
 /* เติมเครดิต — ฟอร์มใน SweetAlert (จัดซ้าย, ช่องกรอกชัด, ปุ่มกดได้ชัด) */
 .swal2-popup.swal-topup-credit-popup {
-  padding: 1.35rem 1.35rem 1.15rem !important;
+  --swal2-title-padding: 0 0 0.65rem;
+  --swal2-html-container-padding: 0;
+  --swal2-padding: 0;
+  padding: 1.25rem 1.5rem 1.35rem !important;
+}
+
+.swal2-popup.swal-topup-credit-popup .swal2-header {
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
 .swal2-popup.swal-topup-credit-popup .swal2-title {
   text-align: left !important;
-  margin: 0 0 0.75rem 0 !important;
-  padding: 0 2.25rem 0 0 !important;
+  margin: 0 0 1rem 0 !important;
+  padding: 0 !important;
 }
 
 .swal2-popup.swal-topup-credit-popup .swal2-html-container.swal-topup-credit-html,
@@ -623,7 +818,7 @@
 }
 
 .swal-topup-intro {
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.9rem 0;
   line-height: 1.5;
 }
 
@@ -670,9 +865,15 @@
 
 .swal-topup-presets {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.625rem;
   margin-top: 0.85rem;
+}
+
+@media (min-width: 420px) {
+  .swal-topup-presets {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .swal-topup-preset {
@@ -810,6 +1011,103 @@
   font-size: 0.75rem;
 }
 
+.swal-topup-qr-expiry {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: rgb(100 116 139);
+  text-align: center;
+}
+
+/* Withdraw confirm modal */
+.swal2-popup.swal-withdraw-popup .swal2-html-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+.swal-withdraw-body {
+  text-align: left;
+  color: rgb(30 41 59);
+}
+
+.swal-withdraw-body .swal-topup-breakdown {
+  margin: 0;
+}
+
+.swal-withdraw-breakdown__fee dd {
+  color: rgb(185 28 28);
+}
+
+.swal-withdraw-bank {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  background: rgb(245 243 255);
+  border: 1px solid rgb(221 214 254);
+  border-radius: 0.5rem;
+}
+
+.swal-withdraw-bank-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(109 40 217);
+}
+
+.swal-withdraw-bank-name {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: rgb(91 33 182);
+}
+
+.swal-withdraw-bank-line {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: rgb(51 65 85);
+}
+
+.swal-withdraw-bank-number {
+  margin-top: 0.15rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: rgb(15 23 42);
+}
+
+.swal-withdraw-foot {
+  margin: 0.75rem 0 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  text-align: center;
+  color: rgb(100 116 139);
+}
+
+.swal-withdraw-foot a {
+  color: rgb(109 40 217);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.swal-withdraw-foot a:hover {
+  color: rgb(91 33 182);
+}
+
+/* Simple confirm dialogs — centered copy + actions */
+.swal2-popup.swal-confirm-centered .swal2-title {
+  text-align: center !important;
+}
+
+.swal2-popup.swal-confirm-centered .swal2-html-container {
+  text-align: center !important;
+}
+
+.swal2-popup.swal-confirm-centered .swal2-actions {
+  justify-content: center !important;
+}
+
 /* Reopen auction — layout + brand-outline cancel */
 .swal2-popup.swal-reopen-auction-popup {
   width: min(calc(100vw - 2rem), 26rem) !important;
@@ -878,7 +1176,6 @@
   margin: 1.25rem 0 0 0 !important;
   padding: 0 !important;
   gap: 0.5rem !important;
-  flex-direction: row !important;
   flex-wrap: nowrap !important;
   justify-content: stretch !important;
 }
@@ -897,6 +1194,195 @@
 }
 
 .swal-reopen-auction-popup .swal2-validation-message {
+  margin-top: 0.75rem !important;
+  font-size: 0.8125rem !important;
+}
+
+/* Form dialogs with textarea (appeal, etc.) */
+.swal2-popup.swal-form-text-popup {
+  width: min(calc(100vw - 2rem), 36rem) !important;
+  max-width: none !important;
+  padding: 1.5rem 1.5rem 1.25rem !important;
+}
+
+.swal-form-text-popup .swal2-title {
+  margin: 0 0 0.5rem 0 !important;
+  padding: 0 !important;
+  font-size: 1.25rem !important;
+  line-height: 1.35 !important;
+}
+
+.swal-form-text-popup .swal2-html-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  text-align: left !important;
+}
+
+.swal-form-text-popup .swal-report-body {
+  width: 100%;
+  text-align: left;
+}
+
+.swal-form-text-popup .swal-report-desc {
+  margin: 0 0 1.25rem 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: rgb(51 65 85);
+}
+
+.swal-form-text-popup .swal-report-list {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: rgb(51 65 85);
+}
+
+.swal-form-text-popup .swal-report-list li + li {
+  margin-top: 0.5rem;
+}
+
+.swal-form-text-popup .swal-report-em {
+  font-weight: 700;
+  color: rgb(220 38 38);
+}
+
+.swal-form-text-popup.swal-otp-popup {
+  width: min(calc(100vw - 2rem), 28.75rem) !important;
+}
+
+.swal-form-text-popup.swal-otp-popup .swal2-title {
+  margin-bottom: 0.35rem !important;
+  text-align: center !important;
+}
+
+.swal-form-text-popup.swal-otp-popup .swal2-html-container {
+  text-align: center !important;
+}
+
+.swal-form-text-popup.swal-otp-popup .swal-otp-desc {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: rgb(51 65 85);
+  text-align: center;
+}
+
+.swal-form-text-popup.swal-otp-popup .swal2-input,
+.swal-form-text-popup.swal-otp-popup input.swal2-input,
+.swal-form-text-popup.swal-otp-popup .swal-otp-input {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  margin: 0.5rem 0 0 !important;
+  padding: 0.625rem 1rem !important;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+  font-family: inherit !important;
+  letter-spacing: normal !important;
+  text-align: left !important;
+  color: rgb(15 23 42) !important;
+  background: rgb(255 255 255) !important;
+  border: 1px solid rgb(221 214 254) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04) !important;
+  outline: none !important;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease !important;
+}
+
+.swal-form-text-popup.swal-otp-popup .swal-otp-input:hover {
+  border-color: rgb(196 181 253) !important;
+}
+
+.swal-form-text-popup.swal-otp-popup .swal-otp-input:focus {
+  border-color: rgb(109 40 217) !important;
+  box-shadow: 0 0 0 3px rgb(109 40 217 / 0.2) !important;
+}
+
+.swal-form-text-popup.swal-otp-popup .swal-otp-input::placeholder {
+  color: rgb(148 163 184) !important;
+}
+
+.swal-form-text-popup.swal-otp-popup .swal2-validation-message {
+  text-align: center !important;
+}
+
+.swal-form-text-popup.swal-otp-popup .swal2-actions {
+  justify-content: center !important;
+}
+
+.swal-form-text-popup.swal-otp-popup .swal2-styled {
+  flex: 0 0 auto !important;
+}
+
+.swal-form-text-popup .swal-report-label {
+  display: block;
+  margin: 0 0 0.5rem 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: rgb(100 116 139);
+}
+
+.swal-form-text-popup .swal-report-textarea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: 10rem;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.75rem 0.875rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  resize: vertical;
+  color: rgb(15 23 42);
+  background: rgb(255 255 255);
+  border: 1px solid rgb(221 214 254);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.swal-form-text-popup .swal-report-textarea::placeholder {
+  color: rgb(148 163 184);
+}
+
+.swal-form-text-popup .swal-report-textarea:focus {
+  outline: none;
+  border-color: rgb(109 40 217);
+  box-shadow: 0 0 0 3px rgb(109 40 217 / 0.2);
+}
+
+.swal-form-text-popup .swal2-actions {
+  width: 100% !important;
+  margin: 1.5rem 0 0 0 !important;
+  padding: 0 !important;
+  gap: 0.625rem !important;
+  flex-wrap: nowrap !important;
+  justify-content: stretch !important;
+}
+
+.swal-form-text-popup .swal2-styled {
+  flex: 1 1 0 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0.625rem 1rem !important;
+  font-size: 0.9375rem !important;
+}
+
+.swal-form-text-popup .swal2-cancel {
+  background: rgb(255 255 255) !important;
+  color: rgb(91 33 182) !important;
+  border: 2px solid rgb(196 181 253) !important;
+}
+
+.swal-form-text-popup .swal2-validation-message {
   margin-top: 0.75rem !important;
   font-size: 0.8125rem !important;
 }
@@ -922,7 +1408,6 @@
   margin: 1.25rem 0 0 0 !important;
   padding: 0 !important;
   gap: 0.5rem !important;
-  flex-direction: row !important;
   flex-wrap: nowrap !important;
   justify-content: stretch !important;
 }
@@ -933,3 +1418,493 @@
   min-width: 0 !important;
   margin: 0 !important;
 }
+
+/* Shipment — track + mark-shipped (theme aligned with topup credit modal) */
+.swal2-popup.swal-shipment-popup {
+  --swal2-title-padding: 0 0 0.65rem;
+  --swal2-html-container-padding: 0;
+  --swal2-padding: 0;
+  padding: 1.25rem 1.5rem 1.35rem !important;
+}
+
+.swal2-popup.swal-shipment-popup .swal2-header {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.swal2-popup.swal-shipment-popup .swal2-title {
+  text-align: left !important;
+  margin: 0 0 1rem 0 !important;
+  padding: 0 !important;
+}
+
+.swal2-popup.swal-shipment-popup .swal2-html-container.swal-shipment-html,
+.swal2-popup.swal-shipment-popup .swal2-html-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: left !important;
+  overflow: visible !important;
+}
+
+.swal2-popup.swal-shipment-popup .swal2-close.swal-shipment-close {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  border-radius: 9999px !important;
+  box-shadow: none !important;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease !important;
+}
+
+.swal2-popup.swal-shipment-popup .swal2-close.swal-shipment-close:hover {
+  background: rgb(245 243 255) !important;
+  color: rgb(91 33 182) !important;
+}
+
+.swal-shipment {
+  text-align: left;
+  color: rgb(30 41 59);
+}
+
+.swal-shipment-intro {
+  margin: 0 0 0.85rem 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: rgb(100 116 139);
+}
+
+.swal-shipment-winner {
+  margin-bottom: 1rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.85rem;
+  background: rgb(248 250 252);
+}
+
+.swal-shipment-winner-title {
+  margin: 0 0 0.65rem 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(100 116 139);
+  text-align: left;
+}
+
+.swal-shipment-winner-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem 0.85rem;
+  margin: 0;
+}
+
+.swal-shipment-winner-grid div {
+  min-width: 0;
+}
+
+.swal-shipment-winner-grid__full {
+  grid-column: 1 / -1;
+}
+
+.swal-shipment-winner-grid dt {
+  margin: 0 0 0.15rem 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgb(100 116 139);
+}
+
+.swal-shipment-winner-grid dd {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: rgb(15 23 42);
+  word-break: break-word;
+}
+
+.swal-shipment-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(51 65 85);
+}
+
+.swal-shipment-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  font-family: inherit;
+  letter-spacing: normal;
+  text-align: left;
+  color: rgb(15 23 42);
+  background: rgb(255 255 255);
+  border: 1px solid rgb(221 214 254);
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.swal-shipment-input:hover {
+  border-color: rgb(196 181 253);
+}
+
+.swal-shipment-input:focus {
+  border-color: rgb(109 40 217);
+  box-shadow: 0 0 0 3px rgb(109 40 217 / 0.2);
+}
+
+.swal-shipment-input::placeholder {
+  color: rgb(148 163 184);
+}
+
+.swal-shipment-meta {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  font-size: 0.8125rem;
+  background: rgb(248 250 252);
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.75rem;
+}
+
+.swal-shipment-meta div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.2rem 0;
+}
+
+.swal-shipment-meta dt {
+  color: rgb(100 116 139);
+  font-weight: 500;
+}
+
+.swal-shipment-meta dd {
+  margin: 0;
+  font-weight: 600;
+  color: rgb(30 41 59);
+  text-align: right;
+}
+
+.swal-shipment-meta__tracking {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+}
+
+.swal-shipment-meta__status {
+  margin-top: 0.25rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgb(226 232 240);
+}
+
+.swal-shipment-meta__status dd {
+  color: rgb(109 40 217);
+}
+
+.swal-shipment-meta__status.is-delivered dd {
+  color: rgb(4 120 87);
+}
+
+.swal-shipment-meta__status.is-warning dd {
+  color: rgb(180 83 9);
+}
+
+.swal-shipment-meta__status.is-muted dd {
+  color: rgb(100 116 139);
+}
+
+.swal-shipment-link {
+  display: inline-block;
+  margin-top: 0.65rem;
+  font-size: 0.75rem;
+  color: rgb(109 40 217);
+  text-decoration: underline;
+}
+
+.swal-shipment-link:hover {
+  color: rgb(91 33 182);
+}
+
+.swal-shipment-section-title {
+  margin: 1.35rem 0 1rem 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(148 163 184);
+  text-align: center;
+}
+
+.swal-shipment-empty {
+  margin: 0.75rem 0 0 0;
+  padding: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: rgb(100 116 139);
+  background: rgb(248 250 252);
+  border: 1px dashed rgb(226 232 240);
+  border-radius: 0.75rem;
+}
+
+/* Timeline — vertical (mobile) */
+.swal-shipment-timeline-v {
+  display: block;
+}
+
+.swal-shipment-timeline-h {
+  display: none;
+}
+
+.swal-shipment-timeline-v ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.swal-shipment-timeline-v li {
+  position: relative;
+  padding-left: 2.5rem;
+}
+
+.swal-shipment-timeline-v li:not(:last-child) {
+  padding-bottom: 1.75rem;
+}
+
+.swal-shipment-timeline-v li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 0.9375rem;
+  top: 2.125rem;
+  bottom: 0;
+  width: 2px;
+  background: rgb(237 233 254);
+}
+
+.swal-shipment-timeline-v .swal-shipment-step-body {
+  min-width: 0;
+}
+
+.swal-shipment-timeline-v .swal-shipment-step-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(15 23 42);
+}
+
+.swal-shipment-timeline-v .swal-shipment-step-time {
+  margin: 0.2rem 0 0 0;
+  font-size: 0.75rem;
+  color: rgb(148 163 184);
+}
+
+.swal-shipment-timeline-v .swal-shipment-step-note {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: rgb(71 85 105);
+}
+
+.swal-shipment-timeline-v .swal-shipment-step-place {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.75rem;
+  color: rgb(148 163 184);
+}
+
+/* Timeline — horizontal (desktop) */
+@media (min-width: 768px) {
+  .swal-shipment-timeline-v {
+    display: none;
+  }
+
+  .swal-shipment-timeline-h {
+    display: block;
+  }
+}
+
+.swal-shipment-timeline-h-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  text-align: center;
+}
+
+.swal-shipment-timeline-h-track {
+  position: relative;
+  display: inline-flex;
+  min-width: max-content;
+  align-items: flex-start;
+  padding: 0 0.5rem;
+  text-align: left;
+}
+
+.swal-shipment-timeline-h-track::before {
+  content: "";
+  position: absolute;
+  left: 2.5rem;
+  right: 2.5rem;
+  top: 1.25rem;
+  height: 2px;
+  background: rgb(237 233 254);
+}
+
+.swal-shipment-timeline-h .swal-shipment-step {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 7.5rem;
+  flex-shrink: 0;
+  padding: 0 0.25rem;
+}
+
+.swal-shipment-timeline-h .swal-shipment-step-title {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  color: rgb(15 23 42);
+}
+
+.swal-shipment-timeline-h .swal-shipment-step-time {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.625rem;
+  text-align: center;
+  color: rgb(148 163 184);
+}
+
+.swal-shipment-timeline-h .swal-shipment-step-note {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.625rem;
+  line-height: 1.35;
+  text-align: center;
+  color: rgb(100 116 139);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.swal-shipment-timeline-h .swal-shipment-step-place {
+  margin: 0.1rem 0 0 0;
+  font-size: 0.625rem;
+  text-align: center;
+  color: rgb(148 163 184);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.swal-shipment-step-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  border: 2px solid rgb(226 232 240);
+  background: rgb(255 255 255);
+  color: rgb(148 163 184);
+}
+
+.swal-shipment-timeline-v .swal-shipment-step-icon {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2rem;
+  height: 2rem;
+}
+
+.swal-shipment-step-icon svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.swal-shipment-timeline-v .swal-shipment-step-icon svg {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+
+.swal-shipment-step-icon.is-current {
+  border-color: rgb(167 139 250);
+  background: rgb(245 243 255);
+  color: rgb(109 40 217);
+}
+
+.swal-shipment-step-icon.is-current.is-delivered {
+  border-color: rgb(110 231 183);
+  background: rgb(209 250 229);
+  color: rgb(5 150 105);
+}
+
+.swal-shipment-step-icon.is-current.is-warning {
+  border-color: rgb(252 211 77);
+  background: rgb(254 243 199);
+  color: rgb(180 83 9);
+}
+
+.swal-shipment-step-icon.is-current.is-muted {
+  border-color: rgb(203 213 225);
+  background: rgb(248 250 252);
+  color: rgb(100 116 139);
+}
+
+.swal2-popup.swal-shipment-popup .swal2-actions {
+  width: 100% !important;
+  margin: 1.4rem 0 0 0 !important;
+  padding: 0 !important;
+  gap: 0.75rem !important;
+  flex-wrap: nowrap !important;
+  justify-content: stretch !important;
+}
+
+.swal2-popup.swal-shipment-popup .swal2-styled {
+  flex: 1 1 0 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+}
+
+.swal2-popup.swal-shipment-popup .swal2-confirm.swal-shipment-confirm {
+  background: rgb(109 40 217) !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+.swal2-popup.swal-shipment-popup .swal2-confirm.swal-shipment-confirm:hover {
+  background: rgb(91 33 182) !important;
+}
+
+.swal2-popup.swal-shipment-popup .swal2-cancel.swal-shipment-cancel {
+  background: rgb(255 255 255) !important;
+  color: rgb(91 33 182) !important;
+  border: 2px solid rgb(196 181 253) !important;
+}
+
+.swal2-popup.swal-shipment-popup .swal2-validation-message {
+  margin-top: 0.75rem !important;
+  font-size: 0.8125rem !important;
+}
+
+.swal2-popup.swal-shipment-popup.swal-shipment-popup--track .swal2-actions {
+  margin-top: 1.6rem !important;
+}
+
+.swal2-popup.swal-shipment-popup.swal-shipment-popup--track .swal2-confirm.swal-shipment-confirm {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+}
+

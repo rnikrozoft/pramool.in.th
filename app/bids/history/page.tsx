@@ -1,18 +1,63 @@
 "use client"
 
 import Link from "next/link"
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import {
   getMyBidHistory,
+  type BidHistoryListScope,
   type BidHistoryOutcome,
   type MyBidHistoryItem,
 } from "@/app/lib/api/auction"
 import { getCoreApiBaseUrl } from "@/app/lib/constants/common"
-import { AppPageShell, APP_PAGE_INNER } from "@/app/components/AppPageShell"
+import { AppPageShell, APP_PAGE_INNER, AppPageHeader } from "@/app/components/AppPageShell"
+import { PAGE_BACK } from "@/app/lib/pageNav"
 import Icon from "@/app/components/Icon"
+import { SortableTableHead } from "@/app/components/SortableTableHead"
+import { TableRowActionMenu, tableRowMenuItemClass } from "@/app/components/TableRowActionMenu"
+import {
+  DEFAULT_BID_HISTORY_SORT,
+  type BidHistorySortKey,
+} from "@/app/lib/auctionListSort"
+import { toggleTableSort, type SortOrder, type TableSortState } from "@/app/lib/tableSort"
 
 type TabKey = "all" | BidHistoryOutcome
-type SortKey = "latest" | "price" | "my_bid"
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
+type PageSize = (typeof PAGE_SIZE_OPTIONS)[number]
+
+function PageSizeSelect({
+  pageSize,
+  loading,
+  onChange,
+  compact,
+}: {
+  pageSize: PageSize
+  loading: boolean
+  onChange: (size: PageSize) => void
+  compact?: boolean
+}) {
+  return (
+    <label className={`flex items-center gap-2 text-slate-500 ${compact ? "text-xs" : "text-sm"}`}>
+      <span className={compact ? "hidden sm:inline" : ""}>แสดงครั้งละ</span>
+      <select
+        value={pageSize}
+        onChange={(e) => onChange(Number(e.target.value) as PageSize)}
+        disabled={loading}
+        className={`rounded-lg border border-slate-200 bg-surface-card font-medium text-body shadow-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:opacity-50 dark:border-slate-600 dark:focus:ring-brand-900/40 ${
+          compact ? "h-11 px-2.5 text-sm" : "px-2 py-1.5 text-sm"
+        }`}
+        aria-label="จำนวนรายการต่อหน้า"
+      >
+        {PAGE_SIZE_OPTIONS.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </select>
+      <span className={compact ? "hidden sm:inline" : ""}>รายการ</span>
+    </label>
+  )
+}
 
 function coverSrc(url: string): string {
   if (!url?.trim()) return "https://placehold.co/120x120/e2e8f0/64748b?text=Auction"
@@ -33,18 +78,53 @@ function normalizeOutcome(raw: string): BidHistoryOutcome {
   return "lost"
 }
 
-function sortHistoryItems(rows: MyBidHistoryItem[], sortBy: SortKey): MyBidHistoryItem[] {
-  const copy = [...rows]
-  if (sortBy === "latest") {
-    copy.sort((a, b) => new Date(b.last_bid_at).getTime() - new Date(a.last_bid_at).getTime())
-    return copy
+function tabToScope(tab: TabKey): BidHistoryListScope {
+  return tab
+}
+
+type HistoryListFetchParams = {
+  limit: number
+  offset: number
+  scope: BidHistoryListScope
+  q?: string
+  sort: BidHistorySortKey
+  order: SortOrder
+}
+
+function buildListFetchParams(
+  pageNum: number,
+  tab: TabKey,
+  q: string,
+  sort: TableSortState<BidHistorySortKey>,
+  pageSize: number,
+): HistoryListFetchParams {
+  return {
+    limit: pageSize,
+    offset: Math.max(0, (pageNum - 1) * pageSize),
+    scope: tabToScope(tab),
+    q: q.trim() || undefined,
+    sort: sort.key,
+    order: sort.order,
   }
-  if (sortBy === "my_bid") {
-    copy.sort((a, b) => b.my_highest_bid - a.my_highest_bid)
-    return copy
-  }
-  copy.sort((a, b) => b.final_price - a.final_price)
-  return copy
+}
+
+function paramsStillCurrent(
+  params: HistoryListFetchParams,
+  tab: TabKey,
+  pageNum: number,
+  q: string,
+  sort: TableSortState<BidHistorySortKey>,
+  pageSize: number,
+): boolean {
+  const current = buildListFetchParams(pageNum, tab, q, sort, pageSize)
+  return (
+    params.limit === current.limit &&
+    params.offset === current.offset &&
+    params.scope === current.scope &&
+    (params.q ?? "") === (current.q ?? "") &&
+    params.sort === current.sort &&
+    params.order === current.order
+  )
 }
 
 function formatBidDate(iso: string): string {
@@ -53,85 +133,142 @@ function formatBidDate(iso: string): string {
   return d.toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
 }
 
-function filterHistoryByQuery(items: MyBidHistoryItem[], q: string): MyBidHistoryItem[] {
-  const needle = q.trim().toLowerCase()
-  if (!needle) return items
-  return items.filter(
-    (item) =>
-      item.title.toLowerCase().includes(needle) ||
-      item.auction_id.toLowerCase().includes(needle),
+function formatEndDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return "—"
+  return d.toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
+}
+
+function HistoryRowActionMenu({
+  auctionId,
+  open,
+  onToggle,
+  onClose,
+}: {
+  auctionId: string
+  open: boolean
+  onToggle: () => void
+  onClose: () => void
+}) {
+  return (
+    <TableRowActionMenu open={open} onToggle={onToggle} onClose={onClose}>
+      <Link
+        href={`/product/${encodeURIComponent(auctionId)}`}
+        role="menuitem"
+        className={`${tableRowMenuItemClass} text-body hover:bg-slate-50 dark:hover:bg-slate-800/60`}
+        onClick={onClose}
+      >
+        <Icon name="fa-eye" className="text-xs opacity-80" aria-hidden />
+        ดูรายละเอียด
+      </Link>
+    </TableRowActionMenu>
   )
 }
 
 export default function BidHistoryPage() {
   const [items, setItems] = useState<MyBidHistoryItem[]>([])
+  const [listTotal, setListTotal] = useState(0)
+  const [allCount, setAllCount] = useState(0)
+  const [activeCount, setActiveCount] = useState(0)
+  const [outbidCount, setOutbidCount] = useState(0)
+  const [wonCount, setWonCount] = useState(0)
+  const [lostCount, setLostCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [listRefreshing, setListRefreshing] = useState(false)
   const [listError, setListError] = useState("")
   const [tab, setTab] = useState<TabKey>("all")
-  const [sortBy, setSortBy] = useState<SortKey>("latest")
+  const [sort, setSort] = useState<TableSortState<BidHistorySortKey>>(DEFAULT_BID_HISTORY_SORT)
   const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<PageSize>(10)
+  const hasLoadedRef = useRef(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setListError("")
-    try {
-      const data = await getMyBidHistory({ limit: 100 })
-      setItems(data)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : ""
-      if (msg === "unauthorized") {
-        setListError("กรุณาเข้าสู่ระบบเพื่อดูประวัติการประมูล")
-      } else {
-        setListError("โหลดประวัติไม่สำเร็จ กรุณาลองใหม่")
-      }
-      setItems([])
-    } finally {
-      setLoading(false)
-    }
+  const applyListResponse = useCallback((res: Awaited<ReturnType<typeof getMyBidHistory>>) => {
+    setItems(res.items)
+    setListTotal(res.total)
+    setAllCount(res.all_count)
+    setActiveCount(res.active_count)
+    setOutbidCount(res.outbid_count)
+    setWonCount(res.won_count)
+    setLostCount(res.lost_count)
   }, [])
 
   useEffect(() => {
-    void load()
-  }, [load])
-
-  useEffect(() => {
-    const id = window.setTimeout(() => setSearchQuery(searchInput.trim()), 300)
+    const id = window.setTimeout(() => {
+      const nextQuery = searchInput.trim()
+      setSearchQuery((prev) => (prev === nextQuery ? prev : nextQuery))
+      setPage((prev) => (prev === 1 ? prev : 1))
+    }, 300)
     return () => window.clearTimeout(id)
   }, [searchInput])
 
-  const counts = useMemo(() => {
-    const c = { all: items.length, active: 0, outbid: 0, won: 0, lost: 0 }
-    for (const it of items) {
-      const o = normalizeOutcome(it.outcome)
-      if (o === "active") c.active++
-      else if (o === "outbid") c.outbid++
-      else if (o === "won") c.won++
-      else c.lost++
+  useEffect(() => {
+    setPage(1)
+  }, [tab, sort, pageSize])
+
+  useEffect(() => {
+    setOpenMenuId(null)
+  }, [tab, page, searchQuery, sort, pageSize])
+
+  useEffect(() => {
+    let cancelled = false
+    const params = buildListFetchParams(page, tab, searchQuery, sort, pageSize)
+
+    const load = async () => {
+      if (!hasLoadedRef.current) setLoading(true)
+      else setListRefreshing(true)
+      setListError("")
+      try {
+        const res = await getMyBidHistory(params)
+        if (cancelled || !paramsStillCurrent(params, tab, page, searchQuery, sort, pageSize)) return
+        applyListResponse(res)
+      } catch (e) {
+        if (cancelled || !paramsStillCurrent(params, tab, page, searchQuery, sort, pageSize)) return
+        const msg = e instanceof Error ? e.message : ""
+        if (msg === "unauthorized") {
+          setListError("กรุณาเข้าสู่ระบบเพื่อดูประวัติการประมูล")
+        } else {
+          setListError("โหลดประวัติไม่สำเร็จ กรุณาลองใหม่")
+        }
+        setItems([])
+        setListTotal(0)
+      } finally {
+        setLoading(false)
+        setListRefreshing(false)
+        hasLoadedRef.current = true
+      }
     }
-    return c
-  }, [items])
 
-  const searchedItems = useMemo(
-    () => filterHistoryByQuery(items, searchQuery),
-    [items, searchQuery],
-  )
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [tab, page, searchQuery, sort, pageSize, applyListResponse])
 
-  const filteredItems = useMemo(() => {
-    if (tab === "all") return searchedItems
-    return searchedItems.filter((item) => normalizeOutcome(item.outcome) === tab)
-  }, [searchedItems, tab])
+  const handlePageSizeChange = (size: PageSize) => {
+    setPageSize(size)
+    setPage(1)
+  }
 
-  const displayItems = useMemo(
-    () => sortHistoryItems(filteredItems, sortBy),
-    [filteredItems, sortBy],
-  )
+  const handleSortColumn = (key: BidHistorySortKey) => {
+    setSort((prev) => toggleTableSort(prev, key))
+    setPage(1)
+  }
+
+  const totalPages = Math.max(1, Math.ceil(listTotal / pageSize))
+  const pageStart = listTotal === 0 ? 0 : (page - 1) * pageSize + 1
+  const pageEnd = Math.min(page * pageSize, listTotal)
 
   const tabButton = (key: TabKey, label: string, count: number) => (
     <button
       key={key}
       type="button"
-      onClick={() => setTab(key)}
+      onClick={() => {
+        setTab(key)
+        setPage(1)
+      }}
       className={`relative whitespace-nowrap border-b-2 px-1 pb-3 text-sm font-medium transition ${
         tab === key ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-700"
       }`}
@@ -142,7 +279,7 @@ export default function BidHistoryPage() {
 
   const priceCell = "text-sm font-semibold tabular-nums"
 
-  if (loading && items.length === 0 && !listError) {
+  if (loading && !hasLoadedRef.current && !listError) {
     return (
       <AppPageShell>
         <main className={APP_PAGE_INNER}>
@@ -156,19 +293,12 @@ export default function BidHistoryPage() {
     <AppPageShell>
       <main className={APP_PAGE_INNER}>
         <div className="min-w-0">
-          <div className="mb-6 flex gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-100 text-brand-600">
-              <Icon name="fa-clock" className="text-lg" aria-hidden />
-            </span>
-            <div>
-              <h1 className="font-display text-2xl font-bold tracking-tight text-heading sm:text-3xl">
-                ประวัติการประมูล
-              </h1>
-              <p className="mt-1 text-sm text-slate-600">
-                รายการที่เคยเข้าร่วมบิด ราคาสูงสุดที่คุณเสนอ และผลของแต่ละรายการ
-              </p>
-            </div>
-          </div>
+          <AppPageHeader
+            title="ประวัติการประมูล"
+            description="รายการที่เคยเข้าร่วมบิด ราคาสูงสุดที่คุณเสนอ และผลของแต่ละรายการ"
+            icon="fa-clock"
+            {...PAGE_BACK.home}
+          />
 
           {listError && (
             <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -185,7 +315,7 @@ export default function BidHistoryPage() {
                   </div>
                   <div>
                     <p className="text-xs font-medium text-amber-800">กำลังประมูล</p>
-                    <p className="mt-0.5 text-2xl font-bold text-amber-900">{counts.active}</p>
+                    <p className="mt-0.5 text-2xl font-bold text-amber-900">{activeCount}</p>
                     <p className="text-[11px] text-amber-700/80">รายการ</p>
                   </div>
                 </div>
@@ -195,7 +325,7 @@ export default function BidHistoryPage() {
                   </div>
                   <div>
                     <p className="text-xs font-medium text-red-700">โดนบิดแซง</p>
-                    <p className="mt-0.5 text-2xl font-bold text-red-900">{counts.outbid}</p>
+                    <p className="mt-0.5 text-2xl font-bold text-red-900">{outbidCount}</p>
                     <p className="text-[11px] text-red-600/80">รายการ</p>
                   </div>
                 </div>
@@ -205,7 +335,7 @@ export default function BidHistoryPage() {
                   </div>
                   <div>
                     <p className="text-xs font-medium text-emerald-700">ชนะประมูล</p>
-                    <p className="mt-0.5 text-2xl font-bold text-emerald-900">{counts.won}</p>
+                    <p className="mt-0.5 text-2xl font-bold text-emerald-900">{wonCount}</p>
                     <p className="text-[11px] text-emerald-600/80">รายการ</p>
                   </div>
                 </div>
@@ -215,7 +345,7 @@ export default function BidHistoryPage() {
                   </div>
                   <div>
                     <p className="text-xs font-medium text-brand-800">แพ้ประมูล</p>
-                    <p className="mt-0.5 text-2xl font-bold text-brand-900">{counts.lost}</p>
+                    <p className="mt-0.5 text-2xl font-bold text-brand-900">{lostCount}</p>
                     <p className="text-[11px] text-brand-700/80">รายการ</p>
                   </div>
                 </div>
@@ -224,11 +354,11 @@ export default function BidHistoryPage() {
               <div className="data-table-shell">
                 <div className="flex flex-col gap-3 border-b border-slate-100/90 bg-slate-50/40 px-4 py-3 dark:border-slate-700/90 dark:bg-slate-800/40 sm:flex-row sm:items-end sm:justify-between sm:px-5">
                   <div className="-mb-px flex flex-wrap gap-x-5 gap-y-1 overflow-x-auto">
-                    {tabButton("all", "ทั้งหมด", counts.all)}
-                    {tabButton("active", "กำลังประมูล", counts.active)}
-                    {tabButton("won", "ชนะประมูล", counts.won)}
-                    {tabButton("outbid", "โดนบิดแซง", counts.outbid)}
-                    {tabButton("lost", "แพ้ประมูล", counts.lost)}
+                    {tabButton("all", "ทั้งหมด", allCount)}
+                    {tabButton("active", "กำลังประมูล", activeCount)}
+                    {tabButton("won", "ชนะประมูล", wonCount)}
+                    {tabButton("outbid", "โดนบิดแซง", outbidCount)}
+                    {tabButton("lost", "แพ้ประมูล", lostCount)}
                   </div>
                   <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                     <div className="relative w-full min-w-0 sm:w-52">
@@ -246,52 +376,85 @@ export default function BidHistoryPage() {
                         className="box-border block w-full min-w-0 rounded-lg border-0 bg-surface-card py-2.5 pl-9 pr-3 text-sm text-body ring-1 ring-slate-200/80 transition placeholder:text-slate-400 hover:ring-slate-300/90 focus:ring-brand-400 dark:ring-slate-600"
                       />
                     </div>
-                    <div className="relative w-full min-w-0 sm:w-auto sm:max-w-sm sm:shrink-0">
-                      <select
-                        className="box-border block w-full min-w-0 appearance-none rounded-lg border-0 bg-surface-card py-2.5 pl-3 pr-11 text-sm font-medium text-body ring-1 ring-slate-200/80 transition hover:ring-slate-300/90 dark:ring-slate-600"
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value as SortKey)}
-                        aria-label="เรียงลำดับรายการในหมวดที่เลือก"
-                      >
-                        <option value="latest">บิดล่าสุดก่อน</option>
-                        <option value="price">ราคาปิด (สูงไปต่ำ)</option>
-                        <option value="my_bid">ราคาที่คุณเสนอ (สูงไปต่ำ)</option>
-                      </select>
-                      <span
-                        className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400"
-                        aria-hidden
-                      >
-                        <Icon name="fa-chevron-down" className="block text-[0.625rem] leading-none" />
-                      </span>
-                    </div>
+                    <PageSizeSelect
+                      pageSize={pageSize}
+                      loading={loading}
+                      onChange={handlePageSizeChange}
+                      compact
+                    />
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[980px] text-left text-sm text-slate-800">
+                <div className={`overflow-x-auto transition-opacity ${listRefreshing ? "opacity-60" : ""}`}>
+                  <table className="list-auction-table text-left">
+                    <colgroup>
+                      <col className="col-product" />
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                      <col className="col-actions" />
+                    </colgroup>
                     <thead>
                       <tr className="table-header-row">
-                        <th className="px-4 py-3 pl-5">รายการสินค้า</th>
-                        <th className="px-4 py-3 text-center">ราคาที่คุณเสนอสูงสุด</th>
-                        <th className="px-4 py-3 text-center">ราคาปิด / ปัจจุบัน</th>
-                        <th className="px-4 py-3 text-center">บิดล่าสุด</th>
-                        <th className="px-4 py-3 text-center">สถานะ</th>
-                        <th className="w-[9rem] min-w-[9rem] max-w-[9rem] py-3 pl-2 pr-5 text-center">จัดการ</th>
+                        <SortableTableHead label="รายการสินค้า" sortable={false} className="pl-5" />
+                        <SortableTableHead
+                          label="ราคาที่คุณเสนอสูงสุด"
+                          sortKey="my_bid"
+                          sort={sort}
+                          onSort={handleSortColumn}
+                          align="center"
+                        />
+                        <SortableTableHead
+                          label="ราคาปิด / ปัจจุบัน"
+                          sortKey="price"
+                          sort={sort}
+                          onSort={handleSortColumn}
+                          align="center"
+                        />
+                        <SortableTableHead
+                          label="บิดล่าสุด"
+                          sortKey="latest"
+                          sort={sort}
+                          onSort={handleSortColumn}
+                          align="center"
+                        />
+                        <SortableTableHead
+                          label="สถานะ"
+                          sortKey="status"
+                          sort={sort}
+                          onSort={handleSortColumn}
+                          align="center"
+                        />
+                        <SortableTableHead
+                          label="วันที่จบการประมูล"
+                          sortKey="end"
+                          sort={sort}
+                          onSort={handleSortColumn}
+                          align="center"
+                        />
+                        <SortableTableHead
+                          label="จัดการ"
+                          sortable={false}
+                          align="center"
+                          className="table-col-actions"
+                        />
                       </tr>
                     </thead>
                     <tbody>
-                      {displayItems.length === 0 && !loading && (
+                      {items.length === 0 && !loading && (
                         <tr>
-                          <td colSpan={6} className="px-5 py-12 text-center text-slate-500">
+                          <td colSpan={7} className="px-5 py-12 text-center text-slate-500">
                             {searchQuery
                               ? `ไม่พบรายการที่ตรงกับ "${searchQuery}"`
-                              : items.length === 0
+                              : allCount === 0
                                 ? "ยังไม่มีประวัติการประมูล"
                                 : "ไม่พบรายการในหมวดนี้"}
                           </td>
                         </tr>
                       )}
-                      {displayItems.map((item) => {
+                      {items.map((item) => {
                         const outcome = normalizeOutcome(item.outcome)
                         const tags = item.category
                           .split("|")
@@ -392,22 +555,67 @@ export default function BidHistoryPage() {
                                 </div>
                               )}
                             </td>
-                            <td className="w-[9rem] max-w-[9rem] py-4 pl-2 pr-5 align-middle">
-                              <div className="mx-auto flex w-full max-w-[9rem] flex-col gap-2 justify-center">
-                                <Link
-                                  href={`/product/${encodeURIComponent(item.auction_id)}`}
-                                  className="action-btn-secondary"
-                                >
-                                  <Icon name="fa-eye" className="text-xs opacity-80" aria-hidden />
-                                  ดูรายละเอียด
-                                </Link>
-                              </div>
+                            <td className="px-4 py-4 text-center align-middle text-sm text-slate-600">
+                              {formatEndDate(item.end_at)}
+                            </td>
+                            <td className="table-col-actions py-4 align-middle">
+                              <HistoryRowActionMenu
+                                auctionId={item.auction_id}
+                                open={openMenuId === item.auction_id}
+                                onToggle={() =>
+                                  setOpenMenuId((prev) => (prev === item.auction_id ? null : item.auction_id))
+                                }
+                                onClose={() => setOpenMenuId(null)}
+                              />
                             </td>
                           </tr>
                         )
                       })}
                     </tbody>
                   </table>
+                </div>
+                <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100/90 bg-slate-50/30 px-5 py-4 dark:border-slate-700/90 dark:bg-slate-800/30 sm:flex-row">
+                  <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 sm:justify-start">
+                    <p className="text-xs text-slate-500">
+                      {searchQuery ? (
+                        <>พบ {listTotal.toLocaleString()} รายการจากการค้นหา</>
+                      ) : tab === "all" ? (
+                        <>ทั้งหมด {listTotal.toLocaleString()} รายการ</>
+                      ) : (
+                        <>พบ {listTotal.toLocaleString()} รายการในหมวดนี้</>
+                      )}
+                      {listTotal > 0 ? (
+                        <>
+                          {" "}
+                          · แสดง {pageStart.toLocaleString()}–{pageEnd.toLocaleString()}
+                        </>
+                      ) : null}
+                    </p>
+                    <PageSizeSelect pageSize={pageSize} loading={loading} onChange={handlePageSizeChange} />
+                  </div>
+                  {listTotal > pageSize ? (
+                    <div className="flex items-center gap-2 text-sm text-body">
+                      <button
+                        type="button"
+                        className="btn-outline px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                        disabled={page <= 1 || loading}
+                      >
+                        ก่อนหน้า
+                      </button>
+                      <span className="tabular-nums">
+                        หน้า {page} / {totalPages}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn-outline px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                        disabled={page >= totalPages || loading}
+                      >
+                        ถัดไป
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </>

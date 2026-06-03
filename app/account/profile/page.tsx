@@ -2,7 +2,8 @@
 
 import Link from "next/link"
 import React, { useContext, useEffect, useState } from "react"
-import { AppPageShell, APP_PAGE_INNER } from "@/app/components/AppPageShell"
+import { AppPageShell, APP_PAGE_INNER, AppPageHeader } from "@/app/components/AppPageShell"
+import { PAGE_BACK } from "@/app/lib/pageNav"
 import { getBanks, getMyProfile, updateMyProfile } from "@/app/lib/api/user"
 import { UserContext } from "@/app/context/UserContext"
 import Swal from "sweetalert2"
@@ -10,6 +11,7 @@ import subDistricts from "@/app/data/sub-districts.json"
 import districts from "@/app/data/districts.json"
 import provinces from "@/app/data/provinces.json"
 import { recordOTPTimeout, requestOTP, verifyOTP } from "@/app/lib/api/otp"
+import { openConfirmOtpSwal } from "@/app/lib/utils/confirmOtpSwal"
 import { BankSelect } from "@/app/components/LocationSelector"
 import AddressLocationFields from "@/app/components/AddressLocationFields"
 import type { AddressLocationValue } from "@/app/lib/locationCascade"
@@ -46,6 +48,7 @@ export default function ProfilePage() {
   const [successMessage, setSuccessMessage] = useState("")
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [userID, setUserID] = useState("")
+  const [nationalID, setNationalID] = useState("")
   const [tel, setTel] = useState("")
   const [zipcode, setZipcode] = useState("")
   const [provinceId, setProvinceId] = useState<number | null>(null)
@@ -98,6 +101,7 @@ export default function ProfilePage() {
         setLoading(true)
         const profile = await getMyProfile()
         setUserID(profile.user_id || "")
+        setNationalID(profile.national_id || "")
         setTel(profile.tel || "")
         setForm((prev) => ({
           first_name: profile.first_name || prev.first_name,
@@ -206,77 +210,17 @@ export default function ProfilePage() {
       throw error
     }
 
-    const verifyResult = await Swal.fire({
-      title: "ยืนยัน OTP",
-      text: `กรุณากรอก OTP ที่ส่งไปยัง${channelLabel}`,
-      input: "text",
-      inputPlaceholder: "กรอก OTP 4 หลัก",
-      inputAttributes: {
-        maxlength: "4",
-        inputmode: "numeric",
-        autocapitalize: "off",
-        autocorrect: "off",
-      },
-      showCancelButton: true,
-      confirmButtonText: "ยืนยัน",
-      cancelButtonText: "ยกเลิก",
-      width: 460,
-      buttonsStyling: false,
-      timer: 10000,
-      customClass: {
-        popup: "rounded-2xl",
-        title: "text-2xl font-semibold text-heading",
-        htmlContainer: "text-sm text-slate-500",
-        actions: "gap-2",
-        confirmButton: "btn-primary min-w-[110px]",
-        cancelButton: "btn-outline min-w-[110px]",
-        input: "form-input",
-      },
-      didOpen: () => {
-        const otpInput = Swal.getInput()
-        if (otpInput) {
-          otpInput.style.width = "calc(100% - 24px)"
-          otpInput.style.maxWidth = "calc(100% - 24px)"
-          otpInput.style.margin = "8px auto 0"
-          otpInput.style.boxSizing = "border-box"
-        }
-        const popup = Swal.getPopup()
-        if (popup) {
-          popup.style.position = "relative"
-          popup.style.overflow = "hidden"
-          const bar = document.createElement("div")
-          bar.style.position = "absolute"
-          bar.style.left = "12px"
-          bar.style.right = "12px"
-          bar.style.bottom = "8px"
-          bar.style.height = "3px"
-          bar.style.width = "auto"
-          bar.style.background = "#6d28d9"
-          bar.style.borderRadius = "9999px"
-          bar.style.transformOrigin = "left center"
-          bar.style.transition = "transform 10s linear"
-          popup.appendChild(bar)
-          requestAnimationFrame(() => {
-            bar.style.transform = "scaleX(0)"
-          })
-        }
-      },
-      inputValidator: (value) => {
-        if (!value) return "กรุณากรอก OTP"
-        if (!/^\d{4}$/.test(value)) return "OTP ต้องเป็นตัวเลข 4 หลัก"
-        return undefined
-      },
-    })
+    const verifyResult = await openConfirmOtpSwal(channelLabel)
     if (verifyResult.dismiss === Swal.DismissReason.timer || verifyResult.dismiss === Swal.DismissReason.cancel) {
       const timeoutResult = await recordOTPTimeout(tel.trim())
       if (timeoutResult.status === "banned") {
-        setErrorMessage(`คุณใส่ OTP ไม่ทันครบ 2 ครั้ง ระบบระงับ${channelLabel}นี้ 5 นาที`)
+        setErrorMessage(`คุณใส่รหัสยืนยันไม่ทันครบ 2 ครั้ง ระบบระงับ${channelLabel}นี้ 5 นาที`)
         return false
       }
       if (verifyResult.dismiss === Swal.DismissReason.cancel) {
-        setErrorMessage("คุณยกเลิกการยืนยัน OTP")
+        setErrorMessage("คุณยกเลิกการยืนยันรหัสยืนยัน")
       } else {
-        setErrorMessage("หมดเวลาใส่ OTP กรุณาลองใหม่อีกครั้ง")
+        setErrorMessage("หมดเวลาใส่รหัสยืนยัน กรุณาลองใหม่อีกครั้ง")
       }
       return false
     }
@@ -287,7 +231,7 @@ export default function ProfilePage() {
       pin: verifyResult.value,
     })
     if (!verified) {
-      setErrorMessage("OTP ไม่ถูกต้อง")
+      setErrorMessage("รหัสยืนยันไม่ถูกต้อง")
       return false
     }
     return true
@@ -378,23 +322,19 @@ export default function ProfilePage() {
   return (
     <AppPageShell>
       <main className={APP_PAGE_INNER}>
-        <div className="mb-8 flex flex-col gap-4 border-b border-slate-200/80 pb-6 dark:border-slate-700/80">
-          <div>
-            <Link
-              href="/"
-              className="mb-2 inline-flex items-center gap-2 text-sm text-muted transition hover:text-slate-800 dark:hover:text-slate-200"
-            >
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                <Icon name="fa-house" aria-hidden />
-              </span>
-              กลับหน้าหลัก
-            </Link>
-            <h1 className="text-heading text-2xl font-bold tracking-tight sm:text-3xl">โปรไฟล์ของฉัน</h1>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-body">
-              อัปเดตข้อมูลส่วนตัว ที่อยู่ และบัญชีธนาคาร
-            </p>
-          </div>
-        </div>
+        <AppPageHeader
+          title="โปรไฟล์ของฉัน"
+          description={
+            <>
+              อัปเดตข้อมูลส่วนตัว ที่อยู่ และบัญชีธนาคาร ·{" "}
+              <Link href="/account/privacy" className="font-medium text-brand-600 underline dark:text-brand-400">
+                จัดการข้อมูลส่วนตัว (PDPA)
+              </Link>
+            </>
+          }
+          icon="fa-user"
+          {...PAGE_BACK.home}
+        />
 
         {loading ? (
           <div className="form-section-card p-8">
@@ -411,8 +351,12 @@ export default function ProfilePage() {
                 <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-label">รหัสผู้ใช้</label>
-                      <input className="form-input bg-slate-50 dark:bg-slate-800/80" value={userID} disabled />
+                      <label className="mb-1 block text-sm font-medium text-label">รหัสระบบ</label>
+                      <input className="form-input bg-slate-50 dark:bg-slate-800/80 font-mono text-xs" value={userID} disabled />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-label">เลขบัตรประชาชน</label>
+                      <input className="form-input bg-slate-50 dark:bg-slate-800/80" value={nationalID} disabled />
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-label">เบอร์โทรศัพท์</label>
@@ -546,7 +490,7 @@ export default function ProfilePage() {
                       <span className="mt-0.5 shrink-0 text-emerald-600">
                         <Icon name="fa-circle-check" aria-hidden />
                       </span>
-                      แก้ไขข้อมูลแล้วต้องยืนยัน OTP ทางเบอร์นี้ทุกครั้ง
+                      แก้ไขข้อมูลแล้วต้องยืนยันรหัสยืนยันทางเบอร์นี้ทุกครั้ง
                     </li>
                     <li className="flex gap-2">
                       <span className="mt-0.5 shrink-0 text-emerald-600">

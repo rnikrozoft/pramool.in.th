@@ -1,162 +1,123 @@
 "use client"
 
-import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import type { PublicAuctionListItem } from "@/app/lib/api/auction"
+import { isHomeShowcaseMockItem } from "@/app/lib/data/homeShowcaseMocks"
+import PublicAuctionCard from "@/app/components/auctions/PublicAuctionCard"
 import Icon from "@/app/components/Icon"
 
-export type ShowcaseItem = {
-  id: string
-  name: string
-  price: string
-  image: string
-  countdown: string
-  bidders: number
-  badge?: "hot" | "new" | "ending"
-}
+export default function HomeAuctionShowcase({ items }: { items: PublicAuctionListItem[] }) {
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const [canScrollPrev, setCanScrollPrev] = useState(false)
+  const [canScrollNext, setCanScrollNext] = useState(false)
 
-const badgeStyle: Record<NonNullable<ShowcaseItem["badge"]>, string> = {
-  hot: "bg-gradient-to-r from-rose-500 to-red-500 text-white",
-  new: "bg-gradient-to-r from-emerald-500 to-teal-500 text-white",
-  ending: "bg-gradient-to-r from-orange-500 to-amber-500 text-white",
-}
-
-const badgeLabel: Record<NonNullable<ShowcaseItem["badge"]>, string> = {
-  hot: "มาแรง",
-  new: "ใหม่",
-  ending: "ใกล้ปิด",
-}
-
-const barColor: Record<NonNullable<ShowcaseItem["badge"]>, string> = {
-  hot: "bg-gradient-to-r from-rose-500 to-red-500",
-  new: "bg-gradient-to-r from-emerald-500 to-teal-500",
-  ending: "bg-gradient-to-r from-orange-500 to-amber-500",
-}
-
-function useCountdown(iso: string) {
-  const end = useMemo(() => new Date(iso).getTime(), [iso])
-  const [, setT] = useState(0)
-  useEffect(() => {
-    const id = setInterval(() => setT((x) => x + 1), 1000)
-    return () => clearInterval(id)
+  const syncScrollButtons = useCallback(() => {
+    const el = scrollerRef.current
+    if (!el) return
+    const max = el.scrollWidth - el.clientWidth
+    setCanScrollPrev(el.scrollLeft > 8)
+    setCanScrollNext(el.scrollLeft < max - 8)
   }, [])
-  const now = Date.now()
-  if (!Number.isFinite(end) || end <= now) return "ปิดแล้ว"
-  let sec = Math.floor((end - now) / 1000)
-  const d = Math.floor(sec / 86400)
-  sec %= 86400
-  const h = Math.floor(sec / 3600)
-  sec %= 3600
-  const m = Math.floor(sec / 60)
-  const s = sec % 60
-  if (d > 0) return `เหลือ ${d} วัน ${h} ชม.`
-  if (h > 0) return `เหลือ ${h} ชม. ${m} นาที`
-  return `เหลือ ${m} นาที ${s} วินาที`
-}
 
-export default function HomeAuctionShowcase({ items }: { items: ShowcaseItem[] }) {
-  return (
-    <section className="relative overflow-hidden bg-surface-page py-16 sm:py-20">
-      <div
-        className="pointer-events-none absolute -left-32 top-12 h-72 w-72 rounded-full bg-gradient-to-br from-violet-100/70 via-fuchsia-100/40 to-transparent blur-3xl"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute -right-32 bottom-12 h-72 w-72 rounded-full bg-gradient-to-br from-amber-100/70 via-orange-100/40 to-transparent blur-3xl"
-        aria-hidden
-      />
-      <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
-        <div className="mb-10 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <span className="home-eyebrow">
-              <Icon name="fa-star" className="text-[10px]" aria-hidden />
-              คัดมาให้คุณ
-            </span>
-            <h2 className="font-display mt-3 text-2xl font-bold text-heading md:text-3xl lg:text-4xl">
-              ประมูล
-              <span className="home-gradient-text">น่าสนใจ</span>
-            </h2>
-            <p className="mt-2 max-w-xl text-sm text-body sm:text-base">
-              รายการยอดนิยม ใกล้ปิดประมูล และของใหม่ล่าสุด
-            </p>
-          </div>
-          <Link
-            href="/auctions"
-            className="group inline-flex items-center gap-2 self-start rounded-full border border-brand-200 bg-surface-card px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950/50 sm:self-auto"
-          >
-            ดูทั้งหมด
-            <Icon
-              name="fa-arrow-right"
-              className="text-xs transition group-hover:translate-x-0.5"
-              aria-hidden
-            />
-          </Link>
-        </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {items.map((item) => (
-            <ShowcaseCard key={item.id} item={item} />
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
+  useEffect(() => {
+    syncScrollButtons()
+    const el = scrollerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => syncScrollButtons())
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [items, syncScrollButtons])
 
-function ShowcaseCard({ item }: { item: ShowcaseItem }) {
-  const line = useCountdown(item.countdown)
-  const badge = item.badge ?? "new"
-  const pct = badge === "ending" ? 78 : badge === "hot" ? 62 : 40
+  const scrollByPage = useCallback((dir: -1 | 1) => {
+    const el = scrollerRef.current
+    if (!el) return
+    const step = Math.max(el.clientWidth * 0.85, 280)
+    el.scrollBy({ left: dir * step, behavior: "smooth" })
+  }, [])
+
+  const showNav = items.length > 4
+  const isCarousel = items.length > 4
 
   return (
-    <article className="home-card home-card-hover group overflow-hidden">
-      <div className="relative overflow-hidden">
-        <Image
-          src={item.image}
-          alt={item.name}
-          width={400}
-          height={280}
-          className="aspect-[4/3] w-full object-cover transition duration-500 group-hover:scale-[1.05]"
-        />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-slate-900/30 to-transparent opacity-0 transition group-hover:opacity-100" />
-        <span
-          className={`absolute left-2 top-2 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide shadow-sm sm:text-[11px] ${badgeStyle[badge]}`}
-        >
-          {badgeLabel[badge]}
-        </span>
-        <button
-          type="button"
-          className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-surface-card/95 text-muted shadow-md ring-1 ring-slate-200/80 transition hover:scale-105 hover:text-rose-500 dark:ring-slate-600"
-          aria-label="รายการโปรด"
-        >
-          <Icon name="fa-heart" aria-hidden />
-        </button>
-      </div>
-      <div className="p-4">
-        <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug text-heading">{item.name}</h3>
-        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-50/80 px-2.5 py-1 text-xs font-semibold text-brand-700 ring-1 ring-brand-100 dark:bg-brand-950/50 dark:text-brand-300 dark:ring-brand-800">
-          <Icon name="fa-clock" className="opacity-90" aria-hidden />
-          {line}
-        </p>
-        <div className="mt-3 flex items-end justify-between gap-2">
-          <div>
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted">ราคาปัจจุบัน</p>
-            <p className="home-gradient-text font-display text-lg font-bold sm:text-xl">{item.price}</p>
-          </div>
-          <div className="text-right text-xs text-muted">
-            ผู้ประมูล <span className="font-bold text-heading">{item.bidders}</span>
-          </div>
-        </div>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-          <div className={`h-full rounded-full transition-all ${barColor[badge]}`} style={{ width: `${pct}%` }} />
+    <section className="home-container home-section-tight">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="font-display text-xl font-bold text-heading sm:text-2xl">
+            การประมูลที่น่าสนใจ
+          </h2>
+          <p className="mt-1 text-sm text-body">รายการใกล้ปิดประมูลและยอดนิยมจากระบบจริง</p>
         </div>
         <Link
           href="/auctions"
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-fuchsia-600 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-600/20 transition hover:shadow-lg hover:shadow-brand-700/30"
+          className="inline-flex items-center gap-1 self-start text-sm font-semibold text-brand-700 transition hover:text-brand-800 dark:text-brand-400"
         >
-          <Icon name="fa-bolt" className="text-xs" aria-hidden />
-          ประมูลตอนนี้
+          ดูทั้งหมด
+          <Icon name="fa-chevron-right" className="text-xs" aria-hidden />
         </Link>
       </div>
-    </article>
+
+      {items.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-900">
+          <p className="text-sm text-body">ยังไม่มีรายการที่กำลังประมูล</p>
+          <Link href="/auctions" className="mt-3 inline-flex text-sm font-semibold text-brand-700">
+            ไปหน้ารายการประมูล
+          </Link>
+        </div>
+      ) : (
+        <div className="relative">
+          {showNav ? (
+            <>
+              <button
+                type="button"
+                aria-label="เลื่อนซ้าย"
+                disabled={!canScrollPrev}
+                onClick={() => scrollByPage(-1)}
+                className="absolute -left-3 top-[42%] z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-brand-700 shadow-md transition hover:bg-brand-50 disabled:pointer-events-none disabled:opacity-0 xl:flex dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-brand-950/40"
+              >
+                <Icon name="fa-chevron-left" className="text-sm" aria-hidden />
+              </button>
+              <button
+                type="button"
+                aria-label="เลื่อนขวา"
+                disabled={!canScrollNext}
+                onClick={() => scrollByPage(1)}
+                className="absolute -right-3 top-[42%] z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-brand-700 shadow-md transition hover:bg-brand-50 disabled:pointer-events-none disabled:opacity-0 xl:flex dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-brand-950/40"
+              >
+                <Icon name="fa-chevron-right" className="text-sm" aria-hidden />
+              </button>
+            </>
+          ) : null}
+
+          <div
+            ref={scrollerRef}
+            onScroll={isCarousel ? syncScrollButtons : undefined}
+            className={
+              isCarousel
+                ? "flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory overscroll-x-contain pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                : "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+            }
+          >
+            {items.map((item, index) => (
+              <div
+                key={item.auction_id}
+                className={
+                  isCarousel
+                    ? "w-[min(100%,20rem)] shrink-0 snap-start sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.67rem)] xl:w-[calc(25%-0.75rem)]"
+                    : undefined
+                }
+              >
+                <PublicAuctionCard
+                  item={item}
+                  imageLoading={index < 4 ? "eager" : "lazy"}
+                  viewerCount={isHomeShowcaseMockItem(item.auction_id) ? 3 + index : 0}
+                  productHref={isHomeShowcaseMockItem(item.auction_id) ? "/auctions" : undefined}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   )
 }

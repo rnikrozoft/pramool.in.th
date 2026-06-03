@@ -10,6 +10,23 @@ type QueuedToast = {
   timer: number
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
+const toastBase = {
+  toast: true as const,
+  position: "top-end" as const,
+  showConfirmButton: false,
+  timerProgressBar: false,
+  showCloseButton: false,
+  animation: false,
+}
+
 export function queueNotify(icon: SweetAlertIcon, title: string = "เกิดข้อผิดพลาด", timer: number = 2000) {
   try {
     const payload: QueuedToast = { icon, title, timer }
@@ -37,16 +54,21 @@ export function notify(icon: SweetAlertIcon, title: string = "เกิดข้
   const displayTitle = icon === "error" ? userFacingMessage(title, defaultErr) : title
   const text =
     icon === "error" && title === defaultErr ? "ลองใหม่อีกครั้ง หรือกรุณาติดต่อทีมดูแล" : ""
+
+  if (text) {
+    return Swal.fire({
+      icon,
+      html: `<div class="swal-notify-stack"><p class="swal-notify-stack__title">${escapeHtml(displayTitle)}</p><p class="swal-notify-stack__text">${escapeHtml(text)}</p></div>`,
+      ...toastBase,
+      timer,
+      customClass: { popup: "swal-notify-toast--stacked" },
+    })
+  }
+
   return Swal.fire({
     icon,
     title: displayTitle,
-    text,
-    toast: true,
-    position: "top-end",
-    showConfirmButton: false,
+    ...toastBase,
     timer,
-    timerProgressBar: false,
-    showCloseButton: true,
-    animation: false,
   })
 }

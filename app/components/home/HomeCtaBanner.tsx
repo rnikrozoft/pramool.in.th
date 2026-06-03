@@ -19,10 +19,6 @@ export default function HomeCtaBanner() {
         className="pointer-events-none absolute -left-24 -bottom-12 h-80 w-80 rounded-full bg-fuchsia-400/30 blur-3xl"
         aria-hidden
       />
-      <div
-        className="pointer-events-none absolute right-12 top-12 hidden h-20 w-20 rotate-12 rounded-3xl bg-white/10 ring-1 ring-white/20 backdrop-blur-sm lg:block"
-        aria-hidden
-      />
       <div className="relative mx-auto flex max-w-7xl flex-col items-center justify-between gap-10 px-4 lg:flex-row lg:items-center lg:gap-12 sm:px-6">
         <div className="max-w-2xl text-center lg:text-left">
           <span className="home-eyebrow-on-dark">

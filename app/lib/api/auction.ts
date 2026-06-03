@@ -15,12 +15,13 @@ export type CreateAuctionPayload = {
     title: string;
     /** หมวดหลายรายการคั่นด้วย | สูงสุด 5 — ต้องตรงกับ whitelist ฝั่งเซิร์ฟเวอร์ */
     category: string;
-    condition: string;
     description: string;
     startPrice: number;
     bidStep: number;
     endAtISO: string;
     allowEarlyClose: boolean;
+    allowBidCancel?: boolean;
+    autoRenew: boolean;
     /** 0 = ไม่ใช้ — ถ้าผู้ประมูลเสนอราคาถึงยอดนี้ ระบบจะปิดรายการทันที */
     buyNowPrice: number;
     images: File[];
@@ -40,18 +41,16 @@ export type SellerAuctionItem = {
     cover_image_url: string;
     buy_now_price?: number;
     allow_early_close?: boolean;
+    auto_renew?: boolean;
     reopen_eligible?: boolean;
     pending_seller_payout?: boolean;
     seller_shipped_at?: string;
     /** RFC3339 — ช่วงหน่วงไม่รับบิดหลังผู้ขายกดปิดก่อนเวลา */
     bidding_paused_until?: string;
-    /** คะแนนดาวจากผู้ซื้อ (0.5–5) หลังยืนยันรับของ */
-    buyer_rating?: number;
-    /** คะแนนที่ผู้ขายได้จากรีวิว (= ดาว × 2) */
-    buyer_review_points?: number;
     /** ชื่อผู้ชนะ — มีเมื่อปิดประมูลแล้วและมีผู้ชนะ */
     winner_display_name?: string;
     winner_id?: string;
+    created_at?: string;
 };
 
 export type AuctionDetail = {
@@ -60,7 +59,6 @@ export type AuctionDetail = {
     winner_id?: string;
     title: string;
     category: string;
-    condition: string;
     description: string;
     start_price: number;
     current_bid: number;
@@ -69,12 +67,19 @@ export type AuctionDetail = {
     status: string;
     end_at: string;
     allow_early_close: boolean;
+    allow_bid_cancel?: boolean;
+    auto_renew?: boolean;
     reopen_eligible?: boolean;
     cover_image_url: string;
     images: string[];
-    /** รอจ่ายผู้ขายจนกว่าผู้ซื้อจะยืนยันรับของ */
+    /** รอจ่ายผู้ขายจนกว่าพัสดุส่งถึง (Delivered) */
     pending_seller_payout?: boolean;
     seller_shipped_at?: string;
+    carrier_code?: string;
+    carrier_name?: string;
+    tracking_number?: string;
+    shipment_status?: string;
+    can_confirm_received?: boolean;
     buyer_received_at?: string;
     seller_payout_at?: string;
     /** จำนวนวันนับจาก seller_shipped_at ก่อนระบบปลด escrow อัตโนมัติ (ถ้าเปิดใช้) */
@@ -95,12 +100,13 @@ export async function createSellerAuction(payload: CreateAuctionPayload): Promis
     const formData = new FormData();
     formData.append("title", payload.title);
     formData.append("category", payload.category);
-    formData.append("condition", payload.condition);
     formData.append("description", payload.description);
     formData.append("start_price", String(payload.startPrice));
     formData.append("bid_step", String(payload.bidStep));
     formData.append("end_at", payload.endAtISO);
     formData.append("allow_early_close", String(payload.allowEarlyClose));
+    formData.append("allow_bid_cancel", String(Boolean(payload.allowBidCancel)));
+    formData.append("auto_renew", String(payload.autoRenew));
     if (payload.buyNowPrice > 0) {
         formData.append("buy_now_price", String(payload.buyNowPrice));
     }
@@ -130,7 +136,7 @@ export async function createSellerAuction(payload: CreateAuctionPayload): Promis
 
 export type SellerAuctionListScope = "all" | "active" | "closed";
 
-export type SellerAuctionListSort = "latest" | "end" | "price";
+export type SellerAuctionListSort = "latest" | "end" | "price" | "start" | "step" | "bidders" | "status";
 
 export type SellerAuctionListResponse = {
     items: SellerAuctionItem[];
@@ -149,6 +155,7 @@ export async function getMySellerAuctions(params?: {
     scope?: SellerAuctionListScope;
     q?: string;
     sort?: SellerAuctionListSort;
+    order?: "asc" | "desc";
 }): Promise<SellerAuctionListResponse> {
     const sp = new URLSearchParams();
     if (params?.limit != null && params.limit > 0) sp.set("limit", String(params.limit));
@@ -156,7 +163,8 @@ export async function getMySellerAuctions(params?: {
     if (params?.scope && params.scope !== "all") sp.set("scope", params.scope);
     const searchQ = String(params?.q ?? "").trim();
     if (searchQ) sp.set("q", searchQ);
-    if (params?.sort && params.sort !== "latest") sp.set("sort", params.sort);
+    if (params?.sort) sp.set("sort", params.sort);
+    if (params?.order) sp.set("order", params.order);
     // Avoid stale browser cache on seller dashboard right after create/reopen/close actions.
     sp.set("_", String(Date.now()));
     const query = sp.toString();
@@ -193,18 +201,15 @@ export async function getAuctionDetail(auctionID: string): Promise<AuctionDetail
     return await response.json();
 }
 
-export async function closeAuctionEarly(auctionID: string): Promise<void> {
-    const response = await callPostAPI(`/auctions/${auctionID}/close-early`, {}, true, getAuctionRealtimeBaseUrl());
+export async function reportAuction(auctionID: string, reason = ""): Promise<{ report_id: number; message: string }> {
+    const response = await callPostAPI(
+        `/auctions/${encodeURIComponent(auctionID)}/report`,
+        { reason },
+        true,
+        getAuctionRealtimeBaseUrl(),
+    );
     if (!response.ok) {
-        throw new Error("Failed to close auction early");
-    }
-}
-
-/** ผู้ขายบันทึกว่าจัดส่งแล้ว (หลังประมูลปิดและมีผู้ชนะ) */
-export async function markAuctionShipped(auctionID: string): Promise<void> {
-    const response = await callPostAPI(`/auctions/${encodeURIComponent(auctionID)}/mark-shipped`, {}, true, getAuctionRealtimeBaseUrl());
-    if (!response.ok) {
-        let msg = "บันทึกการจัดส่งไม่สำเร็จ";
+        let msg = "ส่งเรื่องร้องเรียนไม่สำเร็จ";
         try {
             const data = (await response.json()) as { message?: string };
             if (data?.message) msg = data.message;
@@ -213,13 +218,51 @@ export async function markAuctionShipped(auctionID: string): Promise<void> {
         }
         throw new Error(msg);
     }
+    return (await response.json()) as { report_id: number; message: string };
 }
 
-/** ผู้ชนะยืนยันรับของ — ต้องส่ง rating (0.5–5 ดาว) ก่อน ระบบจึงโอนเครดิตให้ผู้ขาย */
-export async function confirmAuctionReceived(auctionID: string, rating: number): Promise<void> {
+export type CancelBidResult = {
+    auction_id: string;
+    refunded_baht: number;
+    forfeited_baht: number;
+    remaining_credit: number;
+    current_bid: number;
+    end_at: string;
+};
+
+export async function cancelBid(auctionID: string): Promise<CancelBidResult> {
+    const response = await callPostAPI(
+        `/auctions/${encodeURIComponent(auctionID)}/cancel-bid`,
+        {},
+        true,
+        getAuctionRealtimeBaseUrl(),
+    );
+    if (!response.ok) {
+        let msg = "ยกเลิกการเสนอราคาไม่สำเร็จ";
+        try {
+            const data = (await response.json()) as { message?: string };
+            if (data?.message) msg = data.message;
+        } catch {
+            /* ignore */
+        }
+        throw new Error(msg);
+    }
+    return (await response.json()) as CancelBidResult;
+}
+
+export async function closeAuctionEarly(auctionID: string): Promise<void> {
+    const response = await callPostAPI(`/auctions/${auctionID}/close-early`, {}, true, getAuctionRealtimeBaseUrl());
+    if (!response.ok) {
+        throw new Error("Failed to close auction early");
+    }
+}
+
+
+/** ผู้ชนะยืนยันรับของ — ต้องส่ง rating (0.5–5 ดาว) และ comment (ไม่บังคับ) */
+export async function confirmAuctionReceived(auctionID: string, rating: number, comment = ""): Promise<void> {
     const response = await callPostAPI(
         `/auctions/${encodeURIComponent(auctionID)}/confirm-received`,
-        { rating },
+        { rating, comment: comment.trim() },
         true,
         getAuctionRealtimeBaseUrl(),
     );
@@ -349,15 +392,17 @@ export type MyActiveBidItem = {
     end_at: string;
     /** ผู้ขายเปิดให้ปิดประมูลก่อนเวลาตามเงื่อนไขได้ */
     allow_early_close?: boolean;
-    /** ประมูลปิดแล้ว ผู้ขายส่งของแล้ว รอผู้ชนะกดยืนยันรับของ */
+    /** ประมูลปิดแล้ว ผู้ขายส่งของแล้ว — ผู้ชนะยืนยันรับของและให้คะแนนได้ตามสมัครใจ (+1 คะแนน) */
     can_confirm_received?: boolean;
+    shipment_status?: string;
     /** RFC3339 — ช่วงหน่วงไม่รับบิด */
     bidding_paused_until?: string;
+    created_at?: string;
 };
 
 export type ActiveBidListScope = "all" | "active" | "ending_soon" | "outbid" | "closed";
 
-export type ActiveBidListSort = "latest" | "end" | "price";
+export type ActiveBidListSort = "latest" | "end" | "price" | "start" | "step" | "my_bid" | "status";
 
 export type MyActiveBidsResponse = {
     items: MyActiveBidItem[];
@@ -378,6 +423,7 @@ export async function getMyActiveBids(params?: {
     scope?: ActiveBidListScope;
     q?: string;
     sort?: ActiveBidListSort;
+    order?: "asc" | "desc";
 }): Promise<MyActiveBidsResponse> {
     const sp = new URLSearchParams();
     if (params?.limit != null && params.limit > 0) sp.set("limit", String(params.limit));
@@ -385,7 +431,8 @@ export async function getMyActiveBids(params?: {
     if (params?.scope && params.scope !== "all") sp.set("scope", params.scope);
     const searchQ = String(params?.q ?? "").trim();
     if (searchQ) sp.set("q", searchQ);
-    if (params?.sort && params.sort !== "latest") sp.set("sort", params.sort);
+    if (params?.sort) sp.set("sort", params.sort);
+    if (params?.order) sp.set("order", params.order);
     sp.set("_", String(Date.now()));
     const query = sp.toString();
     const path = query ? `/my/active-bids?${query}` : "/my/active-bids";
@@ -423,12 +470,43 @@ export type MyBidHistoryItem = {
     my_highest_bid: number;
     final_price: number;
     last_bid_at: string;
+    end_at: string;
 };
 
-export async function getMyBidHistory(params?: { limit?: number; offset?: number }): Promise<MyBidHistoryItem[]> {
+export type BidHistoryListScope = "all" | "active" | "outbid" | "won" | "lost";
+
+export type BidHistoryListSort = "latest" | "price" | "my_bid" | "status" | "end";
+
+export type MyBidHistoryResponse = {
+    items: MyBidHistoryItem[];
+    total: number;
+    all_count: number;
+    active_count: number;
+    outbid_count: number;
+    won_count: number;
+    lost_count: number;
+    limit: number;
+    offset: number;
+    scope: string;
+};
+
+export async function getMyBidHistory(params?: {
+    limit?: number;
+    offset?: number;
+    scope?: BidHistoryListScope;
+    q?: string;
+    sort?: BidHistoryListSort;
+    order?: "asc" | "desc";
+}): Promise<MyBidHistoryResponse> {
     const sp = new URLSearchParams();
-    if (params?.limit != null && params.limit > 0) sp.set("limit", String(Math.min(params.limit, 100)));
-    if (params?.offset != null && params.offset >= 0) sp.set("offset", String(params.offset));
+    if (params?.limit != null && params.limit > 0) sp.set("limit", String(params.limit));
+    if (params?.offset != null && params.offset > 0) sp.set("offset", String(params.offset));
+    if (params?.scope && params.scope !== "all") sp.set("scope", params.scope);
+    const searchQ = String(params?.q ?? "").trim();
+    if (searchQ) sp.set("q", searchQ);
+    if (params?.sort) sp.set("sort", params.sort);
+    if (params?.order) sp.set("order", params.order);
+    sp.set("_", String(Date.now()));
     const q = sp.toString();
     const path = q ? `/my/bid-history?${q}` : "/my/bid-history";
     const response = await callGetAPI(path, true, getAuctionRealtimeBaseUrl());
@@ -438,8 +516,19 @@ export async function getMyBidHistory(params?: { limit?: number; offset?: number
     if (!response.ok) {
         throw new Error("Failed to fetch bid history");
     }
-    const data = (await response.json()) as { items?: MyBidHistoryItem[] };
-    return Array.isArray(data.items) ? data.items : [];
+    const data = (await response.json()) as Partial<MyBidHistoryResponse>;
+    return {
+        items: Array.isArray(data.items) ? data.items : [],
+        total: typeof data.total === "number" ? data.total : (Array.isArray(data.items) ? data.items.length : 0),
+        all_count: typeof data.all_count === "number" ? data.all_count : 0,
+        active_count: typeof data.active_count === "number" ? data.active_count : 0,
+        outbid_count: typeof data.outbid_count === "number" ? data.outbid_count : 0,
+        won_count: typeof data.won_count === "number" ? data.won_count : 0,
+        lost_count: typeof data.lost_count === "number" ? data.lost_count : 0,
+        limit: typeof data.limit === "number" ? data.limit : params?.limit ?? 10,
+        offset: typeof data.offset === "number" ? data.offset : params?.offset ?? 0,
+        scope: typeof data.scope === "string" ? data.scope : params?.scope ?? "all",
+    };
 }
 
 export type PublicAuctionBidderItem = {
@@ -475,6 +564,7 @@ export type PublicSellerReviewItem = {
     auction_id: string;
     auction_title: string;
     rating: number;
+    comment?: string;
     created_at: string;
 };
 
@@ -484,6 +574,7 @@ export type PublicUserProfile = {
     member_since: string;
     review_avg_rating: number;
     review_count: number;
+    seller_no_ship_count?: number;
     active_auctions: PublicAuctionListItem[];
     active_auctions_total: number;
     reviews: PublicSellerReviewItem[];
@@ -507,6 +598,42 @@ export async function getPublicUserProfile(userId: string): Promise<PublicUserPr
     return (await response.json()) as PublicUserProfile;
 }
 
+/** รายการประมูลที่ปิดแล้วของผู้ขาย (โปรไฟล์สาธารณะ) */
+export async function getPublicUserClosedAuctions(
+    userId: string,
+    limit = 24,
+    offset = 0,
+): Promise<{ items: PublicAuctionListItem[]; total: number; limit: number; offset: number }> {
+    const id = userId.trim();
+    if (!id) throw new Error("missing user id");
+    const sp = new URLSearchParams();
+    sp.set("limit", String(limit));
+    sp.set("offset", String(offset));
+    const response = await callGetAPI(
+        `/public/users/${encodeURIComponent(id)}/closed-auctions?${sp.toString()}`,
+        false,
+        getAuctionRealtimeBaseUrl(),
+    );
+    if (response.status === 404) {
+        throw new ResourceNotFoundError();
+    }
+    if (!response.ok) {
+        throw new Error("Failed to fetch closed auctions");
+    }
+    const data = (await response.json()) as {
+        items?: PublicAuctionListItem[];
+        total?: number;
+        limit?: number;
+        offset?: number;
+    };
+    return {
+        items: Array.isArray(data.items) ? data.items : [],
+        total: Number(data.total ?? 0),
+        limit: Number(data.limit ?? limit),
+        offset: Number(data.offset ?? offset),
+    };
+}
+
 export type PublicAuctionListItem = {
     auction_id: string;
     title: string;
@@ -517,10 +644,17 @@ export type PublicAuctionListItem = {
     total_bids: number;
     bidder_count: number;
     end_at: string;
+    status?: string;
     cover_image_url: string;
     buy_now_price?: number;
     /** ผู้ขายเปิดให้ปิดประมูลก่อนเวลาได้ */
     allow_early_close?: boolean;
+    /** ผู้ขายเปิดให้ผู้ประมูลยกเลิกการบิดได้ */
+    allow_bid_cancel?: boolean;
+    seller_display_name?: string;
+    seller_id?: string;
+    seller_review_avg_rating?: number;
+    seller_review_count?: number;
 };
 
 export type AuctionListSort =
@@ -532,9 +666,13 @@ export type AuctionListSort =
     | "price_desc"
     | "ending_soon";
 
+export type AuctionListEndedScope = "open" | "closed" | "any";
+
 export async function listPublicAuctions(params: {
     q?: string;
     category?: string;
+    /** open = กำลังประมูล, closed = ปิดแล้ว, any = ทั้งคู่ */
+    ended?: AuctionListEndedScope;
     /** Filter by current winning bid */
     min_price?: number;
     max_price?: number;
@@ -542,6 +680,8 @@ export async function listPublicAuctions(params: {
     max_start_price?: number;
     min_bid_step?: number;
     max_bid_step?: number;
+    /** คะแนนเฉลี่ยผู้ขายขั้นต่ำ (0.5–5 ดาว) */
+    min_seller_rating?: number;
     /** YYYY-MM-DD — ปิดประมูลในวันที่ (เขตไทย) ไม่ก่อนนี้ */
     end_from?: string;
     /** YYYY-MM-DD — ปิดประมูลในวันที่ ไม่หลังนี้ */
@@ -553,6 +693,7 @@ export async function listPublicAuctions(params: {
     const sp = new URLSearchParams();
     if (params.q?.trim()) sp.set("q", params.q.trim());
     if (params.category?.trim()) sp.set("category", params.category.trim());
+    if (params.ended && params.ended !== "open") sp.set("ended", params.ended);
     if (params.min_price != null && !Number.isNaN(params.min_price) && params.min_price >= 0) {
         sp.set("min_price", String(params.min_price));
     }
@@ -571,6 +712,9 @@ export async function listPublicAuctions(params: {
     if (params.max_bid_step != null && !Number.isNaN(params.max_bid_step) && params.max_bid_step > 0) {
         sp.set("max_bid_step", String(params.max_bid_step));
     }
+    if (params.min_seller_rating != null && !Number.isNaN(params.min_seller_rating) && params.min_seller_rating >= 0.5) {
+        sp.set("min_seller_rating", String(params.min_seller_rating));
+    }
     if (params.end_from?.trim()) sp.set("end_from", params.end_from.trim());
     if (params.end_to?.trim()) sp.set("end_to", params.end_to.trim());
     if (params.sort) sp.set("sort", params.sort);
@@ -584,7 +728,14 @@ export async function listPublicAuctions(params: {
         signal: options?.signal,
     });
     if (!response.ok) {
-        throw new Error("Failed to fetch auctions");
+        let detail = "";
+        try {
+            const errBody = await response.json();
+            if (errBody && typeof errBody.message === "string") detail = errBody.message;
+        } catch {
+            /* ignore */
+        }
+        throw new Error(detail ? `Failed to fetch auctions: ${detail}` : "Failed to fetch auctions");
     }
     const data = await response.json();
     return {

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import React, { memo, Suspense, useCallback, useEffect, useMemo, useState } from "react"
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   type AuctionListSort,
@@ -9,10 +9,12 @@ import {
   fetchAuctionRoomPresence,
 } from "@/app/lib/api/auction"
 import { listPublicAuctionsCached } from "@/app/lib/data/publicAuctionsCache"
-import { getCoreApiBaseUrl } from "@/app/lib/constants/common"
 import { APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
+import { useCategoryBarLabels } from "@/app/lib/hooks/useProductCategories"
 import { CategoryMultiSelect } from "@/app/seller/auctions/new/CategoryMultiSelect"
 import Icon from "@/app/components/Icon"
+import PublicAuctionCard from "@/app/components/auctions/PublicAuctionCard"
+import { isAuctionClosed } from "@/app/lib/auctions/publicAuctionCardUtils"
 import { bahtFromInput, blockBahtDecimalKey } from "@/app/lib/money/baht"
 
 type SortOption = AuctionListSort
@@ -41,200 +43,17 @@ function parseCategoriesParam(v: string | null): string[] {
     .filter(Boolean)
 }
 
-/** URL/API: ไม่กรองหมวด — รวมถึงค่าว่างหรือคำว่า «ทั้งหมด» */
-function isAllCategoriesLabel(c: string | null | undefined): boolean {
-  const t = (c ?? "").trim()
-  return t === "" || t === "ทั้งหมด"
-}
-
-const categories = [
-  "ทั้งหมด",
-  "เครื่องใช้ไฟฟ้า",
-  "โทรศัพท์มือถือ",
-  "แท็บเล็ต",
-  "คอมพิวเตอร์",
-  "กล้องถ่ายรูป",
-  "แฟชั่น",
-  "ของสะสม",
-  "อื่นๆ",
-]
-
 const POLL_MS = 90_000
 const FILTER_DEBOUNCE_MS = 450
 
-function coverImageUrl(path: string | undefined): string {
-  const u = path?.trim() ?? ""
-  if (!u) return "https://placehold.co/600x400?text=Pramool"
-  if (u.startsWith("http://") || u.startsWith("https://")) return u
-  return `${getCoreApiBaseUrl()}${u.startsWith("/") ? "" : "/"}${u}`
-}
-
-/** แสดงหน่วยเดียวแบบย่อ: วัน (>24ชม.) → ชม. (>60นาที) → นาที → วินาที */
-function formatCountdown(endMs: number): string {
-  const now = Date.now()
-  if (!Number.isFinite(endMs) || endMs <= now) return "ปิดแล้ว"
-  const totalSec = Math.floor((endMs - now) / 1000)
-  if (totalSec >= 86400) {
-    const days = Math.floor(totalSec / 86400)
-    return `${days} วัน`
-  }
-  if (totalSec >= 3600) {
-    const hours = Math.floor(totalSec / 3600)
-    return `${hours} ชม.`
-  }
-  if (totalSec >= 60) {
-    const minutes = Math.floor(totalSec / 60)
-    return `${minutes} นาที`
-  }
-  return `${totalSec} วินาที`
-}
-
-type CardAccent = "orange" | "red" | "purple" | "slate"
-
-function cardAccentForItem(item: PublicAuctionListItem, now: number): CardAccent {
-  const endMs = new Date(item.end_at).getTime()
-  if (endMs <= now) return "slate"
-  const left = endMs - now
-  const bids = Number(item.total_bids ?? 0)
-  const bidders = Number(item.bidder_count ?? 0)
-  if (left <= 3600000) return "orange"
-  if (bids >= 8 || bidders >= 4) return "red"
-  return "purple"
-}
-
-type BadgeSpec = { label: string; className: string }
-
-function badgesForItem(item: PublicAuctionListItem, now: number): BadgeSpec[] {
-  const endMs = new Date(item.end_at).getTime()
-  const closed = endMs <= now
-  if (closed) return [{ label: "ปิดประมูลแล้ว", className: "bg-slate-600 text-white" }]
-
-  const left = endMs - now
-  const bids = Number(item.total_bids ?? 0)
-  const bidders = Number(item.bidder_count ?? 0)
-  const buyNow = Number(item.buy_now_price ?? 0)
-  const out: BadgeSpec[] = []
-
-  if (left <= 3600000) out.push({ label: "ใกล้ปิดประมูล", className: "bg-orange-500 text-white" })
-  if (bids >= 8 || bidders >= 4) out.push({ label: "กำลังมาแรง", className: "bg-red-500 text-white" })
-  if (bids === 0) out.push({ label: "ใหม่", className: "bg-emerald-500 text-white" })
-  if (buyNow > 0) out.push({ label: "พรีเมียม", className: "bg-brand-600 text-white" })
-
-  if (out.length === 0) return []
-  return out.slice(0, 2)
-}
-
-const accentTimer: Record<CardAccent, string> = {
-  orange: "text-orange-600",
-  red: "text-red-600",
-  purple: "text-brand-600",
-  slate: "text-slate-500",
-}
-
-const AuctionCard = memo(function AuctionCard({
-  item,
-  imageLoading,
-  viewerCount,
-}: {
-  item: PublicAuctionListItem
-  imageLoading: "eager" | "lazy"
-  viewerCount: number
-}) {
-  const endMs = useMemo(() => new Date(item.end_at).getTime(), [item.end_at])
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    const id = window.setInterval(() => setTick((x) => x + 1), 1000)
-    return () => window.clearInterval(id)
-  }, [])
-  const now = Date.now()
-  const accent = cardAccentForItem(item, now)
-  const badges = badgesForItem(item, now)
-  const line = formatCountdown(endMs)
-  const current = Number(item.current_bid ?? 0)
-  const start = Number(item.start_price ?? 0)
-  const step = Number(item.bid_step ?? 0)
-  const showEarlyCloseBadge = Boolean(item.allow_early_close) && endMs > now
-
-  const imageBlock = (
-    <div className="relative shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-800">
-      <img
-        src={coverImageUrl(item.cover_image_url)}
-        alt={item.title}
-        className="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.03]"
-        loading={imageLoading}
-        decoding="async"
-      />
-      <div className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-col gap-1">
-        {showEarlyCloseBadge && (
-          <span
-            className="max-w-full rounded-md bg-amber-500 px-2 py-0.5 text-[10px] font-bold leading-snug text-amber-950 shadow-sm ring-1 ring-amber-600/20"
-            title="ผู้ขายอาจปิดการประมูลก่อนถึงเวลาที่กำหนด"
-          >
-            ปิดก่อนเวลาได้
-          </span>
-        )}
-        {badges.length > 0 && (
-          <div className="flex max-w-full flex-wrap gap-1">
-            {badges.map((b) => (
-              <span key={b.label} className={`rounded-md px-2 py-0.5 text-[10px] font-semibold shadow-sm ${b.className}`}>
-                {b.label}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-      <span
-        className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-bold tabular-nums text-slate-800 shadow-md ring-1 ring-black/5"
-        title={`${viewerCount.toLocaleString()} คนกำลังดูในห้องประมูล`}
-        aria-label={`${viewerCount.toLocaleString()} คนกำลังดูในห้องประมูล`}
-      >
-        <Icon name="fa-eye" className="text-[0.7rem] text-slate-600" aria-hidden />
-        {viewerCount.toLocaleString()}
-      </span>
-    </div>
-  )
-
-  const categories = item.category.split("|").filter(Boolean)
-
-  const body = (
-    <div className="flex min-w-0 flex-1 flex-col p-3 sm:p-4">
-      <h2 className="line-clamp-2 font-display text-sm font-semibold leading-snug text-heading sm:text-base">{item.title}</h2>
-      {categories.length > 0 ? (
-        <p className="mt-1 text-xs text-muted">{categories.join(" · ")}</p>
-      ) : null}
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted">ราคาปัจจุบัน</p>
-          <p className="font-display text-xl font-bold text-brand-600 dark:text-brand-400 sm:text-2xl">{current.toLocaleString()} ฿</p>
-        </div>
-        <div className="max-w-[55%] text-right sm:max-w-[50%]">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted">เหลือเวลา</p>
-          <p className={`mt-0.5 flex items-center justify-end gap-1 font-display text-lg font-bold tabular-nums leading-tight sm:text-xl ${accentTimer[accent]}`}>
-            <Icon name="fa-clock" className="shrink-0 text-[0.85em] opacity-80" aria-hidden />
-            <span className="text-right">{line}</span>
-          </p>
-        </div>
-      </div>
-      <p className="mt-1 text-[11px] text-muted">
-        เริ่ม {start.toLocaleString()} ฿ · บิดขั้นต่ำ {step.toLocaleString()} ฿
-      </p>
-      <Link
-        href={`/product/${item.auction_id}`}
-        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
-      >
-        <Icon name="fa-bolt" className="text-xs" aria-hidden />
-        ประมูลตอนนี้
-      </Link>
-    </div>
-  )
-
-  return (
-    <article className="auction-card">
-      {imageBlock}
-      {body}
-    </article>
-  )
-})
+const SELLER_RATING_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "ทั้งหมด" },
+  { value: "3", label: "3 ดาวขึ้นไป" },
+  { value: "3.5", label: "3.5 ดาวขึ้นไป" },
+  { value: "4", label: "4 ดาวขึ้นไป" },
+  { value: "4.5", label: "4.5 ดาวขึ้นไป" },
+  { value: "5", label: "5 ดาว" },
+]
 
 function FilterCheckbox({
   checked,
@@ -263,18 +82,34 @@ function FilterCheckbox({
   )
 }
 
+function categoriesEqual(a: string[], b: string[]) {
+  return a.length === b.length && a.every((c, i) => c === b[i])
+}
+
+/** ส่ง ended scope ให้ API — filter ปิดแล้วต้องโหลดจาก server ไม่ใช่กรอง client อย่างเดียว */
+function endedScopeFromStatus(stActive: boolean, stNoBid: boolean, stClosed: boolean): "open" | "closed" | "any" {
+  if (stClosed && !stActive && !stNoBid) return "closed"
+  if (stClosed) return "any"
+  return "open"
+}
+
 function AuctionsPageInner() {
+  const categories = useCategoryBarLabels()
   const params = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
   const qParam = params.get("q") || ""
-  const initialCategories = parseCategoriesParam(params.get("category"))
+  const categoryParam = params.get("category") ?? ""
+  const initialCategories = parseCategoriesParam(categoryParam || null)
   const initialSort = parseSortParam(params.get("sort"))
+  const listFetchSeqRef = useRef(0)
 
   const [keyword, setKeyword] = useState(qParam)
   const [selectedCategories, setSelectedCategories] = useState<string[]>(initialCategories)
   const [minPrice, setMinPrice] = useState("")
   const [maxPrice, setMaxPrice] = useState("")
+  const [minBidStep, setMinBidStep] = useState("")
+  const [minSellerRating, setMinSellerRating] = useState("")
   const [sortBy, setSortBy] = useState<SortOption>(initialSort)
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
   const [items, setItems] = useState<PublicAuctionListItem[]>([])
@@ -287,6 +122,8 @@ function AuctionsPageInner() {
   const [appliedKeyword, setAppliedKeyword] = useState(qParam)
   const [appliedMinPrice, setAppliedMinPrice] = useState("")
   const [appliedMaxPrice, setAppliedMaxPrice] = useState("")
+  const [appliedMinBidStep, setAppliedMinBidStep] = useState("")
+  const [appliedMinSellerRating, setAppliedMinSellerRating] = useState("")
 
   const [stActive, setStActive] = useState(true)
   const [stNoBid, setStNoBid] = useState(true)
@@ -295,67 +132,65 @@ function AuctionsPageInner() {
   const [closing24h, setClosing24h] = useState(false)
   const [closing7d, setClosing7d] = useState(false)
 
-  /**
-   * เปลี่ยนหมวดจากแถบ/ดรอปดาวน์ — เมื่อเลือก «ทั้งหมด» ให้ล้างตัวกรอง «ปิดภายใน X»
-   * เพราะโหลดได้แค่ 100 รายการล่าสุดจาก API ถ้ายังติ๊กปิดใน 7 วัน อยู่ ชุด 100 รายการนั้นอาจไม่มีใครปิดทัน
-   * → กรองฝั่ง client แล้วเหลือ 0 ทั้งที่มีประมูลในระบบ
-   */
-  const applyCategoryChange = useCallback((c: string) => {
-    if (isAllCategoriesLabel(c)) {
-      setSelectedCategories([])
-    } else {
-      setSelectedCategories((prev) => {
-        if (prev.includes(c)) return prev.filter((x) => x !== c)
-        return [...prev, c]
-      })
-    }
-    if (isAllCategoriesLabel(c)) {
-      setClosing1h(false)
-      setClosing24h(false)
-      setClosing7d(false)
-    }
-  }, [])
+  const categoryFilter = useMemo(
+    () => (selectedCategories.length === 0 ? "" : selectedCategories.join(",")),
+    [selectedCategories],
+  )
+  const endedScope = useMemo(
+    () => endedScopeFromStatus(stActive, stNoBid, stClosed),
+    [stActive, stNoBid, stClosed],
+  )
 
   useEffect(() => {
     setKeyword(qParam)
+    setAppliedKeyword(qParam)
   }, [qParam])
 
   useEffect(() => {
-    setSelectedCategories(parseCategoriesParam(params.get("category")))
-  }, [params])
+    const next = parseCategoriesParam(categoryParam || null)
+    setSelectedCategories((prev) => (categoriesEqual(prev, next) ? prev : next))
+  }, [categoryParam])
 
   useEffect(() => {
     const id = window.setTimeout(() => {
       setAppliedKeyword(keyword)
       setAppliedMinPrice(minPrice)
       setAppliedMaxPrice(maxPrice)
+      setAppliedMinBidStep(minBidStep)
+      setAppliedMinSellerRating(minSellerRating)
     }, FILTER_DEBOUNCE_MS)
     return () => window.clearTimeout(id)
-  }, [keyword, minPrice, maxPrice])
+  }, [keyword, minPrice, maxPrice, minBidStep, minSellerRating])
 
   useEffect(() => {
     const sp = new URLSearchParams()
-    if (appliedKeyword.trim()) sp.set("q", appliedKeyword.trim())
-    if (selectedCategories.length > 0) sp.set("category", selectedCategories.join(","))
+    if (qParam.trim()) sp.set("q", qParam.trim())
+    if (categoryFilter) sp.set("category", categoryFilter)
     if (sortBy !== "newest") sp.set("sort", sortBy)
     const qs = sp.toString()
     const next = qs ? `${pathname}?${qs}` : pathname
     const cur = `${window.location.pathname}${window.location.search}`
     if (next === cur) return
     router.replace(next, { scroll: false })
-  }, [appliedKeyword, selectedCategories, sortBy, pathname, router])
+  }, [qParam, categoryFilter, sortBy, pathname, router])
 
   const loadList = useCallback(
     async (options?: { signal?: AbortSignal; bypassCache?: boolean }) => {
       const minNum = appliedMinPrice.trim() === "" ? undefined : Number(appliedMinPrice)
       const maxNum = appliedMaxPrice.trim() === "" ? undefined : Number(appliedMaxPrice)
+      const bidStepNum = appliedMinBidStep.trim() === "" ? undefined : Number(appliedMinBidStep)
+      const ratingNum = appliedMinSellerRating.trim() === "" ? undefined : Number(appliedMinSellerRating)
 
       return listPublicAuctionsCached(
         {
           q: appliedKeyword.trim() || undefined,
-          category: selectedCategories.length === 0 ? undefined : selectedCategories.join(","),
+          category: categoryFilter || undefined,
+          ended: endedScope,
           min_price: minNum !== undefined && !Number.isNaN(minNum) ? minNum : undefined,
           max_price: maxNum !== undefined && !Number.isNaN(maxNum) ? maxNum : undefined,
+          min_bid_step: bidStepNum !== undefined && !Number.isNaN(bidStepNum) && bidStepNum > 0 ? bidStepNum : undefined,
+          min_seller_rating:
+            ratingNum !== undefined && !Number.isNaN(ratingNum) && ratingNum >= 0.5 ? ratingNum : undefined,
           sort: sortBy,
           limit: 100,
           offset: 0,
@@ -363,30 +198,32 @@ function AuctionsPageInner() {
         { signal: options?.signal, bypassCache: options?.bypassCache },
       )
     },
-    [appliedKeyword, appliedMinPrice, appliedMaxPrice, selectedCategories, sortBy],
+    [appliedKeyword, appliedMinPrice, appliedMaxPrice, appliedMinBidStep, appliedMinSellerRating, categoryFilter, endedScope, sortBy],
   )
 
   useEffect(() => {
-    const ac = new AbortController()
+    const seq = ++listFetchSeqRef.current
     setListLoading(true)
     setListError("")
-    void loadList({ signal: ac.signal })
+    void loadList()
       .then((res) => {
+        if (seq !== listFetchSeqRef.current) return
         setItems(res.items)
         setTotal(res.total)
         setLastRefreshed(new Date())
       })
       .catch((err: unknown) => {
-        if (err instanceof Error && err.name === "AbortError") return
+        if (seq !== listFetchSeqRef.current) return
         setListError("ไม่สามารถโหลดรายการประมูลได้")
         setItems([])
         setTotal(0)
+        if (process.env.NODE_ENV === "development") {
+          console.error("listPublicAuctions failed:", err)
+        }
       })
       .finally(() => {
-        if (!ac.signal.aborted) setListLoading(false)
+        if (seq === listFetchSeqRef.current) setListLoading(false)
       })
-
-    return () => ac.abort()
   }, [loadList])
 
   useEffect(() => {
@@ -439,7 +276,7 @@ function AuctionsPageInner() {
     let c7d = 0
     for (const it of items) {
       const e = new Date(it.end_at).getTime()
-      if (e <= now) continue
+      if (isAuctionClosed(it, now)) continue
       const left = e - now
       if (left <= 3600000) c1h += 1
       if (left <= 86400000) c24h += 1
@@ -454,7 +291,7 @@ function AuctionsPageInner() {
     const noStatusToggles = !stActive && !stNoBid && !stClosed
     return items.filter((it) => {
       const endMs = new Date(it.end_at).getTime()
-      const closed = endMs <= now
+      const closed = isAuctionClosed(it, now)
       const bids = Number(it.total_bids ?? 0)
       const noBids = bids === 0 && !closed
       const active = !closed && bids > 0
@@ -464,7 +301,7 @@ function AuctionsPageInner() {
         typeOk = false
         if (stActive && active) typeOk = true
         if (stNoBid && noBids) typeOk = true
-        if (stClosed && closed) typeOk = true
+        if (stClosed && closed && bids === 0) typeOk = true
         if (!typeOk) return false
       }
 
@@ -493,9 +330,17 @@ function AuctionsPageInner() {
 
   const clearFilters = () => {
     setKeyword("")
+    setAppliedKeyword("")
     setSelectedCategories([])
     setMinPrice("")
     setMaxPrice("")
+    setAppliedMinPrice("")
+    setAppliedMaxPrice("")
+    setMinBidStep("")
+    setAppliedMinBidStep("")
+    setMinSellerRating("")
+    setAppliedMinSellerRating("")
+    setSortBy("newest")
     setStActive(true)
     setStNoBid(true)
     setStClosed(false)
@@ -522,7 +367,6 @@ function AuctionsPageInner() {
         />
       </div>
       <div>
-        <label className="mb-1.5 block text-xs font-semibold text-label">หมวดหมู่</label>
         <CategoryMultiSelect
           options={categories.filter((c) => c !== "ทั้งหมด")}
           value={selectedCategories}
@@ -567,16 +411,51 @@ function AuctionsPageInner() {
         </div>
       </div>
       <div>
+        <label className="mb-1.5 block text-xs font-semibold text-label" htmlFor="filter-min-bid-step">
+          ราคาบิดขั้นต่ำ (฿)
+        </label>
+        <input
+          id="filter-min-bid-step"
+          value={minBidStep}
+          onKeyDown={blockBahtDecimalKey}
+          onChange={(e) => {
+            const v = bahtFromInput(e.target.value)
+            setMinBidStep(v > 0 ? String(v) : "")
+          }}
+          placeholder="เช่น 10"
+          type="number"
+          step={1}
+          min={1}
+          className="form-input text-sm"
+        />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-xs font-semibold text-label" htmlFor="filter-seller-rating">
+          คะแนนผู้ขาย
+        </label>
+        <select
+          id="filter-seller-rating"
+          className="form-select text-sm"
+          value={minSellerRating}
+          onChange={(e) => setMinSellerRating(e.target.value)}
+        >
+          {SELLER_RATING_FILTER_OPTIONS.map((o) => (
+            <option key={o.value || "all"} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
         <p className="mb-2 text-xs font-semibold text-label">สถานะการประมูล</p>
         <div className="space-y-0.5">
           <FilterCheckbox checked={stActive} onChange={setStActive} label="กำลังประมูล" />
           <FilterCheckbox checked={stNoBid} onChange={setStNoBid} label="ยังไม่มีการประมูล" />
-          <FilterCheckbox checked={stClosed} onChange={setStClosed} label="ปิดประมูลแล้ว" />
+          <FilterCheckbox checked={stClosed} onChange={setStClosed} label="ปิดแล้วไม่มีผู้บิด" />
         </div>
       </div>
       <div>
         <p className="mb-2 text-xs font-semibold text-label">เวลาปิดประมูล</p>
-        <p className="mb-2 text-[11px] text-muted">เลือกอย่างน้อยหนึ่งช่วงเพื่อกรอง (ว่าง = ไม่กรองตามเวลา)</p>
         <div className="space-y-0.5">
           <FilterCheckbox checked={closing1h} onChange={setClosing1h} label="ภายใน 1 ชั่วโมง" count={closingStats.c1h} />
           <FilterCheckbox checked={closing24h} onChange={setClosing24h} label="ภายใน 24 ชั่วโมง" count={closingStats.c24h} />
@@ -602,56 +481,63 @@ function AuctionsPageInner() {
 
   return (
     <div className="page-shell">
-      <div className="surface-sticky-bar fixed inset-x-0 top-[65px] z-30 lg:hidden">
-        <div className="app-page-container flex items-center gap-2 py-2">
+      <div className="surface-sticky-bar fixed inset-x-0 top-[var(--mobile-nav-height)] z-30 lg:hidden">
+        <div className="app-page-container py-2.5">
           <button
             type="button"
-            className="flex-1 rounded-xl border border-violet-200 bg-surface-card px-3 py-2.5 text-sm font-medium text-body dark:border-violet-800"
+            className="w-full rounded-xl border border-violet-200 bg-surface-card px-3 py-2.5 text-sm font-medium text-body dark:border-violet-800"
             onClick={() => setIsMobileFilterOpen(true)}
           >
             <Icon name="fa-sliders" className="mr-2 text-brand-600" aria-hidden />
             ตัวกรอง
           </button>
-          <select
-            className="form-select min-w-0 flex-[1.2] text-sm"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
-          >
-            {sortOptions.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
 
-      {/* แถบหมวด + เรียงลำดับ — เต็มความกว้างหน้าจอ พื้นขาว */}
-      <div className="surface-bar w-full">
-        <div className="app-page-container pb-2.5 pt-20 sm:pt-[5.5rem] lg:pt-2">
-          <div className="flex items-center justify-between gap-3 sm:gap-4">
-            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {categories.map((c) => {
-                const active = c === "ทั้งหมด" ? selectedCategories.length === 0 : selectedCategories.includes(c)
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => applyCategoryChange(c)}
-                    className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium sm:px-4 sm:py-2 ${
-                      active ? "chip-active" : "chip"
-                    }`}
-                  >
-                    {c}
-                  </button>
-                )
-              })}
+      <main className="app-page-inner pt-[var(--mobile-auction-filter-height)] lg:pt-8">
+        <section className="relative lg:mt-4 lg:flex lg:flex-row lg:items-start lg:gap-8">
+          <aside className="hidden lg:sticky lg:top-24 lg:z-10 lg:block lg:w-72 lg:flex-shrink-0 lg:self-start">
+            <div className="surface-panel p-5">
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <h2 className="font-display text-base font-bold leading-none text-heading">ตัวกรองการค้นหา</h2>
+                <button
+                  type="button"
+                  className="shrink-0 text-xs font-medium leading-none text-muted hover:text-brand-600 dark:hover:text-brand-400"
+                  onClick={clearFilters}
+                >
+                  ล้างทั้งหมด
+                </button>
+              </div>
+              {filterPanel}
             </div>
-            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              <label className="hidden min-w-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-card px-2.5 py-1.5 pl-3 dark:border-slate-700 sm:flex">
-                <span className="whitespace-nowrap text-sm text-label">เรียงตาม</span>
+          </aside>
+
+          <div className="min-w-0 flex-1">
+            <div id="auction-results" className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h1 className="font-display text-xl font-bold text-heading sm:text-2xl">
+                    พบสินค้า{" "}
+                    <span className="text-brand-600 dark:text-brand-400">{listLoading ? "…" : displayedItems.length.toLocaleString()}</span> รายการ
+                  </h1>
+                  <div className="flex items-center gap-2 text-xs text-muted">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                    </span>
+                    อัปเดตล่าสุด {refreshedLabel}
+                  </div>
+                </div>
+                {!listLoading && total > items.length ? (
+                  <p className="mt-0.5 text-xs text-muted">
+                    แสดง {items.length.toLocaleString()} รายการล่าสุดจากทั้งหมด {total.toLocaleString()} รายการในระบบ
+                  </p>
+                ) : null}
+              </div>
+              <label className="flex w-full min-w-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-card px-2.5 py-1.5 pl-3 dark:border-slate-700 sm:w-auto sm:shrink-0">
+                <span className="shrink-0 whitespace-nowrap text-sm text-label">เรียงตาม</span>
                 <select
-                  className="max-w-[9.5rem] cursor-pointer border-0 bg-transparent py-0.5 text-sm font-semibold text-heading outline-none focus:ring-0 sm:max-w-[11rem]"
+                  className="min-w-0 flex-1 cursor-pointer border-0 bg-transparent py-0.5 pr-1 text-right text-sm font-semibold text-heading outline-none focus:ring-0 sm:max-w-[11rem] sm:flex-none sm:pr-0 sm:text-left"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as SortOption)}
                 >
@@ -662,45 +548,6 @@ function AuctionsPageInner() {
                   ))}
                 </select>
               </label>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <main className="app-page-inner">
-        <section className="relative mt-4 lg:flex lg:flex-row lg:items-start lg:gap-8">
-          <aside className="hidden lg:sticky lg:top-24 lg:z-10 lg:block lg:w-72 lg:flex-shrink-0 lg:self-start">
-            <div className="surface-panel p-5">
-              <div className="mb-4 flex items-start justify-between gap-2">
-                <h2 className="font-display text-base font-bold text-heading">ตัวกรองการค้นหา</h2>
-                <button type="button" className="shrink-0 text-xs font-medium text-muted hover:text-brand-600 dark:hover:text-brand-400" onClick={clearFilters}>
-                  ล้างทั้งหมด
-                </button>
-              </div>
-              {filterPanel}
-            </div>
-          </aside>
-
-          <div className="min-w-0 flex-1">
-            <div id="auction-results" className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h1 className="font-display text-xl font-bold text-heading sm:text-2xl">
-                  พบสินค้า{" "}
-                  <span className="text-brand-600 dark:text-brand-400">{listLoading ? "…" : displayedItems.length.toLocaleString()}</span> รายการ
-                </h1>
-                {!listLoading && total > items.length ? (
-                  <p className="mt-0.5 text-xs text-muted">
-                    แสดง {items.length.toLocaleString()} รายการล่าสุดจากทั้งหมด {total.toLocaleString()} รายการในระบบ
-                  </p>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-2 text-xs text-muted">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                </span>
-                อัปเดตล่าสุด {refreshedLabel}
-              </div>
             </div>
 
             {listError && (
@@ -730,7 +577,7 @@ function AuctionsPageInner() {
             ) : (
               <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {displayedItems.map((item, index) => (
-                  <AuctionCard
+                  <PublicAuctionCard
                     key={item.auction_id}
                     item={item}
                     imageLoading={index < 8 ? "eager" : "lazy"}
@@ -748,15 +595,25 @@ function AuctionsPageInner() {
               className="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-y-auto rounded-t-2xl bg-surface-card p-5 shadow-2xl dark:shadow-black/50"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-display text-base font-bold text-heading">ตัวกรองการค้นหา</h2>
-                <button type="button" className="text-sm font-medium text-muted" onClick={() => setIsMobileFilterOpen(false)}>
-                  ปิด
-                </button>
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <h2 className="font-display text-base font-bold leading-none text-heading">ตัวกรองการค้นหา</h2>
+                <div className="flex shrink-0 items-center gap-3">
+                  <button
+                    type="button"
+                    className="text-xs font-medium leading-none text-brand-600 dark:text-brand-400"
+                    onClick={clearFilters}
+                  >
+                    ล้างทั้งหมด
+                  </button>
+                  <button
+                    type="button"
+                    className="text-sm font-medium leading-none text-muted"
+                    onClick={() => setIsMobileFilterOpen(false)}
+                  >
+                    ปิด
+                  </button>
+                </div>
               </div>
-              <button type="button" className="mb-4 text-xs font-medium text-brand-600 dark:text-brand-400" onClick={clearFilters}>
-                ล้างทั้งหมด
-              </button>
               {filterPanel}
             </div>
           </div>

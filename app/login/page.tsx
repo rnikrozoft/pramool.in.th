@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import React, { useContext, useState } from "react"
+import React, { useContext, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { UserContext } from "../context/UserContext"
 import { login } from "../lib/api/user"
@@ -29,6 +29,8 @@ const features = [
   },
 ]
 
+const REMEMBER_LOGIN_KEY = "pramool_remember_login"
+
 export default function LoginPage() {
   const router = useRouter()
   const { refreshSession } = useContext(UserContext)
@@ -37,6 +39,14 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    try {
+      setRememberMe(localStorage.getItem(REMEMBER_LOGIN_KEY) === "1")
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   const handleSocial = (provider: string) => {
     notify("info", `การเข้าสู่ระบบด้วย ${provider} จะเปิดให้ใช้งานเร็วๆ นี้`)
@@ -53,13 +63,22 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const id = loginId.trim()
+    const pw = password.trim()
     if (!id) {
       notify("error", "กรุณากรอกเบอร์โทรศัพท์หรืออีเมล")
       return
     }
+    if (!pw) {
+      notify("error", "กรุณากรอกรหัสผ่าน")
+      return
+    }
+    if (pw.length < 8) {
+      notify("error", "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร")
+      return
+    }
     setSubmitting(true)
     try {
-      const { ok, message } = await login(id, password)
+      const { ok, message } = await login(id, pw, rememberMe)
       if (!ok) {
         notify(
           "error",
@@ -70,12 +89,14 @@ export default function LoginPage() {
         )
         return
       }
-      if (rememberMe) {
-        try {
-          localStorage.setItem("pramool_remember_login", "1")
-        } catch {
-          /* ignore */
+      try {
+        if (rememberMe) {
+          localStorage.setItem(REMEMBER_LOGIN_KEY, "1")
+        } else {
+          localStorage.removeItem(REMEMBER_LOGIN_KEY)
         }
+      } catch {
+        /* ignore */
       }
       persistPhoneForOnboarding(id)
       await refreshSession({ force: true })
@@ -156,7 +177,7 @@ export default function LoginPage() {
                 </div>
                 <div>
                   <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium text-label">
-                    รหัสผ่าน
+                    รหัสผ่าน <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <span
@@ -169,6 +190,8 @@ export default function LoginPage() {
                       id="login-password"
                       type={showPassword ? "text" : "password"}
                       autoComplete="current-password"
+                      required
+                      minLength={8}
                       className="form-input pl-10 pr-11"
                       placeholder="กรอกรหัสผ่าน"
                       value={password}
@@ -183,9 +206,6 @@ export default function LoginPage() {
                       <Icon name={showPassword ? "fa-eye-slash" : "fa-eye"} aria-hidden />
                     </button>
                   </div>
-                  <p className="mt-1.5 text-xs text-muted">
-                    บัญชีที่ยังไม่ได้ตั้งรหัสผ่านสามารถเว้นว่างได้ (เข้าด้วยเบอร์อย่างเดียว)
-                  </p>
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -198,13 +218,12 @@ export default function LoginPage() {
                     />
                     จดจำการเข้าสู่ระบบ
                   </label>
-                  <button
-                    type="button"
+                  <Link
+                    href="/forgot-password"
                     className="text-sm font-medium text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-400 dark:hover:text-brand-300"
-                    onClick={() => notify("info", "ฟีเจอร์ลืมรหัสผ่านจะเปิดให้ใช้งานเร็วๆ นี้")}
                   >
                     ลืมรหัสผ่าน?
-                  </button>
+                  </Link>
                 </div>
 
                 <button
@@ -225,15 +244,7 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleSocial("Google")}
-                  className="auth-social-btn"
-                >
-                  <i className="fa-brands fa-google shrink-0 text-lg text-red-500" aria-hidden />
-                  Google
-                </button>
+              <div className="grid grid-cols-1 gap-3">
                 <button
                   type="button"
                   onClick={() => handleSocial("Facebook")}
@@ -241,14 +252,6 @@ export default function LoginPage() {
                 >
                   <i className="fa-brands fa-facebook shrink-0 text-lg text-[#1877F2]" aria-hidden />
                   Facebook
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSocial("Apple")}
-                  className="auth-social-btn"
-                >
-                  <i className="fa-brands fa-apple shrink-0 text-xl text-slate-900 dark:text-slate-100" aria-hidden />
-                  Apple
                 </button>
               </div>
 

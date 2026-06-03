@@ -1,15 +1,20 @@
 import React from "react"
-import { AppPageShell, APP_PAGE_INNER } from "@/app/components/AppPageShell"
+import { AppPageShell, APP_PAGE_INNER, AppPageHeader } from "@/app/components/AppPageShell"
+import { PAGE_BACK } from "@/app/lib/pageNav"
 
 export default function HowItWorksPage() {
   return (
     <AppPageShell>
       <main className={APP_PAGE_INNER}>
         <div className="mx-auto max-w-4xl">
-          <h1 className="text-heading text-2xl font-semibold">วิธีใช้งาน</h1>
-          <p className="mt-2 text-sm text-muted">ขั้นตอนการใช้งานระบบประมูลแบบย่อ</p>
+          <AppPageHeader
+            title="วิธีการประมูล"
+            description="ขั้นตอนการใช้งานระบบประมูลแบบย่อ"
+            icon="fa-bolt"
+            {...PAGE_BACK.home}
+          />
 
-          <div className="mt-6 space-y-4">
+          <div className="space-y-4">
             <section className="product-panel p-4">
               <h2 className="font-semibold text-heading">1) สมัครสมาชิกและยืนยันตัวตน</h2>
               <p className="mt-1 text-sm text-body">ยืนยันเบอร์โทรศัพท์และกรอกข้อมูลพื้นฐานเพื่อเริ่มใช้งาน</p>

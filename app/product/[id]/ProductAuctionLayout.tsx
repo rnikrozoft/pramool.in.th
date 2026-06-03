@@ -4,6 +4,8 @@ import Image from "next/image"
 import Link from "next/link"
 import type { ReactNode } from "react"
 import Icon from "@/app/components/Icon"
+import { BID_TIME_EXTENSION_MINUTES } from "@/app/lib/auctionRealtime"
+import { ProductImageZoom } from "@/app/components/ProductImageZoom"
 import { bahtFromInput, blockBahtDecimalKey } from "@/app/lib/money/baht"
 import { SellerStarsDisplay } from "@/app/components/SellerStarRating"
 import type { AuctionDetail } from "@/app/lib/api/auction"
@@ -33,7 +35,7 @@ type ProductAuctionLayoutProps = {
   isPlacingBid: boolean
   auctionClosed: boolean
   isOwnAuction: boolean
-  user: { userId?: string } | null
+  user: { userId?: string; accountRestricted?: boolean } | null
   hasEnoughCredit: boolean
   showBuyNowButton: boolean
   buyNowButtonActive: boolean
@@ -43,10 +45,16 @@ type ProductAuctionLayoutProps = {
   showEarlyCloseButton: boolean
   isClosingEarly: boolean
   onCloseEarly: () => void
-  onSubmitBid: (amount: number) => void
+  onSubmitBid: (amount: number) => void | Promise<void>
   bidError: string
+  showCancelBidButton?: boolean
+  myHeldAmount?: number
+  isCancelingBid?: boolean
+  onCancelBid?: () => void
   alerts: ReactNode
   mobileBidPanel: ReactNode
+  onReportAuction?: () => void
+  showReportButton?: boolean
 }
 
 function BidExtensionBadge() {
@@ -123,6 +131,43 @@ function BidderRow({ row, highlight }: { row: AuctionBidderRow; highlight?: bool
   )
 }
 
+function SellerInfoBlock({ auction }: { auction: AuctionDetail }) {
+  const sellerId = auction.seller_id?.trim() ?? ""
+  const sellerName = auction.seller_display_name?.trim() || "ผู้ขาย"
+  const reviewCount = auction.seller_review_count ?? 0
+  const reviewRating = auction.seller_review_avg_rating ?? 0
+  const profileHref = sellerId ? `/user/${encodeURIComponent(sellerId)}` : null
+
+  return (
+    <div className="sm:text-right">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">ข้อมูลผู้ขาย</p>
+      {profileHref ? (
+        <Link
+          href={profileHref}
+          className="mt-1 inline-block font-medium text-heading underline-offset-2 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
+        >
+          {sellerName}
+        </Link>
+      ) : (
+        <p className="mt-1 font-medium text-heading">{sellerName}</p>
+      )}
+      {reviewCount > 0 && reviewRating > 0 ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2 sm:justify-end">
+          <SellerStarsDisplay rating={reviewRating} size="sm" />
+          <span className="text-sm text-muted">
+            <span className="font-semibold tabular-nums text-amber-800 dark:text-amber-300">
+              {reviewRating.toFixed(1)}
+            </span>
+            /5
+          </span>
+        </div>
+      ) : (
+        <p className="mt-1 text-sm text-muted">ยังไม่มีรีวิวจากผู้ซื้อ</p>
+      )}
+    </div>
+  )
+}
+
 export function ProductAuctionLayout(props: ProductAuctionLayoutProps) {
   const {
     auction,
@@ -155,8 +200,14 @@ export function ProductAuctionLayout(props: ProductAuctionLayoutProps) {
     onCloseEarly,
     onSubmitBid,
     bidError,
+    showCancelBidButton,
+    myHeldAmount = 0,
+    isCancelingBid,
+    onCancelBid,
     alerts,
     mobileBidPanel,
+    onReportAuction,
+    showReportButton,
   } = props
 
   const displayBidders = auctionBidders
@@ -256,6 +307,7 @@ export function ProductAuctionLayout(props: ProductAuctionLayoutProps) {
         ))}
       </div>
 
+      {!user?.accountRestricted ? (
       <button
         type="button"
         className={`relative mt-4 hidden w-full rounded-xl py-3.5 text-sm font-bold shadow-md lg:block ${
@@ -264,7 +316,7 @@ export function ProductAuctionLayout(props: ProductAuctionLayoutProps) {
             : "bg-brand-600 text-white hover:bg-brand-700"
         }`}
         disabled={!canBid || isPlacingBid}
-        onClick={() => onSubmitBid(bidAmount)}
+        onClick={() => void onSubmitBid(bidAmount)}
       >
         {canBid ? <BidExtensionBadge /> : null}
         {auctionClosed
@@ -279,13 +331,14 @@ export function ProductAuctionLayout(props: ProductAuctionLayoutProps) {
                   ? "กำลังเสนอราคา..."
                   : `เสนอราคา ${bidAmount.toLocaleString()} ฿`}
       </button>
+      ) : null}
 
-      {showBuyNowButton ? (
+      {showBuyNowButton && !user?.accountRestricted ? (
         <button
           type="button"
           className={`mt-2 hidden w-full rounded-xl border-2 border-brand-300 bg-brand-50 py-2.5 text-sm font-semibold text-brand-800 lg:block ${buyNowButtonActive ? "buy-now-bounce" : ""} disabled:cursor-not-allowed disabled:opacity-50`}
           disabled={isOwnAuction || isPlacingBid || !canAffordBuyNow || !user}
-          onClick={() => onSubmitBid(buyNowPrice)}
+          onClick={() => void onSubmitBid(buyNowPrice)}
         >
           เสนอราคาด่วน {buyNowPrice.toLocaleString()} ฿
         </button>
@@ -302,17 +355,22 @@ export function ProductAuctionLayout(props: ProductAuctionLayoutProps) {
         </button>
       ) : null}
 
+      {showCancelBidButton && onCancelBid ? (
+        <button
+          type="button"
+          className="mt-2 hidden w-full rounded-xl border border-slate-300 bg-white py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 lg:block"
+          disabled={isCancelingBid || isPlacingBid}
+          onClick={onCancelBid}
+        >
+          {isCancelingBid
+            ? "กำลังยกเลิก..."
+            : `ยกเลิกการเสนอราคา (คืน ${Math.floor(myHeldAmount / 2).toLocaleString()} ฿ · +${BID_TIME_EXTENSION_MINUTES} นาที)`}
+        </button>
+      ) : null}
+
       {isOwnAuction && (
         <p className="mt-2 hidden text-xs text-amber-700 lg:block">รายการนี้เป็นสินค้าของคุณเอง จึงไม่สามารถเสนอราคาได้</p>
       )}
-
-      <div className="mt-4 hidden items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-2.5 text-xs text-emerald-900 lg:flex dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
-        <Icon name="fa-shield-halved" className="mt-0.5 shrink-0 text-emerald-600" aria-hidden />
-        <div>
-          <p className="font-semibold">ประมูลปลอดภัย 100%</p>
-          <p className="mt-0.5 text-emerald-800/90 dark:text-emerald-300/90">ชำระผ่านระบบเครดิต — โอนให้ผู้ขายหลังยืนยันรับของ</p>
-        </div>
-      </div>
 
       {bidError ? <p className="mt-2 hidden text-xs text-rose-600 lg:block">{bidError}</p> : null}
     </>
@@ -343,21 +401,15 @@ export function ProductAuctionLayout(props: ProductAuctionLayoutProps) {
           <p className="w-full text-xs text-muted sm:mr-auto sm:w-auto">
             รหัสสินค้า: <span className="font-mono font-medium text-body">{auction.auction_id}</span>
           </p>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-body hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
-            onClick={share}
-          >
-            <Icon name="fa-arrow-right" className="text-[0.7rem]" aria-hidden />
-            แชร์
-          </button>
-          <Link
-            href="/auctions"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-body hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
-          >
-            รายการถัดไป
-            <Icon name="fa-chevron-right" className="text-[0.65rem]" aria-hidden />
-          </Link>
+          {showReportButton && onReportAuction ? (
+            <button
+              type="button"
+              className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 dark:border-rose-900/50 dark:text-rose-300 dark:hover:bg-rose-950/40"
+              onClick={onReportAuction}
+            >
+              ร้องเรียนรายการ
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -390,16 +442,10 @@ export function ProductAuctionLayout(props: ProductAuctionLayoutProps) {
 
         <section className="space-y-4 xl:col-span-6">
           <div className="product-panel overflow-hidden p-3 sm:p-4">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800">
-              <Image
-                src={imageList[activeImage] ?? imageList[0]}
-                width={900}
-                height={675}
-                className="h-full w-full object-contain"
-                alt={auction.title}
-                unoptimized
-              />
-            </div>
+            <ProductImageZoom
+              src={imageList[activeImage] ?? imageList[0]}
+              alt={auction.title}
+            />
             {imageList.length > 1 ? (
               <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
                 {imageList.map((image, index) => (
@@ -417,73 +463,25 @@ export function ProductAuctionLayout(props: ProductAuctionLayoutProps) {
           </div>
 
           <div className="product-panel p-4 sm:p-5">
-            <h1 className="font-display text-2xl font-bold text-heading sm:text-3xl">{auction.title}</h1>
-            {auction.condition ? (
-              <p className="mt-1 text-sm text-muted">{auction.condition}</p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {categories.map((c) => (
-                <span key={c} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-body dark:bg-slate-800">
-                  {c}
-                </span>
-              ))}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <h1 className="font-display text-2xl font-bold text-heading sm:text-3xl">{auction.title}</h1>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {categories.map((c) => (
+                    <span key={c} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-body dark:bg-slate-800">
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="w-full shrink-0 sm:w-auto sm:max-w-[min(100%,16rem)]">
+                <SellerInfoBlock auction={auction} />
+              </div>
             </div>
             {alerts}
             <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-700">
               <h2 className="text-sm font-bold text-heading">รายละเอียดสินค้า</h2>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-body">{auction.description || "—"}</p>
-            </div>
-            <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-700">
-              <h2 className="text-sm font-bold text-heading">ข้อมูลผู้ขาย</h2>
-              {auction.seller_id?.trim() ? (
-                <Link
-                  href={`/user/${encodeURIComponent(auction.seller_id.trim())}`}
-                  className="mt-1 inline-block font-medium text-heading underline-offset-2 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
-                >
-                  {auction.seller_display_name?.trim() || "ผู้ขาย"}
-                </Link>
-              ) : (
-                <p className="mt-1 font-medium text-heading">{auction.seller_display_name?.trim() || "ผู้ขาย"}</p>
-              )}
-              {(auction.seller_review_count ?? 0) > 0 && (auction.seller_review_avg_rating ?? 0) > 0 ? (
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <SellerStarsDisplay rating={auction.seller_review_avg_rating!} size="sm" />
-                  <span className="text-sm text-muted">
-                    <span className="font-semibold tabular-nums text-amber-800">
-                      {auction.seller_review_avg_rating!.toFixed(1)}
-                    </span>
-                    /5 · {auction.seller_review_count!.toLocaleString()} รีวิว
-                    {auction.seller_id?.trim() ? (
-                      <>
-                        {" "}
-                        ·{" "}
-                        <Link
-                          href={`/user/${encodeURIComponent(auction.seller_id.trim())}`}
-                          className="text-brand-600 underline-offset-2 hover:underline dark:text-brand-400"
-                        >
-                          ดูโปรไฟล์
-                        </Link>
-                      </>
-                    ) : null}
-                  </span>
-                </div>
-              ) : (
-                <p className="mt-1 text-sm text-muted">
-                  ยังไม่มีรีวิวจากผู้ซื้อ
-                  {auction.seller_id?.trim() ? (
-                    <>
-                      {" "}
-                      ·{" "}
-                      <Link
-                        href={`/user/${encodeURIComponent(auction.seller_id.trim())}`}
-                        className="text-brand-600 underline-offset-2 hover:underline dark:text-brand-400"
-                      >
-                        ดูโปรไฟล์
-                      </Link>
-                    </>
-                  ) : null}
-                </p>
-              )}
             </div>
           </div>
 
@@ -517,26 +515,6 @@ export function ProductAuctionLayout(props: ProductAuctionLayoutProps) {
           </div>
         </aside>
       </div>
-
-      <div className="product-live-features hidden rounded-xl border border-slate-200/90 bg-surface-card px-4 py-4 sm:grid sm:grid-cols-2 sm:gap-4 lg:grid lg:grid-cols-4 dark:border-slate-700">
-        {[
-          { icon: "fa-bolt", label: "ประมูลง่าย", sub: "บิดได้ทันที" },
-          { icon: "fa-shield-halved", label: "ปลอดภัย 100%", sub: "ระบบเครดิต" },
-          { icon: "fa-truck-fast", label: "จัดส่งทั่วประเทศ", sub: "ตามเงื่อนไขผู้ขาย" },
-          { icon: "fa-headset", label: "บริการลูกค้า", sub: "ช่วยเหลือตลอด" },
-        ].map((f) => (
-          <div key={f.label} className="flex items-center gap-3 py-2">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50">
-              <Icon name={f.icon} className="text-sm" aria-hidden />
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-heading">{f.label}</p>
-              <p className="text-xs text-muted">{f.sub}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
     </div>
   )
 }

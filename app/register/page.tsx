@@ -10,6 +10,7 @@ import { getMyOnboardingStatus, signup } from "../lib/api/user"
 import { runPostAuthRedirect } from "../lib/postAuthRedirect"
 import { notify, queueNotify } from "../lib/utils/notify"
 import { userFacingMessage } from "../lib/utils/userFacingMessage"
+import { consentPayload } from "@/app/lib/privacyPolicy"
 import Icon from "@/app/components/Icon"
 
 const features = [
@@ -113,6 +114,7 @@ export default function RegisterPage() {
         email: emailTrim,
         password,
         confirm_password: confirmPassword,
+        ...consentPayload(),
       })
       if (!res.ok) {
         let raw = ""
@@ -131,7 +133,12 @@ export default function RegisterPage() {
 
       await refreshSession({ force: true })
       queueNotify("success", "สมัครสมาชิกสำเร็จ")
-      await runPostAuthRedirect(router, { phoneForOnboarding: t })
+      await runPostAuthRedirect(router, {
+        phoneForOnboarding: t,
+        signupFirstName: firstName.trim(),
+        signupLastName: lastName.trim(),
+        preferOnboardingOnError: true,
+      })
     } catch {
       notify("error")
     }
@@ -257,6 +264,8 @@ export default function RegisterPage() {
                       id="reg-password"
                       type={showPassword ? "text" : "password"}
                       autoComplete="new-password"
+                      required
+                      minLength={8}
                       className="form-input pr-11"
                       placeholder="อย่างน้อย 8 ตัวอักษร"
                       value={password}
@@ -281,6 +290,8 @@ export default function RegisterPage() {
                       id="reg-confirm"
                       type={showConfirmPassword ? "text" : "password"}
                       autoComplete="new-password"
+                      required
+                      minLength={8}
                       className="form-input pr-11"
                       placeholder="ยืนยันรหัสผ่าน"
                       value={confirmPassword}
@@ -306,11 +317,11 @@ export default function RegisterPage() {
                   />
                   <span>
                     ฉันยอมรับ{" "}
-                    <Link href="#" className="font-medium text-brand-600 underline hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+                    <Link href="/terms" className="font-medium text-brand-600 underline hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                       ข้อกำหนดการใช้งาน
                     </Link>{" "}
                     และ{" "}
-                    <Link href="#" className="font-medium text-brand-600 underline hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+                    <Link href="/privacy" className="font-medium text-brand-600 underline hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                       นโยบายความเป็นส่วนตัว
                     </Link>{" "}
                     <span className="text-red-500">*</span>
@@ -335,15 +346,7 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleSocial("Google")}
-                  className="auth-social-btn"
-                >
-                  <i className="fa-brands fa-google shrink-0 text-lg text-red-500" aria-hidden />
-                  Google
-                </button>
+              <div className="grid grid-cols-1 gap-3">
                 <button
                   type="button"
                   onClick={() => handleSocial("Facebook")}
@@ -351,14 +354,6 @@ export default function RegisterPage() {
                 >
                   <i className="fa-brands fa-facebook shrink-0 text-lg text-[#1877F2]" aria-hidden />
                   Facebook
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSocial("Apple")}
-                  className="auth-social-btn"
-                >
-                  <i className="fa-brands fa-apple shrink-0 text-xl text-slate-900 dark:text-slate-100" aria-hidden />
-                  Apple
                 </button>
               </div>
 

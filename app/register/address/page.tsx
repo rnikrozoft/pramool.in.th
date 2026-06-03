@@ -8,14 +8,16 @@ import AddressLocationFields from "@/app/components/AddressLocationFields"
 import { BankSelect } from "@/app/components/LocationSelector"
 import type { AddressLocationValue } from "@/app/lib/locationCascade"
 import { getMyOnboardingStatus } from "@/app/lib/api/user"
-import { callPostAPI } from '@/app/lib/utils/call-api';
-import { callGetAPI } from '@/app/lib/utils/call-api';
+import { cacheOnboardingPrefill } from "@/app/lib/postAuthRedirect"
+import { callGetAPI, callPostAPI } from '@/app/lib/utils/call-api';
 import { useRouter } from 'next/navigation';
 import { UserContext } from '@/app/context/UserContext';
-import { AppPageShell, APP_PAGE_INNER } from "@/app/components/AppPageShell"
+import { AppPageShell, APP_PAGE_INNER, AppPageHeader } from "@/app/components/AppPageShell"
+import { PAGE_BACK } from "@/app/lib/pageNav"
 import { FormStepSection } from "@/app/components/FormStepSection"
 import { notify } from "@/app/lib/utils/notify"
 import { userFacingMessage } from "@/app/lib/utils/userFacingMessage"
+import { consentPayload } from "@/app/lib/privacyPolicy"
 import Icon from "@/app/components/Icon"
 
 export default function AddressPage() {
@@ -74,7 +76,6 @@ export default function AddressPage() {
     }
 
     const isValidThaiNationalId = (id: string) => {
-        return true;
         if (!/^\d{13}$/.test(id)) return false
         let sum = 0
         for (let i = 0; i < 12; i += 1) {
@@ -142,6 +143,8 @@ export default function AddressPage() {
 
             const completeFormData = {
                 ...formData,
+                national_id: formData.user_id.trim(),
+                ...consentPayload(),
                 tel: verifiedTel,
                 facebook: contactForm.facebook.trim(),
                 bank_id: contactForm.bank_id,
@@ -176,6 +179,8 @@ export default function AddressPage() {
 
             await refreshSession({ force: true })
             localStorage.removeItem("phone")
+            localStorage.removeItem("onboarding_first_name")
+            localStorage.removeItem("onboarding_last_name")
 
             const onboardingStatus = await getMyOnboardingStatus()
             if (onboardingStatus.is_first_registration) {
@@ -226,6 +231,10 @@ export default function AddressPage() {
     }, [user])
 
     useEffect(() => {
+        void refreshSession({ force: true, silent: true })
+    }, [refreshSession])
+
+    useEffect(() => {
         async function bootstrapAddressOnboarding() {
             try {
                 const onboardingStatus = await getMyOnboardingStatus()
@@ -234,16 +243,27 @@ export default function AddressPage() {
                     return
                 }
 
-                const telFromLocal = localStorage.getItem("phone") ?? ""
-                if (telFromLocal) {
-                    setVerifiedTel(telFromLocal)
-                    return
-                }
+                cacheOnboardingPrefill(onboardingStatus)
 
-                const response = await callGetAPI('/users', true)
-                if (!response.ok) return
-                const data = await response.json()
-                if (data?.tel) setVerifiedTel(data.tel)
+                const tel =
+                    onboardingStatus.tel?.trim() ||
+                    localStorage.getItem("phone") ||
+                    ""
+                if (tel) setVerifiedTel(tel)
+
+                setFormData((prev) => ({
+                    ...prev,
+                    first_name:
+                        prev.first_name.trim() ||
+                        onboardingStatus.first_name?.trim() ||
+                        localStorage.getItem("onboarding_first_name") ||
+                        "",
+                    last_name:
+                        prev.last_name.trim() ||
+                        onboardingStatus.last_name?.trim() ||
+                        localStorage.getItem("onboarding_last_name") ||
+                        "",
+                }))
             } catch {
                 setVerifiedTel("")
             }
@@ -258,23 +278,12 @@ export default function AddressPage() {
     return (
         <AppPageShell>
         <main className={APP_PAGE_INNER}>
-        <div className="mb-8 flex flex-col gap-4 border-b border-slate-200/80 pb-6">
-            <div>
-                <Link
-                    href="/"
-                    className="mb-2 inline-flex items-center gap-2 text-sm text-muted transition hover:text-slate-800 dark:hover:text-slate-200"
-            >
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                        <Icon name="fa-house" aria-hidden />
-                    </span>
-                    กลับหน้าหลัก
-                </Link>
-                <h1 className="text-heading text-2xl font-bold tracking-tight sm:text-3xl">ข้อมูลสมัครสมาชิก</h1>
-                <p className="mt-2 max-w-xl text-sm leading-relaxed text-body">
-                    กรอกข้อมูลตามขั้นตอนด้านล่างเพื่อเปิดใช้งานบัญชีสำหรับซื้อขายและประมูล
-                </p>
-            </div>
-        </div>
+        <AppPageHeader
+            title="ข้อมูลสมัครสมาชิก"
+            description="กรอกข้อมูลตามขั้นตอนด้านล่างเพื่อเปิดใช้งานบัญชีสำหรับซื้อขายและประมูล"
+            icon="fa-user-plus"
+            {...PAGE_BACK.home}
+        />
 
         <form
             id="onboarding-address-form"

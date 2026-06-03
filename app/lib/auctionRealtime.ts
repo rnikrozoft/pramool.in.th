@@ -6,10 +6,8 @@
  */
 import type { MyActiveBidItem } from "@/app/lib/api/auction"
 
-/** เปิด mock ตารางประมูล — ตั้ง NEXT_PUBLIC_DEV_AUCTION_TABLE_MOCKS=1 ใน .env.local */
-export function devAuctionTableMocksEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_DEV_AUCTION_TABLE_MOCKS === "1"
-}
+/** ตรงกับ bidExtensionDuration บน auction-service */
+export const BID_TIME_EXTENSION_MINUTES = 10
 
 /**
  * ช่วงโพล REST แบบปรับตามความเร่งด่วน — แท็บซ่อนโพลช้า, ใกล้ปิดโพลถี่

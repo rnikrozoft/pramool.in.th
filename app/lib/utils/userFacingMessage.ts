@@ -33,6 +33,7 @@ const EXACT_EN: Record<string, string> = {
   "bidding paused: seller is closing this auction":
     "ผู้ขายกำลังปิดประมูลชั่วคราว ระบบไม่รับการเสนอราคาในช่วงนี้ กรุณารอสักครู่",
   "insufficient credit": "เครดิตไม่พอ กรุณาเติมเครดิตก่อน",
+  "credit debt": "คุณมียอดค้างชำระ กรุณาเติมเครดิตให้ครบก่อนประมูล",
   "unsupported message type": "คำสั่งไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่",
   "missing user": "กรุณาเข้าสู่ระบบก่อนเสนอราคา",
   "missing auction id": "ไม่พบรายการประมูล",
@@ -43,7 +44,6 @@ const EXACT_EN: Record<string, string> = {
   "at least one image is required": "กรุณาอัปโหลดอย่างน้อย 1 รูป",
   "title is required": "กรุณากรอกหัวข้อประมูล",
   "title too long": "หัวข้อยาวเกินกำหนด กรุณาย่อข้อความ",
-  "condition too long": "ช่องสภาพสินค้ายาวเกินกำหนด",
   "description too long": "รายละเอียดยาวเกินกำหนด กรุณาย่อข้อความ",
   "invalid price settings": "ราคาเริ่มต้นหรือขั้นต่างการเสนอราคาไม่ถูกต้อง",
   "invalid buy_now_price": "ราคาซื้อทันทีไม่ถูกต้อง",
@@ -88,6 +88,10 @@ const MATCH_RULES: MatchRule[] = [
   {
     test: (s) => /end_at must be in the future/i.test(s),
     text: "เวลาปิดประมูลต้องอยู่ในอนาคต",
+  },
+  {
+    test: (s) => /end_at must be within \d+ days/i.test(s),
+    text: "เลือกเวลาปิดได้ไม่เกิน 2 วันนับจากตอนนี้",
   },
   {
     test: (s) => /auction not found/i.test(s),

@@ -4,14 +4,14 @@ import Link from "next/link"
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { UserContext } from "@/app/context/UserContext"
 import {
-  confirmAuctionReceived,
   getMyActiveBids,
+  confirmAuctionReceived,
   type MyActiveBidItem,
 } from "@/app/lib/api/auction"
+import { refreshAuctionShipmentTracking } from "@/app/lib/api/shipment"
 import {
   auctionListWsNeedsFullRefetch,
   computeActiveBidsPollIntervalMs,
-  devAuctionTableMocksEnabled,
   patchMyActiveBidFromWsMessage,
   pickAuctionIdsForLimitedWebSocket,
   type AuctionWSClientPayload,
@@ -20,13 +20,131 @@ import { getCoreApiBaseUrl } from "@/app/lib/constants/common"
 import { notifyCreditChanged } from "@/app/lib/creditSync"
 import { notifyPendingConfirmChanged } from "@/app/lib/pendingConfirmBadgeSync"
 import { useMultiAuctionWebSocket } from "@/app/lib/hooks/useMultiAuctionWebSocket"
-import { AppPageShell, APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
+import { AppPageShell, APP_PAGE_INNER_WIDE, AppPageHeader } from "@/app/components/AppPageShell"
+import { PAGE_BACK } from "@/app/lib/pageNav"
 import Icon from "@/app/components/Icon"
+import { SortableTableHead } from "@/app/components/SortableTableHead"
+import { TableRowActionMenu, tableRowMenuItemClass } from "@/app/components/TableRowActionMenu"
+import {
+  DEFAULT_AUCTION_LIST_SORT,
+  type AuctionListSortKey,
+} from "@/app/lib/auctionListSort"
+import { toggleTableSort, type SortOrder, type TableSortState } from "@/app/lib/tableSort"
 
 type TabKey = "all" | "active" | "ending_soon" | "outbid" | "closed"
-type SortKey = "latest" | "end" | "price"
 
-const ACTIVE_LIST_PAGE_SIZE = 10
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
+type PageSize = (typeof PAGE_SIZE_OPTIONS)[number]
+
+function PageSizeSelect({
+  pageSize,
+  loading,
+  onChange,
+  compact,
+}: {
+  pageSize: PageSize
+  loading: boolean
+  onChange: (size: PageSize) => void
+  compact?: boolean
+}) {
+  return (
+    <label className={`flex items-center gap-2 text-slate-500 ${compact ? "text-xs" : "text-sm"}`}>
+      <span className={compact ? "hidden sm:inline" : ""}>แสดงครั้งละ</span>
+      <select
+        value={pageSize}
+        onChange={(e) => onChange(Number(e.target.value) as PageSize)}
+        disabled={loading}
+        className={`rounded-lg border border-slate-200 bg-surface-card font-medium text-body shadow-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:opacity-50 dark:border-slate-600 dark:focus:ring-brand-900/40 ${
+          compact ? "h-11 px-2.5 text-sm" : "px-2 py-1.5 text-sm"
+        }`}
+        aria-label="จำนวนรายการต่อหน้า"
+      >
+        {PAGE_SIZE_OPTIONS.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </select>
+      <span className={compact ? "hidden sm:inline" : ""}>รายการ</span>
+    </label>
+  )
+}
+
+type ActiveBidRowActionMenuProps = {
+  auctionId: string
+  open: boolean
+  busy: boolean
+  showConfirm: boolean
+  showTrack: boolean
+  confirming: boolean
+  tracking: boolean
+  onToggle: () => void
+  onClose: () => void
+  onConfirmReceived: () => void
+  onTrackShipment: () => void
+}
+
+function ActiveBidRowActionMenu({
+  auctionId,
+  open,
+  busy,
+  showConfirm,
+  showTrack,
+  confirming,
+  tracking,
+  onToggle,
+  onClose,
+  onConfirmReceived,
+  onTrackShipment,
+}: ActiveBidRowActionMenuProps) {
+  const menuLinkClass = `${tableRowMenuItemClass} text-body hover:bg-slate-50 dark:hover:bg-slate-800/60`
+  const menuEmeraldClass = `${tableRowMenuItemClass} text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40`
+  const menuTrackClass = `${tableRowMenuItemClass} text-teal-800 hover:bg-teal-50 dark:text-teal-200 dark:hover:bg-teal-950/40`
+
+  return (
+    <TableRowActionMenu open={open} busy={busy} onToggle={onToggle} onClose={onClose}>
+      <Link
+        href={`/product/${encodeURIComponent(auctionId)}`}
+        role="menuitem"
+        className={menuLinkClass}
+        onClick={onClose}
+      >
+        <Icon name="fa-eye" className="text-xs opacity-80" aria-hidden />
+        ดูรายละเอียด
+      </Link>
+      {showConfirm ? (
+        <button
+          type="button"
+          role="menuitem"
+          className={menuEmeraldClass}
+          disabled={busy || confirming}
+          onClick={() => {
+            onClose()
+            onConfirmReceived()
+          }}
+        >
+          <Icon name="fa-box-open" className="text-xs" aria-hidden />
+          {confirming ? "กำลังส่ง…" : "ยืนยันรับของ"}
+        </button>
+      ) : null}
+      {showTrack ? (
+        <button
+          type="button"
+          role="menuitem"
+          className={menuTrackClass}
+          disabled={busy || tracking}
+          onClick={() => {
+            onClose()
+            onTrackShipment()
+          }}
+        >
+          <Icon name="fa-truck-fast" className="text-xs" aria-hidden />
+          {tracking ? "กำลังโหลด…" : "ติดตามพัสดุ"}
+        </button>
+      ) : null}
+    </TableRowActionMenu>
+  )
+}
 
 function tabToScope(tab: TabKey): "all" | "active" | "ending_soon" | "outbid" | "closed" {
   return tab
@@ -37,17 +155,25 @@ type ActiveBidListFetchParams = {
   offset: number
   scope: ReturnType<typeof tabToScope>
   q?: string
-  sort: SortKey
+  sort: AuctionListSortKey
+  order: SortOrder
 }
 
-function buildListFetchParams(pageNum: number, tab: TabKey, q: string, sort: SortKey): ActiveBidListFetchParams {
+function buildListFetchParams(
+  pageNum: number,
+  tab: TabKey,
+  q: string,
+  sort: TableSortState<AuctionListSortKey>,
+  pageSize: number,
+): ActiveBidListFetchParams {
   const trimmed = q.trim()
   return {
-    limit: ACTIVE_LIST_PAGE_SIZE,
-    offset: Math.max(0, (pageNum - 1) * ACTIVE_LIST_PAGE_SIZE),
+    limit: pageSize,
+    offset: Math.max(0, (pageNum - 1) * pageSize),
     scope: tabToScope(tab),
     q: trimmed || undefined,
-    sort,
+    sort: sort.key,
+    order: sort.order,
   }
 }
 
@@ -59,81 +185,6 @@ function filterActiveBidItemsByQuery(items: MyActiveBidItem[], q: string): MyAct
       item.title.toLowerCase().includes(needle) ||
       item.auction_id.toLowerCase().includes(needle),
   )
-}
-
-/** โหมด dev — ต่อท้ายรายการจริงเพื่อดูเลย์เอาต์ (ไม่ทับ auction_id เดิม) */
-function devMockActiveBids(nowMs: number): MyActiveBidItem[] {
-  const iso = (ms: number) => new Date(ms).toISOString()
-  return [
-    {
-      auction_id: "mock-bid-01",
-      title: "กล้องมิเรอร์เลสพร้อมเลนส์คิต",
-      category: "อิเล็กทรอนิกส์|กล้อง",
-      cover_image_url: "https://placehold.co/160x160/e9d5ff/6b21a8?text=Cam",
-      start_price: 12000,
-      current_bid: 18500,
-      bid_step: 500,
-      my_held_amount: 18500,
-      next_minimum_bid: 19000,
-      is_leading: true,
-      end_at: iso(nowMs + 52 * 60 * 60 * 1000),
-      allow_early_close: true,
-    },
-    {
-      auction_id: "mock-bid-02",
-      title: "นาฬิกาออโตเมติกมือสองสภาพดี",
-      category: "แฟชั่น|นาฬิกา",
-      cover_image_url: "https://placehold.co/160x160/fee2e2/b91c1c?text=Watch",
-      start_price: 5000,
-      current_bid: 8200,
-      bid_step: 200,
-      my_held_amount: 7600,
-      next_minimum_bid: 8400,
-      is_leading: false,
-      end_at: iso(nowMs + 48 * 60 * 1000),
-    },
-    {
-      auction_id: "mock-bid-03",
-      title: "โต๊ะไม้สักแฮนด์เมด",
-      category: "บ้านและสวน|เฟอร์นิเจอร์",
-      cover_image_url: "https://placehold.co/160x160/dcfce7/166534?text=Table",
-      start_price: 2500,
-      current_bid: 3400,
-      bid_step: 100,
-      my_held_amount: 3200,
-      next_minimum_bid: 3500,
-      is_leading: false,
-      end_at: iso(nowMs + 20 * 60 * 60 * 1000),
-    },
-    {
-      auction_id: "mock-bid-04",
-      title: "หูฟังไร้สายตัดเสียงรบกวน",
-      category: "อิเล็กทรอนิกส์|เสียง",
-      cover_image_url: "https://placehold.co/160x160/e0e7ff/3730a3?text=HP",
-      start_price: 3000,
-      current_bid: 4290,
-      bid_step: 50,
-      my_held_amount: 4290,
-      next_minimum_bid: 4340,
-      is_leading: true,
-      end_at: iso(nowMs + 70 * 60 * 1000),
-    },
-    {
-      auction_id: "mock-bid-05",
-      title: "รองเท้าวิ่งไซส์ 42 (ปิดประมูลแล้ว)",
-      category: "กีฬา|รองเท้า",
-      cover_image_url: "https://placehold.co/160x160/f1f5f9/475569?text=Done",
-      start_price: 1500,
-      current_bid: 2100,
-      bid_step: 50,
-      my_held_amount: 2000,
-      next_minimum_bid: 2150,
-      is_leading: true,
-      end_at: iso(nowMs - 3 * 60 * 60 * 1000),
-      allow_early_close: false,
-      can_confirm_received: true,
-    },
-  ]
 }
 
 function coverSrc(url: string): string {
@@ -193,14 +244,22 @@ function finalizeActiveBidListResult(
   }
 }
 
-function paramsStillCurrent(params: ActiveBidListFetchParams, tab: TabKey, pageNum: number, q: string, sort: SortKey): boolean {
-  const current = buildListFetchParams(pageNum, tab, q, sort)
+function paramsStillCurrent(
+  params: ActiveBidListFetchParams,
+  tab: TabKey,
+  pageNum: number,
+  q: string,
+  sort: TableSortState<AuctionListSortKey>,
+  pageSize: number,
+): boolean {
+  const current = buildListFetchParams(pageNum, tab, q, sort, pageSize)
   return (
     params.limit === current.limit &&
     params.offset === current.offset &&
     params.scope === current.scope &&
     (params.q ?? "") === (current.q ?? "") &&
-    params.sort === current.sort
+    params.sort === current.sort &&
+    params.order === current.order
   )
 }
 
@@ -246,22 +305,27 @@ export default function ActiveBidsPage() {
   const [syncing, setSyncing] = useState(false)
   const [listError, setListError] = useState("")
   const [tab, setTab] = useState<TabKey>("all")
-  const [sortBy, setSortBy] = useState<SortKey>("latest")
+  const [sort, setSort] = useState<TableSortState<AuctionListSortKey>>(DEFAULT_AUCTION_LIST_SORT)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<PageSize>(10)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [tick, setTick] = useState(0)
   const [confirmingReceivedId, setConfirmingReceivedId] = useState<string | null>(null)
+  const [trackingShipmentId, setTrackingShipmentId] = useState<string | null>(null)
   const itemsRef = useRef<MyActiveBidItem[]>([])
   itemsRef.current = items
   const tabRef = useRef(tab)
   tabRef.current = tab
   const pageRef = useRef(page)
   pageRef.current = page
+  const pageSizeRef = useRef(pageSize)
+  pageSizeRef.current = pageSize
   const searchQueryRef = useRef(searchQuery)
   searchQueryRef.current = searchQuery
-  const sortByRef = useRef(sortBy)
-  sortByRef.current = sortBy
+  const sortRef = useRef(sort)
+  sortRef.current = sort
 
   const applyListResponse = useCallback((res: Awaited<ReturnType<typeof getMyActiveBids>>) => {
     setListTotal(res.total)
@@ -275,27 +339,16 @@ export default function ActiveBidsPage() {
 
   const fetchActiveBidList = useCallback(async (params: ActiveBidListFetchParams) => {
     const res = await getMyActiveBids(params)
-    let merged = res.items
-    if (
-      devAuctionTableMocksEnabled() &&
-      params.offset === 0 &&
-      params.scope === "all" &&
-      !params.q
-    ) {
-      const ids = new Set(merged.map((r) => r.auction_id))
-      const extras = devMockActiveBids(Date.now()).filter((m) => !ids.has(m.auction_id))
-      merged = [...merged, ...extras]
-    }
-    return finalizeActiveBidListResult(res, params, merged)
+    return finalizeActiveBidListResult(res, params, res.items)
   }, [])
 
   const reloadActiveBids = useCallback(
     async (opts?: { showSyncing?: boolean }) => {
-      const params = buildListFetchParams(pageRef.current, tabRef.current, searchQueryRef.current, sortByRef.current)
+      const params = buildListFetchParams(pageRef.current, tabRef.current, searchQueryRef.current, sortRef.current, pageSizeRef.current)
       if (opts?.showSyncing) setSyncing(true)
       try {
         const res = await fetchActiveBidList(params)
-        if (!paramsStillCurrent(params, tabRef.current, pageRef.current, searchQueryRef.current, sortByRef.current)) {
+        if (!paramsStillCurrent(params, tabRef.current, pageRef.current, searchQueryRef.current, sortRef.current, pageSizeRef.current)) {
           return
         }
         applyListResponse(res)
@@ -318,9 +371,17 @@ export default function ActiveBidsPage() {
   }, [searchInput])
 
   useEffect(() => {
+    setPage(1)
+  }, [tab, sort, pageSize])
+
+  useEffect(() => {
+    setOpenMenuId(null)
+  }, [tab, page, searchQuery, sort, pageSize])
+
+  useEffect(() => {
     if (sessionLoading) return
     let cancelled = false
-    const params = buildListFetchParams(page, tab, searchQuery, sortBy)
+    const params = buildListFetchParams(page, tab, searchQuery, sort, pageSize)
 
     const load = async () => {
       if (!hasLoadedRef.current) setLoading(true)
@@ -328,10 +389,10 @@ export default function ActiveBidsPage() {
       setListError("")
       try {
         const res = await fetchActiveBidList(params)
-        if (cancelled || !paramsStillCurrent(params, tab, page, searchQuery, sortBy)) return
+        if (cancelled || !paramsStillCurrent(params, tab, page, searchQuery, sort, pageSize)) return
         applyListResponse(res)
       } catch (e) {
-        if (cancelled || !paramsStillCurrent(params, tab, page, searchQuery, sortBy)) return
+        if (cancelled || !paramsStillCurrent(params, tab, page, searchQuery, sort, pageSize)) return
         const msg = e instanceof Error ? e.message : ""
         if (msg === "unauthorized") {
           setListError("กรุณาเข้าสู่ระบบเพื่อดูรายการประมูลของคุณ")
@@ -354,7 +415,17 @@ export default function ActiveBidsPage() {
     return () => {
       cancelled = true
     }
-  }, [sessionLoading, tab, page, searchQuery, sortBy, applyListResponse, fetchActiveBidList])
+  }, [sessionLoading, tab, page, searchQuery, sort, pageSize, applyListResponse, fetchActiveBidList])
+
+  const handlePageSizeChange = (size: PageSize) => {
+    setPageSize(size)
+    setPage(1)
+  }
+
+  const handleSortColumn = (key: AuctionListSortKey) => {
+    setSort((prev) => toggleTableSort(prev, key))
+    setPage(1)
+  }
 
   useEffect(() => {
     const id = window.setInterval(() => setTick((t) => t + 1), 1000)
@@ -444,18 +515,37 @@ export default function ActiveBidsPage() {
     [allCount, activeCount, endingSoonCount, outbidCount, closedCount],
   )
 
-  const totalPages = Math.max(1, Math.ceil(listTotal / ACTIVE_LIST_PAGE_SIZE))
-  const pageStart = listTotal === 0 ? 0 : (page - 1) * ACTIVE_LIST_PAGE_SIZE + 1
-  const pageEnd = Math.min(page * ACTIVE_LIST_PAGE_SIZE, listTotal)
+  const totalPages = Math.max(1, Math.ceil(listTotal / pageSize))
+  const pageStart = listTotal === 0 ? 0 : (page - 1) * pageSize + 1
+  const pageEnd = Math.min(page * pageSize, listTotal)
+
+  const handleTrackShipment = async (row: MyActiveBidItem) => {
+    if (!user || row.can_confirm_received) return
+    setTrackingShipmentId(row.auction_id)
+    try {
+      const data = await refreshAuctionShipmentTracking(row.auction_id)
+      const { openShipmentTrackSwal } = await import("@/app/lib/utils/shipmentTrackSwal")
+      await openShipmentTrackSwal(data)
+      await reloadActiveBids()
+      if (data.can_confirm) {
+        notifyPendingConfirmChanged()
+      }
+    } catch (e) {
+      const text = e instanceof Error ? e.message : "ติดตามพัสดุไม่สำเร็จ"
+      window.alert(text)
+    } finally {
+      setTrackingShipmentId(null)
+    }
+  }
 
   const handleConfirmReceived = async (row: MyActiveBidItem) => {
     if (!user || !row.can_confirm_received) return
     const { openConfirmReceivedWithReviewSwal } = await import("@/app/lib/utils/confirmReceivedWithReviewSwal")
-    const rating = await openConfirmReceivedWithReviewSwal()
-    if (rating == null) return
+    const review = await openConfirmReceivedWithReviewSwal()
+    if (review == null) return
     setConfirmingReceivedId(row.auction_id)
     try {
-      await confirmAuctionReceived(row.auction_id, rating)
+      await confirmAuctionReceived(row.auction_id, review.rating, review.comment)
       notifyCreditChanged()
       notifyPendingConfirmChanged()
       await reloadActiveBids()
@@ -497,15 +587,12 @@ export default function ActiveBidsPage() {
     <AppPageShell>
       <main className={APP_PAGE_INNER_WIDE}>
         <div className="min-w-0">
-            <div className="mb-6 flex gap-3">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-100 text-brand-600">
-                <Icon name="fa-gavel" className="text-lg" aria-hidden />
-              </span>
-              <div>
-                <h1 className="font-display text-2xl font-bold tracking-tight text-heading sm:text-3xl">รายการที่ฉันกำลังประมูล</h1>
-                <p className="mt-1 text-sm text-slate-600">ติดตามสถานะการประมูลของคุณ</p>
-              </div>
-            </div>
+            <AppPageHeader
+              title="รายการที่กำลังประมูล"
+              description="ติดตามสถานะการประมูลของคุณ"
+              icon="fa-gavel"
+              {...PAGE_BACK.home}
+            />
 
             {listError && (
               <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{listError}</div>
@@ -581,27 +668,12 @@ export default function ActiveBidsPage() {
                           className="box-border block w-full min-w-0 rounded-lg border-0 bg-surface-card py-2.5 pl-9 pr-3 text-sm text-body ring-1 ring-slate-200/80 transition placeholder:text-slate-400 hover:ring-slate-300/90 focus:ring-brand-400 dark:ring-slate-600"
                         />
                       </div>
-                      <div className="relative w-full min-w-0 sm:w-auto sm:max-w-sm sm:shrink-0">
-                        <select
-                          className="box-border block w-full min-w-0 appearance-none rounded-lg border-0 bg-surface-card py-2.5 pl-3 pr-11 text-sm font-medium text-body ring-1 ring-slate-200/80 transition hover:ring-slate-300/90 dark:ring-slate-600"
-                          value={sortBy}
-                          onChange={(e) => {
-                            setSortBy(e.target.value as SortKey)
-                            setPage(1)
-                          }}
-                          aria-label="เรียงลำดับรายการในหมวดที่เลือก"
-                        >
-                          <option value="latest">เรียงล่าสุด</option>
-                          <option value="end">ใกล้ปิดก่อน</option>
-                          <option value="price">ราคาปัจจุบัน (สูงไปต่ำ)</option>
-                        </select>
-                        <span
-                          className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400"
-                          aria-hidden
-                        >
-                          <Icon name="fa-chevron-down" className="block text-[0.625rem] leading-none" />
-                        </span>
-                      </div>
+                      <PageSizeSelect
+                        pageSize={pageSize}
+                        loading={loading}
+                        onChange={handlePageSizeChange}
+                        compact
+                      />
                       <button
                         type="button"
                         disabled={syncing || !!listError}
@@ -620,17 +692,73 @@ export default function ActiveBidsPage() {
 
                   <div className={`relative transition-opacity ${listRefreshing ? "opacity-60" : ""}`}>
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1020px] text-left text-sm text-slate-800">
+                    <table className="list-auction-table text-left">
+                      <colgroup>
+                        <col className="col-product" />
+                        <col />
+                        <col />
+                        <col />
+                        <col />
+                        <col />
+                        <col />
+                        <col className="col-actions" />
+                      </colgroup>
                       <thead>
                         <tr className="table-header-row">
-                          <th className="px-4 py-3 pl-5">รายการสินค้า</th>
-                          <th className="whitespace-nowrap px-3 py-3 text-center">ราคาเปิด</th>
-                          <th className="px-4 py-3 text-center">ราคาปัจจุบัน</th>
-                          <th className="px-4 py-3 text-center">ราคาที่คุณเสนอ</th>
-                          <th className="px-4 py-3 text-center">บิดครั้งละ</th>
-                          <th className="px-4 py-3 text-center">สถานะ</th>
-                          <th className="px-4 py-3">เวลาที่เหลือ</th>
-                          <th className="w-[9rem] min-w-[9rem] max-w-[9rem] py-3 pl-2 pr-5 text-center">จัดการ</th>
+                          <SortableTableHead
+                            label="รายการสินค้า"
+                            sortable={false}
+                            className="pl-5"
+                          />
+                          <SortableTableHead
+                            label="ราคาเปิด"
+                            sortKey="start"
+                            sort={sort}
+                            onSort={handleSortColumn}
+                            className="whitespace-nowrap px-3"
+                            align="center"
+                          />
+                          <SortableTableHead
+                            label="ราคาปัจจุบัน"
+                            sortKey="price"
+                            sort={sort}
+                            onSort={handleSortColumn}
+                            align="center"
+                          />
+                          <SortableTableHead
+                            label="บิดครั้งละ"
+                            sortKey="step"
+                            sort={sort}
+                            onSort={handleSortColumn}
+                            align="center"
+                          />
+                          <SortableTableHead
+                            label="ราคาที่เสนอ"
+                            sortKey="my_bid"
+                            sort={sort}
+                            onSort={handleSortColumn}
+                            align="center"
+                          />
+                          <SortableTableHead
+                            label="สถานะ"
+                            sortKey="status"
+                            sort={sort}
+                            onSort={handleSortColumn}
+                            align="center"
+                          />
+                          <SortableTableHead
+                            label="เวลาที่เหลือ"
+                            sortKey="end"
+                            sort={sort}
+                            onSort={handleSortColumn}
+                            align="center"
+                          />
+                          <SortableTableHead
+                            label="จัดการ"
+                            sortable={false}
+                            align="center"
+                            className="table-col-actions"
+                          />
                         </tr>
                       </thead>
                       <tbody>
@@ -662,6 +790,12 @@ export default function ActiveBidsPage() {
                                   ? "text-emerald-600"
                                   : "text-red-600"
                           const priceCell = "text-sm font-semibold tabular-nums"
+                          const showConfirm = Boolean(item.can_confirm_received)
+                          const awaitingSellerShip =
+                            ended && item.is_leading && !showConfirm && (item.shipment_status ?? "pending") === "pending"
+                          const showTrack = ended && item.is_leading && !showConfirm && !awaitingSellerShip
+                          const rowBusy =
+                            confirmingReceivedId === item.auction_id || trackingShipmentId === item.auction_id
 
                           return (
                             <tr key={item.auction_id} className="border-b border-slate-100 last:border-0 dark:border-slate-700/80">
@@ -705,13 +839,13 @@ export default function ActiveBidsPage() {
                               <td className={`px-4 py-4 text-center align-middle ${priceCell} ${ended ? "text-muted" : "text-heading"}`}>
                                 {item.current_bid.toLocaleString()} ฿
                               </td>
-                              <td className={`px-4 py-4 text-center align-middle ${priceCell} ${yourBidTone}`}>
-                                {item.my_held_amount.toLocaleString()} ฿
-                              </td>
                               <td className="px-4 py-4 text-center align-middle">
                                 <span className={`${priceCell} ${ended ? "text-muted" : "text-heading"}`}>
                                   {step.toLocaleString()} ฿
                                 </span>
+                              </td>
+                              <td className={`px-4 py-4 text-center align-middle ${priceCell} ${yourBidTone}`}>
+                                {item.my_held_amount.toLocaleString()} ฿
                               </td>
                               <td className="px-4 py-4 align-middle">
                                 {item.can_confirm_received ? (
@@ -720,8 +854,28 @@ export default function ActiveBidsPage() {
                                       <Icon name="fa-box-open" className="text-xs" aria-hidden />
                                     </span>
                                     <div>
-                                      <p className="text-sm font-medium text-heading">รอยืนยันรับของ</p>
-                                      <p className="text-xs text-slate-500">ผู้ขายจัดส่งแล้ว</p>
+                                      <p className="text-sm font-medium text-heading">ยืนยันรับของได้</p>
+                                      <p className="text-xs text-slate-500">พัสดุส่งถึงแล้ว · +1 คะแนนชื่อเสียง</p>
+                                    </div>
+                                  </div>
+                                ) : ended && item.is_leading && awaitingSellerShip ? (
+                                  <div className="flex flex-col items-center gap-1.5 text-center">
+                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                                      <Icon name="fa-clock" className="text-xs" aria-hidden />
+                                    </span>
+                                    <div>
+                                      <p className="text-sm font-medium text-heading">รอผู้ขายจัดส่ง</p>
+                                      <p className="text-xs text-slate-500">ปิดประมูลแล้ว — รอผู้ขายส่งของ</p>
+                                    </div>
+                                  </div>
+                                ) : ended && item.is_leading ? (
+                                  <div className="flex flex-col items-center gap-1.5 text-center">
+                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-700">
+                                      <Icon name="fa-truck-fast" className="text-xs" aria-hidden />
+                                    </span>
+                                    <div>
+                                      <p className="text-sm font-medium text-heading">รอติดตามพัสดุ</p>
+                                      <p className="text-xs text-slate-500">กดติดตามเพื่ออัปเดตสถานะ</p>
                                     </div>
                                   </div>
                                 ) : ended ? (
@@ -767,44 +921,22 @@ export default function ActiveBidsPage() {
                                   </div>
                                 )}
                               </td>
-                              <td
-                                className={`w-[9rem] max-w-[9rem] py-4 pl-2 pr-5 ${
-                                  item.can_confirm_received ? "align-top" : "align-middle"
-                                }`}
-                              >
-                                <div
-                                  className={`mx-auto flex w-full max-w-[9rem] flex-col gap-2 ${
-                                    item.can_confirm_received ? "" : "justify-center"
-                                  }`}
-                                >
-                                  {item.can_confirm_received ? (
-                                    <>
-                                      <Link
-                                        href={`/product/${encodeURIComponent(item.auction_id)}`}
-                                        className="action-btn-secondary"
-                                      >
-                                        <Icon name="fa-eye" className="text-xs opacity-80" aria-hidden />
-                                        ดูรายละเอียด
-                                      </Link>
-                                      <button
-                                        type="button"
-                                        className="inline-flex w-full min-h-[2.5rem] items-center justify-center rounded-lg bg-emerald-600 px-2 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-700/90"
-                                        disabled={confirmingReceivedId === item.auction_id}
-                                        onClick={() => void handleConfirmReceived(item)}
-                                      >
-                                        {confirmingReceivedId === item.auction_id ? "กำลังส่ง…" : "ยืนยันรับของ"}
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <Link
-                                      href={`/product/${encodeURIComponent(item.auction_id)}`}
-                                      className="action-btn-secondary"
-                                    >
-                                      <Icon name="fa-eye" className="text-xs opacity-80" aria-hidden />
-                                      ดูรายละเอียด
-                                    </Link>
-                                  )}
-                                </div>
+                              <td className="table-col-actions px-4 py-4 align-middle">
+                                <ActiveBidRowActionMenu
+                                  auctionId={item.auction_id}
+                                  open={openMenuId === item.auction_id}
+                                  busy={rowBusy}
+                                  showConfirm={showConfirm}
+                                  showTrack={showTrack}
+                                  confirming={confirmingReceivedId === item.auction_id}
+                                  tracking={trackingShipmentId === item.auction_id}
+                                  onToggle={() =>
+                                    setOpenMenuId((prev) => (prev === item.auction_id ? null : item.auction_id))
+                                  }
+                                  onClose={() => setOpenMenuId(null)}
+                                  onConfirmReceived={() => void handleConfirmReceived(item)}
+                                  onTrackShipment={() => void handleTrackShipment(item)}
+                                />
                               </td>
                             </tr>
                           )
@@ -813,20 +945,23 @@ export default function ActiveBidsPage() {
                     </table>
                   </div>
                   <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100/90 bg-slate-50/30 px-5 py-4 dark:border-slate-700/90 dark:bg-slate-800/30 sm:flex-row">
-                    <p className="text-xs text-slate-500">
-                      {searchQuery ? (
-                        <>พบ {listTotal.toLocaleString()} รายการจากการค้นหา</>
-                      ) : (
-                        <>ทั้งหมด {listTotal.toLocaleString()} รายการ</>
-                      )}
-                      {listTotal > 0 ? (
-                        <>
-                          {" "}
-                          · แสดง {pageStart.toLocaleString()}–{pageEnd.toLocaleString()}
-                        </>
-                      ) : null}
-                    </p>
-                    {listTotal > ACTIVE_LIST_PAGE_SIZE ? (
+                    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 sm:justify-start">
+                      <p className="text-xs text-slate-500">
+                        {searchQuery ? (
+                          <>พบ {listTotal.toLocaleString()} รายการจากการค้นหา</>
+                        ) : (
+                          <>ทั้งหมด {listTotal.toLocaleString()} รายการ</>
+                        )}
+                        {listTotal > 0 ? (
+                          <>
+                            {" "}
+                            · แสดง {pageStart.toLocaleString()}–{pageEnd.toLocaleString()}
+                          </>
+                        ) : null}
+                      </p>
+                      <PageSizeSelect pageSize={pageSize} loading={loading} onChange={handlePageSizeChange} />
+                    </div>
+                    {listTotal > pageSize ? (
                       <div className="flex items-center gap-2 text-sm text-body">
                         <button
                           type="button"

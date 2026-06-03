@@ -16,12 +16,14 @@ function stableKey(params: PublicAuctionListParams): string {
     const normalized: Record<string, unknown> = {
         q: params.q ?? "",
         category: params.category ?? "",
+        ended: params.ended ?? "open",
         min_price: params.min_price ?? null,
         max_price: params.max_price ?? null,
         min_start_price: params.min_start_price ?? null,
         max_start_price: params.max_start_price ?? null,
         min_bid_step: params.min_bid_step ?? null,
         max_bid_step: params.max_bid_step ?? null,
+        min_seller_rating: params.min_seller_rating ?? null,
         end_from: params.end_from ?? "",
         end_to: params.end_to ?? "",
         sort: (params.sort ?? "newest") as AuctionListSort,
@@ -51,7 +53,7 @@ export function listPublicAuctionsCached(
     }
 
     const pending = inflight.get(key)
-    if (pending) return pending
+    if (pending && !options?.signal) return pending
 
     const p = listPublicAuctions(params, { signal: options?.signal })
         .then((data) => {
@@ -59,6 +61,10 @@ export function listPublicAuctionsCached(
                 cache.set(key, { expires: Date.now() + TTL_MS, data })
             }
             return data
+        })
+        .catch((err) => {
+            inflight.delete(key)
+            throw err
         })
         .finally(() => {
             inflight.delete(key)

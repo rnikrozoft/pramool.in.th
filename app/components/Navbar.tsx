@@ -10,12 +10,28 @@ import { getMyActiveBids } from '../lib/api/auction'
 import { listPublicAuctionsCached } from '../lib/data/publicAuctionsCache'
 import { onPendingConfirmChanged } from '../lib/pendingConfirmBadgeSync'
 import { onPendingShipChanged } from '../lib/pendingShipBadgeSync'
+import { onNotificationChanged } from '../lib/notificationBadgeSync'
 import { openTopupCreditSwal } from '../lib/utils/topupCreditSwal'
 import Icon from "@/app/components/Icon"
-import ThemeToggle from "@/app/components/ThemeToggle"
+import PramoolLogo from "@/app/components/PramoolLogo"
+import { SellerStarsDisplay } from "@/app/components/SellerStarRating"
+import { auctionCoverImageUrl } from "@/app/lib/auctionDisplay"
+import dynamic from "next/dynamic"
+
+const ThemeToggle = dynamic(() => import("@/app/components/ThemeToggle"), { ssr: false })
 
 export default function Navbar() {
-    type SearchSuggestion = Pick<PublicAuctionListItem, "auction_id" | "title" | "current_bid" | "cover_image_url">
+    type SearchSuggestion = Pick<
+        PublicAuctionListItem,
+        | "auction_id"
+        | "title"
+        | "start_price"
+        | "current_bid"
+        | "bid_step"
+        | "cover_image_url"
+        | "seller_display_name"
+        | "seller_review_avg_rating"
+    >
     const [isOpen, setIsOpen] = useState(false)
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
     const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false)
@@ -25,6 +41,8 @@ export default function Navbar() {
     const router = useRouter()
     const { user, loading, setUser, refreshSession } = useContext(UserContext)
     const creditBalance = Number(user?.credit ?? 0)
+    const hasCreditDebt = creditBalance < 0
+    const creditDebtBaht = hasCreditDebt ? Math.abs(creditBalance) : 0
     const creditBalanceRef = useRef(creditBalance)
     useEffect(() => {
         creditBalanceRef.current = creditBalance
@@ -71,6 +89,7 @@ export default function Navbar() {
     }, [refreshPendingConfirmCount])
 
     const pendingSellerShipCount = Number(user?.pendingSellerShipCount ?? 0)
+    const unreadNotificationCount = Number(user?.unreadNotificationCount ?? 0)
 
     useEffect(() => {
         if (!user) return
@@ -83,13 +102,19 @@ export default function Navbar() {
         })
     }, [refreshSession])
 
+    useEffect(() => {
+        return onNotificationChanged(() => {
+            void refreshSession({ force: true, silent: true })
+        })
+    }, [refreshSession])
+
     const navItems = [
-        { href: '/', label: 'หน้าแรก' },
         { href: '/auctions', label: 'รายการสินค้า' },
     ]
     const userMenuItems = [
-        { href: '/seller/auctions', label: 'รายการที่ฉันเปิดประมูล', shipBadge: true },
-        { href: '/bids/active', label: 'รายการที่ฉันกำลังประมูล', confirmBadge: true },
+        { href: '/account/notifications', label: 'การแจ้งเตือน', notificationBadge: true },
+        { href: '/seller/auctions', label: 'รายการที่เปิดประมูล', shipBadge: true },
+        { href: '/bids/active', label: 'รายการที่กำลังประมูล', confirmBadge: true },
         { href: '/bids/history', label: 'ประวัติการประมูล' },
         { href: '/wallet/transactions', label: 'ประวัติเครดิต' },
         { href: '/wallet/withdraw', label: 'ถอนเครดิต' },
@@ -195,8 +220,12 @@ export default function Navbar() {
                         res.items.map((it) => ({
                             auction_id: it.auction_id,
                             title: it.title,
+                            start_price: it.start_price,
                             current_bid: it.current_bid,
+                            bid_step: it.bid_step,
                             cover_image_url: it.cover_image_url,
+                            seller_display_name: it.seller_display_name,
+                            seller_review_avg_rating: it.seller_review_avg_rating,
                         })),
                     )
                     setIsSearchOpen(true)
@@ -222,20 +251,61 @@ export default function Navbar() {
                 ) : searchSuggestions.length === 0 ? (
                     <div className="px-3 py-2.5 text-sm text-muted">ไม่พบรายการที่ตรงกับคำค้น</div>
                 ) : (
-                    <div className="max-h-80 overflow-y-auto">
-                        {searchSuggestions.map((it) => (
-                            <button
-                                key={it.auction_id}
-                                type="button"
-                                className="block w-full border-b border-slate-100 px-3 py-2 text-left hover:bg-brand-50 last:border-0 dark:border-slate-700 dark:hover:bg-brand-950/40"
-                                onClick={() => handleSearchSuggestionPick(it.auction_id)}
-                            >
-                                <p className="truncate text-sm font-medium text-heading">{it.title}</p>
-                                <p className="mt-0.5 text-xs text-muted">
-                                    {it.auction_id} · {Number(it.current_bid ?? 0).toLocaleString()} ฿
-                                </p>
-                            </button>
-                        ))}
+                    <div className="max-h-[28rem] overflow-y-auto">
+                        {searchSuggestions.map((it) => {
+                            const sellerName = it.seller_display_name?.trim() || "ผู้ขาย"
+                            const sellerRating = Number(it.seller_review_avg_rating ?? 0)
+                            const start = Number(it.start_price ?? 0)
+                            const current = Number(it.current_bid ?? 0)
+                            const step = Number(it.bid_step ?? 0)
+                            return (
+                                <button
+                                    key={it.auction_id}
+                                    type="button"
+                                    className="flex w-full gap-3 border-b border-slate-100 px-3 py-2.5 text-left hover:bg-brand-50 last:border-0 dark:border-slate-700 dark:hover:bg-brand-950/40"
+                                    onClick={() => handleSearchSuggestionPick(it.auction_id)}
+                                >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={auctionCoverImageUrl(it.cover_image_url)}
+                                        alt=""
+                                        className="h-14 w-14 shrink-0 rounded-lg bg-slate-100 object-cover ring-1 ring-slate-200/80 dark:bg-slate-800 dark:ring-slate-700"
+                                    />
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block truncate text-sm font-semibold text-heading">{it.title}</span>
+                                        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                                            <span className="truncate font-medium text-body">{sellerName}</span>
+                                            <span className="inline-flex shrink-0 items-center gap-1">
+                                                <SellerStarsDisplay rating={sellerRating} size="sm" />
+                                                <span className="font-display font-bold tabular-nums text-heading">
+                                                    {sellerRating > 0 ? sellerRating.toFixed(1) : "—"}
+                                                </span>
+                                            </span>
+                                        </span>
+                                        <span className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] leading-snug">
+                                            <span>
+                                                <span className="text-muted">เปิด </span>
+                                                <span className="font-display font-semibold tabular-nums text-heading">
+                                                    {start.toLocaleString()} ฿
+                                                </span>
+                                            </span>
+                                            <span>
+                                                <span className="text-muted">บิดขั้นต่ำ </span>
+                                                <span className="font-display font-semibold tabular-nums text-brand-600 dark:text-brand-400">
+                                                    {step.toLocaleString()} ฿
+                                                </span>
+                                            </span>
+                                            <span>
+                                                <span className="text-muted">ล่าสุด </span>
+                                                <span className="font-display font-semibold tabular-nums text-brand-700 dark:text-brand-300">
+                                                    {current.toLocaleString()} ฿
+                                                </span>
+                                            </span>
+                                        </span>
+                                    </span>
+                                </button>
+                            )
+                        })}
                     </div>
                 )}
                 <button
@@ -313,8 +383,24 @@ export default function Navbar() {
         </span>
     ) : null
 
-    const userMenuPendingCornerCount = pendingConfirmCount + pendingSellerShipCount
+    const notificationBadgeLabel = `${unreadNotificationCount} การแจ้งเตือนใหม่`
+    const notificationBadgeCount = unreadNotificationCount > 9 ? "9+" : unreadNotificationCount
+
+    const notificationBadgeMenu = unreadNotificationCount > 0 ? (
+        <span
+            className="relative inline-flex h-[18px] min-w-[18px] shrink-0"
+            aria-label={notificationBadgeLabel}
+        >
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" aria-hidden />
+            <span className="relative inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
+                {notificationBadgeCount}
+            </span>
+        </span>
+    ) : null
+
+    const userMenuPendingCornerCount = pendingConfirmCount + pendingSellerShipCount + unreadNotificationCount
     const userMenuPendingCornerLabel = [
+        unreadNotificationCount > 0 ? `${unreadNotificationCount} การแจ้งเตือนใหม่` : "",
         pendingSellerShipCount > 0 ? `${pendingSellerShipCount} รายการรอบันทึกส่งของ` : "",
         pendingConfirmCount > 0 ? `${pendingConfirmCount} รายการรอยืนยันรับของ` : "",
     ].filter(Boolean).join(", ")
@@ -338,21 +424,26 @@ export default function Navbar() {
                 <div className="app-page-container py-3">
                     <div className="flex items-center gap-2">
                         <button
-                            className="rounded-2xl border border-violet-200 p-2.5 text-brand-700"
+                            className="relative rounded-2xl border border-violet-200 p-2.5 text-brand-700"
                             type="button"
                             aria-expanded={isOpen}
-                            aria-label="Toggle navigation"
+                            aria-label={
+                                userMenuPendingCornerCount > 0
+                                    ? `เปิดเมนู — ${userMenuPendingCornerLabel}`
+                                    : "เปิดเมนู"
+                            }
                             onClick={() => setIsOpen((prev) => !prev)}
                         >
                             <Icon name="fa-bars" />
+                            {clientReady && !loading && user ? userMenuPendingCornerBadge : null}
                         </button>
-                        <div ref={mobileSearchWrapRef} className="relative flex-1">
+                        <div ref={mobileSearchWrapRef} className="relative min-w-0 flex-1">
                             <form className="relative" onSubmit={handleSearchSubmit}>
                                 <input
                                     type="text"
                                     className="form-input border-slate-200 bg-slate-100 pr-10 placeholder:text-slate-500 focus:border-brand-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:focus:bg-slate-800"
-                                    placeholder="ค้นหาชื่อสินค้า..."
-                                    aria-label="Search product"
+                                    placeholder="ค้นหาสินค้า / รหัสประมูล"
+                                    aria-label="ค้นหาสินค้า"
                                     value={searchKeyword}
                                     onFocus={() => {
                                         if (searchKeyword.trim().length >= 2) setIsSearchOpen(true)
@@ -365,15 +456,20 @@ export default function Navbar() {
                             </form>
                             {renderSearchSuggestions()}
                         </div>
-                        <ThemeToggle size="sm" />
                         {clientReady && !loading && user && (
                             <button
                                 type="button"
-                                className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
+                                className={
+                                    hasCreditDebt
+                                        ? "shrink-0 rounded-full border border-rose-300 bg-rose-50 px-2.5 py-2 text-xs font-semibold text-rose-900 dark:border-rose-800 dark:bg-rose-950/60 dark:text-rose-200"
+                                        : "shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
+                                }
                                 onClick={handleOpenTopup}
-                                aria-label="เครดิตคงเหลือ"
+                                aria-label={hasCreditDebt ? "ยอดค้างชำระ" : "เครดิตคงเหลือ"}
                             >
-                                ฿{formatCompactCredit(creditBalance)}
+                                {hasCreditDebt
+                                    ? `ค้าง ${formatCompactCredit(creditDebtBaht)}`
+                                    : `฿${formatCompactCredit(creditBalance)}`}
                             </button>
                         )}
                         {!clientReady && (
@@ -382,16 +478,28 @@ export default function Navbar() {
                                 aria-hidden
                             />
                         )}
+                        <ThemeToggle size="sm" />
                     </div>
                     {isOpen && (
                         <div className="mt-3 space-y-2 rounded-2xl border border-violet-100 bg-white/95 p-3 shadow-sm dark:border-violet-900/50 dark:bg-slate-800/95">
+                            <Link
+                                href="/"
+                                onClick={() => setIsOpen(false)}
+                                className={
+                                    pathname === "/"
+                                        ? "block rounded-xl bg-brand-50 px-2 py-1.5 text-sm font-semibold text-brand-700 dark:bg-brand-950/40 dark:text-brand-300"
+                                        : "block rounded-xl px-2 py-1.5 text-sm text-body hover:bg-brand-50 dark:hover:bg-brand-950/40"
+                                }
+                            >
+                                หน้าแรก
+                            </Link>
                             {navItems.map((item) => (
                                 <Link key={item.label} className="block rounded-xl px-2 py-1.5 text-sm text-body hover:bg-brand-50 dark:hover:bg-brand-950/40" href={item.href} onClick={() => setIsOpen(false)}>
                                     {item.label}
                                 </Link>
                             ))}
                             <Link href="/how-it-works" onClick={() => setIsOpen(false)} className="block rounded-xl px-2 py-1.5 text-sm text-body hover:bg-brand-50 dark:hover:bg-brand-950/40">
-                                วิธีใช้งาน
+                                วิธีการประมูล
                             </Link>
                             {!clientReady ? (
                                 <div className="space-y-2 border-t border-violet-100 pt-2">
@@ -439,6 +547,7 @@ export default function Navbar() {
                                                         <span>{item.label}</span>
                                                         {"shipBadge" in item && item.shipBadge ? pendingShipBadgeMenu : null}
                                                         {"confirmBadge" in item && item.confirmBadge ? pendingConfirmBadgeMenu : null}
+                                                        {"notificationBadge" in item && item.notificationBadge ? notificationBadgeMenu : null}
                                                     </Link>
                                                 ))}
                                             </div>
@@ -463,25 +572,17 @@ export default function Navbar() {
                     )}
                 </div>
             </nav>
-            <div className="h-[73px] lg:hidden" aria-hidden="true"></div>
+            <div className="h-[var(--mobile-nav-height)] lg:hidden" aria-hidden="true"></div>
             <header className="sticky top-0 z-50 hidden border-b border-violet-100 bg-white shadow-sm dark:border-violet-900/50 dark:bg-slate-900 dark:shadow-slate-950/40 lg:block">
                 <div className="relative app-page-container flex items-center gap-4 py-3">
-                    <Link href="/" className="flex items-center gap-3 text-brand-900 dark:text-brand-100">
-                        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-600 text-lg text-white shadow-md shadow-brand-600/30">
-                            <Icon name="fa-gavel" aria-hidden />
-                        </span>
-                        <span className="flex flex-col leading-tight">
-                            <span className="font-display text-xl font-bold tracking-tight">Pramool</span>
-                            <span className="text-xs font-medium text-brand-600 dark:text-brand-400">ประมูลง่าย · ได้ของชัวร์</span>
-                        </span>
-                    </Link>
-                    <div ref={desktopSearchWrapRef} className="relative mx-auto max-w-xl flex-1">
+                    <PramoolLogo />
+                    <div ref={desktopSearchWrapRef} className="relative min-w-0 max-w-md flex-1 xl:max-w-lg">
                         <form className="relative" onSubmit={handleSearchSubmit}>
                             <input
                                 type="search"
-                                className="form-input border-slate-200 bg-slate-100 py-2.5 pl-4 pr-11 placeholder:text-slate-500 focus:border-brand-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:focus:bg-slate-800"
-                                placeholder="ค้นหาชื่อสินค้า..."
-                                aria-label="ค้นหา"
+                                className="form-input rounded-full border-slate-200 bg-slate-100 py-2.5 pl-4 pr-11 placeholder:text-slate-500 focus:border-brand-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:focus:bg-slate-800"
+                                placeholder="ค้นหาสินค้า / รหัสประมูล"
+                                aria-label="ค้นหาสินค้า"
                                 value={searchKeyword}
                                 onFocus={() => {
                                     if (searchKeyword.trim().length >= 2) setIsSearchOpen(true)
@@ -498,7 +599,7 @@ export default function Navbar() {
                         </form>
                         {renderSearchSuggestions()}
                     </div>
-                    <nav className="hidden shrink-0 items-center gap-6 text-sm lg:flex">
+                    <nav className="hidden shrink-0 items-center gap-5 text-sm xl:flex">
                         {navItems.map((item) => {
                             const active =
                                 item.href === "/"
@@ -510,8 +611,8 @@ export default function Navbar() {
                                     href={item.href}
                                     className={
                                         active
-                                            ? "inline-flex min-h-10 items-center border-b-2 border-brand-600 py-2 font-semibold text-brand-700"
-                                            : "inline-flex min-h-10 items-center border-b-2 border-transparent py-2 font-medium text-slate-600 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400"
+                                            ? "inline-flex min-h-10 items-center whitespace-nowrap font-semibold text-brand-700"
+                                            : "inline-flex min-h-10 items-center whitespace-nowrap font-medium text-slate-600 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400"
                                     }
                                 >
                                     {item.label}
@@ -522,14 +623,13 @@ export default function Navbar() {
                             href="/how-it-works"
                             className={
                                 pathname.startsWith("/how-it-works")
-                                    ? "inline-flex min-h-10 items-center border-b-2 border-brand-600 py-2 font-semibold text-brand-700"
-                                    : "inline-flex min-h-10 items-center border-b-2 border-transparent py-2 font-medium text-slate-600 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400"
+                                    ? "inline-flex min-h-10 items-center whitespace-nowrap font-semibold text-brand-700"
+                                    : "inline-flex min-h-10 items-center whitespace-nowrap font-medium text-slate-600 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400"
                             }
                         >
-                            วิธีใช้งาน
+                            วิธีการประมูล
                         </Link>
                     </nav>
-                    <ThemeToggle />
                     <span
                         className="hidden shrink-0 select-none px-0.5 text-sm font-light text-slate-300 dark:text-slate-600 lg:inline lg:self-center"
                         aria-hidden
@@ -563,10 +663,16 @@ export default function Navbar() {
                                 <div className="flex items-center gap-2">
                                     <button
                                         type="button"
-                                        className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900"
+                                        className={
+                                            hasCreditDebt
+                                                ? "rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-900 dark:border-rose-800 dark:bg-rose-950/60 dark:text-rose-200"
+                                                : "rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900"
+                                        }
                                         onClick={handleOpenTopup}
                                     >
-                                        เครดิต {creditBalance.toLocaleString()} ฿
+                                        {hasCreditDebt
+                                            ? `ค้างชำระ ${creditDebtBaht.toLocaleString()} ฿`
+                                            : `เครดิต ${creditBalance.toLocaleString()} ฿`}
                                     </button>
                                     <div ref={userMenuRef} className="relative">
                                     <button
@@ -598,6 +704,7 @@ export default function Navbar() {
                                                     <span>{item.label}</span>
                                                     {"shipBadge" in item && item.shipBadge ? pendingShipBadgeMenu : null}
                                                     {"confirmBadge" in item && item.confirmBadge ? pendingConfirmBadgeMenu : null}
+                                                    {"notificationBadge" in item && item.notificationBadge ? notificationBadgeMenu : null}
                                                 </Link>
                                             ))}
                                             <div className="my-1 border-t border-violet-100"></div>
@@ -616,6 +723,7 @@ export default function Navbar() {
                             )}
                         </>
                     )}
+                    <ThemeToggle />
                 </div>
             </header>
         </>

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
+import React, { createContext, useCallback, useContext, useEffect, useSyncExternalStore, type ReactNode } from "react"
 
 export type Theme = "light" | "dark"
 
@@ -10,17 +10,18 @@ type ThemeContextType = {
   theme: Theme
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
-  mounted: boolean
 }
 
 export const ThemeContext = createContext<ThemeContextType>({
   theme: "light",
   setTheme: () => {},
   toggleTheme: () => {},
-  mounted: false,
 })
 
+const themeListeners = new Set<() => void>()
+
 function applyTheme(theme: Theme) {
+  if (typeof document === "undefined") return
   document.documentElement.classList.toggle("dark", theme === "dark")
   try {
     localStorage.setItem(STORAGE_KEY, theme)
@@ -49,32 +50,48 @@ export function resolveTheme(): Theme {
   return "light"
 }
 
+function notifyThemeChange() {
+  themeListeners.forEach((listener) => listener())
+}
+
+function subscribeTheme(onStoreChange: () => void) {
+  themeListeners.add(onStoreChange)
+  if (typeof window === "undefined") {
+    return () => themeListeners.delete(onStoreChange)
+  }
+  const mq = window.matchMedia("(prefers-color-scheme: dark)")
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === STORAGE_KEY || e.key === null) onStoreChange()
+  }
+  mq.addEventListener("change", onStoreChange)
+  window.addEventListener("storage", onStorage)
+  return () => {
+    themeListeners.delete(onStoreChange)
+    mq.removeEventListener("change", onStoreChange)
+    window.removeEventListener("storage", onStorage)
+  }
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light")
-  const [mounted, setMounted] = useState(false)
+  const theme = useSyncExternalStore(subscribeTheme, resolveTheme, () => "light" as Theme)
 
   useEffect(() => {
-    const resolved = resolveTheme()
-    applyTheme(resolved)
-    setThemeState(resolved)
-    setMounted(true)
-  }, [])
+    applyTheme(theme)
+  }, [theme])
 
   const setTheme = useCallback((next: Theme) => {
     applyTheme(next)
-    setThemeState(next)
+    notifyThemeChange()
   }, [])
 
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) => {
-      const next: Theme = prev === "dark" ? "light" : "dark"
-      applyTheme(next)
-      return next
-    })
+    const next: Theme = resolveTheme() === "dark" ? "light" : "dark"
+    applyTheme(next)
+    notifyThemeChange()
   }, [])
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, mounted }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   )

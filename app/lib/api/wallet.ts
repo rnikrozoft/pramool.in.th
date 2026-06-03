@@ -10,6 +10,25 @@ export type PromptPayTopupResponse = {
     paid_amount: number;
     fee_amount: number;
     credit_amount: number;
+    expires_at?: string;
+    expired?: boolean;
+    paid?: boolean;
+    credited?: boolean;
+    resumed?: boolean;
+};
+
+export type PromptPayTopupStatusResponse = {
+    charge_id: string;
+    qr_code_url?: string;
+    status: string;
+    paid: boolean;
+    credited: boolean;
+    expired: boolean;
+    expires_at?: string;
+    dispute_status?: string;
+    paid_amount: number;
+    fee_amount: number;
+    credit_amount: number;
 };
 
 export type WalletFeeRates = {
@@ -44,6 +63,38 @@ export const createPromptPayTopup = async (amount: number): Promise<PromptPayTop
         }
         throw new Error(msg);
     }
+    return await response.json();
+};
+
+/** Sync top-up charge status from Omise (GET /wallet/topup/status). */
+export const syncPromptPayTopupStatus = async (chargeId: string): Promise<PromptPayTopupStatusResponse> => {
+    const response = await callGetAPI(
+        `/wallet/topup/status?charge_id=${encodeURIComponent(chargeId)}`,
+        true,
+        getWalletApiBaseUrl(),
+    );
+    if (!response.ok) {
+        let msg = "ตรวจสอบสถานะ QR ไม่สำเร็จ";
+        try {
+            const data = (await response.json()) as { message?: string };
+            if (data?.message) msg = data.message;
+        } catch {
+            /* ignore */
+        }
+        throw new Error(msg);
+    }
+    return await response.json();
+};
+
+/** Returns pending PromptPay QR for the same amount, or null when none is resumable. */
+export const getPendingPromptPayTopup = async (amount: number): Promise<PromptPayTopupResponse | null> => {
+    const response = await callGetAPI(
+        `/wallet/topup/pending?amount=${floorBaht(amount)}`,
+        true,
+        getWalletApiBaseUrl(),
+    );
+    if (response.status === 204) return null;
+    if (!response.ok) return null;
     return await response.json();
 };
 
@@ -107,13 +158,28 @@ export type CreditActivityResponse = {
     offset: number;
 };
 
+export type CreditActivitySortKey = "created_at" | "entry_type" | "amount" | "status";
+
+export type CreditActivitySort = {
+    key: CreditActivitySortKey;
+    order: "asc" | "desc";
+};
+
 export const getCreditActivity = async (
     limit: number,
     offset: number,
     filter: ActivityFilter = "all",
+    sort?: CreditActivitySort,
 ): Promise<CreditActivityResponse> => {
+    const qs = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+        filter,
+    });
+    if (sort?.key) qs.set("sort", sort.key);
+    if (sort?.order) qs.set("order", sort.order);
     const response = await callGetAPI(
-        `/wallet/transactions?limit=${limit}&offset=${offset}&filter=${encodeURIComponent(filter)}`,
+        `/wallet/transactions?${qs.toString()}`,
         true,
         getWalletApiBaseUrl(),
     );

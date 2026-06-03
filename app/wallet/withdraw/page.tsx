@@ -3,7 +3,8 @@
 import Link from "next/link"
 import React, { useCallback, useContext, useEffect, useMemo, useState } from "react"
 import Swal from "sweetalert2"
-import { AppPageShell, APP_PAGE_INNER } from "@/app/components/AppPageShell"
+import { AppPageShell, APP_PAGE_INNER, AppPageHeader } from "@/app/components/AppPageShell"
+import { PAGE_BACK } from "@/app/lib/pageNav"
 import { UserContext } from "@/app/context/UserContext"
 import { getBanks, getMyProfile, type BankOption } from "@/app/lib/api/user"
 import { requestWithdraw } from "@/app/lib/api/wallet"
@@ -21,6 +22,7 @@ import {
   withdrawNetTransfer,
   type ActiveWalletFees,
 } from "@/app/lib/walletFees"
+import { openWithdrawConfirmSwal } from "@/app/lib/utils/withdrawConfirmSwal"
 
 export default function WalletWithdrawPage() {
   const { user, refreshSession } = useContext(UserContext)
@@ -69,8 +71,11 @@ export default function WalletWithdrawPage() {
 
   const hasBank = bankId > 0 && bankAccountName.trim() !== "" && /^\d{10,16}$/.test(bankAccountNumber.trim())
   const credit = user?.credit ?? 0
+  const hasCreditDebt = credit < 0
+  const creditDebtBaht = hasCreditDebt ? Math.abs(credit) : 0
   const blocked = Boolean(user?.withdrawalBlocked)
   const blockReason = user?.withdrawalBlockReason?.trim() ?? ""
+  const withdrawDisabled = blocked || hasCreditDebt || !hasBank || credit < fees.minWithdrawCreditThb
 
   const parsedAmount = floorBaht(amount)
   const transferPreview = Number.isFinite(parsedAmount) ? withdrawNetTransfer(parsedAmount, fees) : 0
@@ -89,12 +94,16 @@ export default function WalletWithdrawPage() {
       setError(blockReason || "ยังไม่สามารถถอนเงินได้")
       return
     }
+    if (hasCreditDebt) {
+      setError(`มียอดค้างชำระ ${creditDebtBaht.toLocaleString()} บาท — กรุณาเติมเครดิตให้ครบก่อนถอนเงิน`)
+      return
+    }
     if (!hasBank) {
       setError("กรุณาบันทึกบัญชีธนาคารในโปรไฟล์ก่อน")
       return
     }
     if (!isPositiveWholeBaht(parsedAmount)) {
-      setError("จำนวนเงินต้องเป็นบาทเต็ม (ไม่มีทศนิยม)")
+      setError("จำนวนเงินต้องไม่มีทศนิยม")
       return
     }
     if (!amountValid) {
@@ -105,22 +114,13 @@ export default function WalletWithdrawPage() {
     const fee = fees.omiseTransferFeeThb
     const toBank = withdrawNetTransfer(parsedAmount, fees)
 
-    const confirm = await Swal.fire({
-      title: "ยืนยันการถอนเครดิต",
-      html: `<div class="text-left text-sm text-slate-700 space-y-2">
-<p>หักเครดิต <strong>${parsedAmount.toLocaleString()} ฿</strong></p>
-<p>ค่าธรรมเนียมโอน (Omise) <strong>−${fee.toLocaleString()} ฿</strong> <span class="text-slate-500">— ผู้ใช้รับภาระ</span></p>
-<p class="text-base font-semibold text-slate-900">รับเข้าบัญชีประมาณ <strong>${toBank.toLocaleString()} ฿</strong></p>
-<hr class="my-2 border-slate-200" />
-<p class="font-medium">${bankLabel}</p>
-<p>${bankAccountName}</p>
-<p class="tabular-nums">${bankAccountNumber}</p>
-<p class="text-xs text-slate-500 mt-2"><a href="/terms/fees" target="_blank" rel="noopener" class="underline">อ่านนโยบายค่าธรรมเนียม</a></p>
-</div>`,
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonText: "ยืนยันถอน",
-      cancelButtonText: "ยกเลิก",
+    const confirm = await openWithdrawConfirmSwal({
+      amount: parsedAmount,
+      fee,
+      toBank,
+      bankLabel,
+      bankAccountName,
+      bankAccountNumber,
     })
     if (!confirm.isConfirmed) return
 
@@ -157,7 +157,9 @@ export default function WalletWithdrawPage() {
     blocked,
     blockReason,
     credit,
+    creditDebtBaht,
     hasBank,
+    hasCreditDebt,
     parsedAmount,
     refreshSession,
     user,
@@ -168,31 +170,32 @@ export default function WalletWithdrawPage() {
   return (
     <AppPageShell>
       <main className={APP_PAGE_INNER}>
-        <div className="mb-6">
-          <h1 className="text-heading text-2xl font-semibold">ถอนเครดิต</h1>
-          <p className="mt-1 text-sm text-muted">
-            โอนเครดิตไปบัญชีที่บันทึกไว้ — ค่าธรรมเนียมโอนผ่าน Omise เป็นภาระของผู้ใช้ (
-            <Link href="/terms/fees" className="text-brand-600 underline dark:text-brand-400">
-              อ่านรายละเอียด
-            </Link>
-            )
-          </p>
-        </div>
-
-        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
-          <p className="font-medium text-heading">โมเดลค่าธรรมเนียม</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5">
-            <li>หักเครดิตตามจำนวนที่คุณระบุ</li>
-            <li>ค่าธรรมเนียมโอนเข้าธนาคารประมาณ {fees.omiseTransferFeeThb} บาท/ครั้ง (หักจากยอดที่ได้รับ)</li>
-            <li>ขั้นต่ำถอน {fees.minWithdrawCreditThb} บาท</li>
-          </ul>
-        </div>
+        <AppPageHeader
+          title="ถอนเครดิต"
+          description="โอนเครดิตเข้าบัญชีธนาคารที่บันทึกไว้ในโปรไฟล์"
+          icon="fa-hand-holding-dollar"
+          {...PAGE_BACK.wallet}
+        />
 
         <div className="grid gap-4 lg:grid-cols-2">
           <section className="rounded-xl border border-slate-200 bg-surface-card p-5 dark:border-slate-700">
             <p className="text-sm text-muted">เครดิตคงเหลือ</p>
-            <p className="mt-1 text-3xl font-bold text-emerald-700 dark:text-emerald-400">{credit.toLocaleString()} ฿</p>
-            <p className="mt-2 text-xs text-muted">ขั้นต่ำถอน {fees.minWithdrawCreditThb} บาท</p>
+            <p
+              className={
+                hasCreditDebt
+                  ? "mt-1 text-3xl font-bold text-rose-700 dark:text-rose-400"
+                  : "mt-1 text-3xl font-bold text-emerald-700 dark:text-emerald-400"
+              }
+            >
+              {credit.toLocaleString()} ฿
+            </p>
+            {hasCreditDebt ? (
+              <p className="mt-2 text-xs text-rose-700 dark:text-rose-300">
+                ค้างชำระ {creditDebtBaht.toLocaleString()} บาท — ต้องเติมให้ครบก่อนถอนเงิน
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-muted">ขั้นต่ำถอน {fees.minWithdrawCreditThb} บาท</p>
+            )}
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-surface-card p-5 dark:border-slate-700">
@@ -225,9 +228,18 @@ export default function WalletWithdrawPage() {
           </section>
         </div>
 
+        {hasCreditDebt ? (
+          <div className="mt-4 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+            มียอดค้างชำระ {creditDebtBaht.toLocaleString()} บาท — กรุณาเติมเครดิตให้ครบก่อนถอนเงิน
+          </div>
+        ) : null}
+
         {blocked ? (
           <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-            {blockReason || "ยังไม่สามารถถอนเงินได้ — มีรายการประมูลที่ต้องดำเนินการให้ครบก่อน"}
+            <p>{blockReason || "ยังไม่สามารถถอนเงินได้ — มีรายการประมูลที่ต้องดำเนินการให้ครบก่อน"}</p>
+            <Link href="/bids/active" className="mt-2 inline-flex text-sm font-semibold text-amber-950 underline underline-offset-2 dark:text-amber-100">
+              ดูรายการที่กำลังประมูล / รอดำเนินการ
+            </Link>
           </div>
         ) : null}
 
@@ -248,8 +260,8 @@ export default function WalletWithdrawPage() {
               const v = bahtFromInput(e.target.value)
               setAmount(v > 0 ? String(v) : "")
             }}
-            disabled={submitting || blocked || !hasBank || credit < fees.minWithdrawCreditThb}
-            placeholder={`${fees.minWithdrawCreditThb} – ${credit}`}
+            disabled={submitting || withdrawDisabled}
+            placeholder={`ถอนขั้นต่ำ ${fees.minWithdrawCreditThb} บาท`}
           />
           {Number.isFinite(parsedAmount) && parsedAmount >= fees.minWithdrawCreditThb ? (
             <dl className="mt-3 space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-900/50">
@@ -276,7 +288,7 @@ export default function WalletWithdrawPage() {
                 key={preset}
                 type="button"
                 className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-body hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-800"
-                disabled={submitting || blocked || preset > credit}
+                disabled={submitting || blocked || hasCreditDebt || preset > credit}
                 onClick={() => setAmount(String(Math.min(preset, credit)))}
               >
                 {preset.toLocaleString()} ฿
@@ -285,7 +297,7 @@ export default function WalletWithdrawPage() {
             <button
               type="button"
               className="rounded-full border border-brand-300 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-700 dark:text-brand-300"
-              disabled={submitting || blocked || credit < fees.minWithdrawCreditThb}
+              disabled={submitting || withdrawDisabled}
               onClick={() => setAmount(String(credit))}
             >
               ถอนทั้งหมด
@@ -297,7 +309,7 @@ export default function WalletWithdrawPage() {
           <button
             type="button"
             className="btn-primary mt-4 w-full sm:w-auto"
-            disabled={submitting || blocked || !hasBank || !amountValid}
+            disabled={submitting || blocked || hasCreditDebt || !hasBank || !amountValid}
             onClick={() => void handleSubmit()}
           >
             {submitting ? "กำลังดำเนินการ..." : "ยืนยันถอนเครดิต"}

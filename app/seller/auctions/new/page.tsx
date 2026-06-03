@@ -8,31 +8,29 @@ import Swal from "sweetalert2"
 import { createSellerAuction } from "@/app/lib/api/auction"
 import { UserContext } from "@/app/context/UserContext"
 import { notifyCreditChanged } from "@/app/lib/creditSync"
-import { AppPageShell, APP_PAGE_INNER_SELLER_NEW } from "@/app/components/AppPageShell"
+import { AppPageShell, APP_PAGE_INNER_SELLER_NEW, AppPageHeader } from "@/app/components/AppPageShell"
+import { PAGE_BACK } from "@/app/lib/pageNav"
 import { CategoryMultiSelect } from "./CategoryMultiSelect"
 import { userFacingErrorMessage } from "@/app/lib/utils/userFacingMessage"
 import Icon from "@/app/components/Icon"
-import { estimateSellerPayoutCredits } from "@/app/lib/feePolicyDisplay"
+import { estimateSellerPayoutCredits, listingDepositBaht } from "@/app/lib/feePolicyDisplay"
 import { blockBahtDecimalKey, parseBahtDigits } from "@/app/lib/money/baht"
+import { useProductCategories } from "@/app/lib/hooks/useProductCategories"
 import { getWalletFees, loadWalletFees, type ActiveWalletFees } from "@/app/lib/walletFees"
+import { getListingFees, loadListingFees, type ActiveListingFees } from "@/app/lib/listingFees"
+import {
+    defaultAuctionEndAtLocal,
+    estimateSellerDurationFeeNotice,
+    exceedsFreeListingDuration,
+    extraListingDaysBeyondFree,
+    listingDurationDays,
+    minAuctionEndAtLocal,
+    validateAuctionEndAtLocal,
+} from "@/app/lib/auctionListingDuration"
 
-/** ต้องตรงกับ sellerCategoryWhitelist ใน auction-service */
-const CATEGORY_OPTIONS = [
-    "เครื่องใช้ไฟฟ้า",
-    "โทรศัพท์มือถือ",
-    "แท็บเล็ต",
-    "คอมพิวเตอร์",
-    "กล้องถ่ายรูป",
-    "แฟชั่น",
-    "ของสะสม",
-    "อื่นๆ",
-    "เกมคอนโซล",
-    "กระเป๋า",
-] as const
-
+/** ต้องตรงกับ product_categories ใน DB (โหลดจาก API ตอนเปิดหน้า) */
 const TITLE_MAX = 255
 const DESCRIPTION_MAX = 5000
-const CONDITION_MAX = 100
 const MAX_CATEGORIES = 5
 
 /** รับเฉพาะตัวเลขจำนวนเต็ม (ไม่มีจุดทศนิยม) */
@@ -77,6 +75,7 @@ function Section({
 
 export default function NewSellerAuctionPage() {
     const router = useRouter()
+    const categoryOptions = useProductCategories()
     const { refreshSession } = useContext(UserContext)
     const maxImages = 5
     const maxFileSizeMB = 5
@@ -87,51 +86,60 @@ export default function NewSellerAuctionPage() {
     const [startPrice, setStartPrice] = useState("100")
     const [bidStep, setBidStep] = useState("50")
     const [endAt, setEndAt] = useState("")
-    const [condition, setCondition] = useState("มือสอง สภาพดี")
+    const [minEndAt, setMinEndAt] = useState("")
+    const [durationNoticeFrom, setDurationNoticeFrom] = useState(0)
     const [allowEarlyClose, setAllowEarlyClose] = useState(false)
+    const [allowBidCancel, setAllowBidCancel] = useState(false)
+    const [autoRenew, setAutoRenew] = useState(false)
     const [buyNowPrice, setBuyNowPrice] = useState("")
     const [description, setDescription] = useState("")
     const [images, setImages] = useState<AuctionImage[]>([])
     const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
     const [saving, setSaving] = useState(false)
     const [feePolicy, setFeePolicy] = useState<ActiveWalletFees>(() => getWalletFees())
+    const [listingPolicy, setListingPolicy] = useState<ActiveListingFees>(() => getListingFees())
+    const [listingFeesReady, setListingFeesReady] = useState(false)
     const [acceptedFeeTerms, setAcceptedFeeTerms] = useState(false)
     const imagesRef = useRef<AuctionImage[]>([])
 
     useEffect(() => {
         void loadWalletFees().then(setFeePolicy)
+        void loadListingFees().then((policy) => {
+            setListingPolicy(policy)
+            setListingFeesReady(true)
+        })
     }, [])
 
-    const minEndAt = useMemo(() => {
-        const d = new Date(Date.now() + 60_000)
-        const yyyy = d.getFullYear()
-        const mm = String(d.getMonth() + 1).padStart(2, "0")
-        const dd = String(d.getDate()).padStart(2, "0")
-        const hh = String(d.getHours()).padStart(2, "0")
-        const mi = String(d.getMinutes()).padStart(2, "0")
-        return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
-    }, [])
+    useEffect(() => {
+        const now = Date.now()
+        setMinEndAt(minAuctionEndAtLocal(now))
+        setDurationNoticeFrom(now)
+        setEndAt((prev) => (prev.trim() ? prev : defaultAuctionEndAtLocal(now, listingPolicy)))
+    }, [listingPolicy.freeListingDurationMs])
 
     const canSubmit = useMemo(() => {
         return (
             title.trim() !== "" &&
             selectedCategories.length > 0 &&
             selectedCategories.length <= MAX_CATEGORIES &&
-            Number(startPrice) >= 100 &&
+            Number(startPrice) >= listingPolicy.minStartPriceThb &&
             Number(bidStep) > 0 &&
             endAt.trim() !== "" &&
             images.length > 0
         )
-    }, [title, selectedCategories.length, startPrice, bidStep, endAt, images.length])
+    }, [title, selectedCategories.length, startPrice, bidStep, endAt, images.length, listingPolicy.minStartPriceThb])
 
-    const canPublish = canSubmit && acceptedFeeTerms
+    const canPublish = canSubmit && acceptedFeeTerms && listingFeesReady
 
     const endAtLabel = useMemo(() => {
         if (!endAt.trim()) return "—"
         const d = new Date(endAt)
         if (Number.isNaN(d.getTime())) return "—"
-        return d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })
-    }, [endAt])
+        const formatted = d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })
+        if (durationNoticeFrom <= 0) return formatted
+        const days = listingDurationDays(endAt, durationNoticeFrom)
+        return days > 0 ? `${formatted} · ${days} วัน` : formatted
+    }, [endAt, durationNoticeFrom])
 
     const buyNowNum = useMemo(() => {
         if (buyNowPrice.trim() === "") return 0
@@ -144,10 +152,39 @@ export default function NewSellerAuctionPage() {
         return Number.isFinite(n) ? Math.floor(n) : 0
     }, [startPrice])
 
+    const listingDepositNum = useMemo(() => listingDepositBaht(startPriceNum), [startPriceNum])
+
+    const optionFeeLabel = (amount: number) => (listingFeesReady ? `${amount.toLocaleString()} ฿` : "…")
+
+    const postHoldTotal = useMemo(() => {
+        let total = listingDepositNum
+        if (autoRenew) total += listingPolicy.autoRenewOptionFeeThb
+        if (allowBidCancel) total += listingPolicy.bidCancelOptionFeeThb
+        return total
+    }, [listingDepositNum, autoRenew, allowBidCancel, listingPolicy.autoRenewOptionFeeThb, listingPolicy.bidCancelOptionFeeThb])
+
+    const publishButtonLabel = useMemo(() => {
+        if (postHoldTotal <= 0) return "เผยแพร่ประมูล"
+        return `เผยแพร่ประมูล (หัก ${postHoldTotal.toLocaleString()} ฿)`
+    }, [postHoldTotal])
+
+    const publishButtonLabelShort = useMemo(() => {
+        if (postHoldTotal <= 0) return "เผยแพร่"
+        return `เผยแพร่ (${postHoldTotal.toLocaleString()} ฿)`
+    }, [postHoldTotal])
+
     const bidStepNum = useMemo(() => {
         const n = Number(bidStep)
         return Number.isFinite(n) ? Math.floor(n) : 0
     }, [bidStep])
+
+    const durationFeeNotice = useMemo(() => {
+        if (!endAt.trim() || durationNoticeFrom <= 0) return null
+        if (!exceedsFreeListingDuration(endAt, durationNoticeFrom, listingPolicy)) return null
+        const extraDays = extraListingDaysBeyondFree(endAt, durationNoticeFrom, listingPolicy)
+        const exampleWin = Math.max(startPriceNum + bidStepNum, listingPolicy.minStartPriceThb)
+        return estimateSellerDurationFeeNotice(exampleWin, extraDays, feePolicy.auctionPlatformFeeNormalPct, listingPolicy)
+    }, [endAt, durationNoticeFrom, startPriceNum, bidStepNum, feePolicy.auctionPlatformFeeNormalPct, listingPolicy])
 
     const buyNowMinValid = buyNowNum > 0 && buyNowNum >= startPriceNum + bidStepNum
 
@@ -246,7 +283,7 @@ export default function NewSellerAuctionPage() {
             void Swal.fire({
                 icon: "warning",
                 title: "ยอมรับข้อกำหนดก่อนเผยแพร่",
-                text: "กรุณาติ๊กยอมรับข้อกำหนด ค่าธรรมเนียม และการหักเงินในแถบด้านขวา",
+                text: "กรุณาโปรดยอมรับข้อกำหนด ค่าธรรมเนียม และการหักเงิน",
                 confirmButtonText: "ตกลง",
             })
             return
@@ -262,21 +299,22 @@ export default function NewSellerAuctionPage() {
             return
         }
 
-        const endAtDate = new Date(endAt)
-        if (Number.isNaN(endAtDate.getTime())) {
+        const endAtError = validateAuctionEndAtLocal(endAt)
+        if (endAtError) {
             Swal.fire({
                 icon: "error",
-                title: "รูปแบบเวลาปิดประมูลไม่ถูกต้อง",
+                title: endAtError,
                 confirmButtonText: "ตกลง",
             })
             return
         }
+        const endAtDate = new Date(endAt)
         const sp = parseInt(startPrice, 10)
         const st = parseInt(bidStep, 10)
-        if (!Number.isFinite(sp) || sp < 100) {
+        if (!Number.isFinite(sp) || sp < listingPolicy.minStartPriceThb) {
             Swal.fire({
                 icon: "error",
-                title: "ราคาเริ่มต้นต้องเป็นจำนวนเต็มไม่น้อยกว่า 100 บาท",
+                title: `ราคาเริ่มต้นต้องเป็นจำนวนเต็มไม่น้อยกว่า ${listingPolicy.minStartPriceThb.toLocaleString()} บาท`,
                 confirmButtonText: "ตกลง",
             })
             return
@@ -323,12 +361,13 @@ export default function NewSellerAuctionPage() {
             await createSellerAuction({
                 title,
                 category: selectedCategories.join("|"),
-                condition,
                 description,
                 startPrice: sp,
                 bidStep: st,
                 endAtISO: endAtDate.toISOString(),
                 allowEarlyClose,
+                allowBidCancel,
+                autoRenew,
                 buyNowPrice: bn,
                 images: images.map((img) => img.file),
             })
@@ -371,23 +410,11 @@ export default function NewSellerAuctionPage() {
     return (
         <AppPageShell>
             <main className={APP_PAGE_INNER_SELLER_NEW}>
-                <div className="mb-8 flex flex-col gap-4 border-b border-slate-200/80 pb-6 dark:border-slate-700/80 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                        <Link
-                            href="/seller/auctions"
-                            className="mb-2 inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-800"
-                        >
-                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
-                                <Icon name="fa-arrow-left" aria-hidden />
-                            </span>
-                            กลับไปรายการของฉัน
-                        </Link>
-                        <h1 className="text-heading text-2xl font-bold tracking-tight sm:text-3xl">สร้างรายการประมูล</h1>
-                        {/* <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
-                            ลำดับที่แนะนำ: อัปโหลดรูปสินค้า → ใส่ชื่อและรายละเอียด → กำหนดราคาและเวลาปิด
-                        </p> */}
-                    </div>
-                </div>
+                <AppPageHeader
+                    title="สร้างรายการประมูล"
+                    icon="fa-plus"
+                    {...PAGE_BACK.seller}
+                />
 
                 <form
                     id="seller-auction-form"
@@ -486,26 +513,11 @@ export default function NewSellerAuctionPage() {
                                 </div>
                                 <div className="sm:col-span-2">
                                     <CategoryMultiSelect
-                                        options={CATEGORY_OPTIONS}
+                                        options={categoryOptions}
                                         value={selectedCategories}
                                         onChange={setSelectedCategories}
                                         max={MAX_CATEGORIES}
                                     />
-                                </div>
-                                <div>
-                                    <label className="mb-1.5 block text-sm font-medium text-slate-700">สภาพสินค้า</label>
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            className="form-input pr-14"
-                                            maxLength={CONDITION_MAX}
-                                            value={condition}
-                                            onChange={(e) => setCondition(e.target.value.slice(0, CONDITION_MAX))}
-                                        />
-                                        <span className="pointer-events-none absolute bottom-2 right-3 text-xs tabular-nums text-slate-400">
-                                            {condition.length}/{CONDITION_MAX}
-                                        </span>
-                                    </div>
                                 </div>
                                 <div className="sm:col-span-2">
                                     <label className="mb-1.5 block text-sm font-medium text-slate-700">รายละเอียด</label>
@@ -528,7 +540,7 @@ export default function NewSellerAuctionPage() {
                         <Section
                             step={3}
                             title="กติกาและราคา"
-                            description="ระบบหักมัดจำจากเครดิตตามราคาเริ่มต้นเมื่อโพสต์สำเร็จ"
+                            description="ระบบหักมัดจำ 10% ของราคาเริ่มต้นจากเครดิตเมื่อโพสต์สำเร็จ"
                         >
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div>
@@ -566,6 +578,11 @@ export default function NewSellerAuctionPage() {
                                         min={minEndAt}
                                         onChange={(e) => setEndAt(e.target.value)}
                                     />
+                                    <p className="mt-1.5 text-xs text-muted">
+                                        {listingPolicy.freeListingDurationDays} วันแรกไม่มีค่าใช้จ่ายเพิ่ม · หากระยะประมูลรวมเกิน {listingPolicy.freeListingDurationDays} วัน (เช่น มีการบิดขยายเวลา) และมีผู้ชนะ
+                                        แพลตฟอร์มหักจาก<strong>ส่วนแบ่งของคุณ</strong>เพิ่ม {listingPolicy.extraListingDayFeePct}% ของราคาปิดต่อวันที่เกิน
+                                        (นอกจากค่าธรรมเนียมปกติ {feePolicy.auctionPlatformFeeNormalPct}%)
+                                    </p>
                                 </div>
                                 <div className="sm:col-span-2 rounded-xl border border-violet-100 bg-violet-50/60 p-4">
                                     <label className="mb-1.5 block text-sm font-medium text-violet-900">
@@ -593,9 +610,47 @@ export default function NewSellerAuctionPage() {
                                         onChange={(e) => setAllowEarlyClose(e.target.checked)}
                                     />
                                     <span className="text-sm font-semibold text-amber-950">
-                                        อนุญาตให้ผู้ขายปิดประมูลก่อนหมดเวลา
+                                        ปิดประมูลก่อนหมดเวลา
                                     </span>
                                 </label>
+                                <p className="mt-2 pl-7 text-xs leading-relaxed text-amber-900/90">
+                                    เมื่อคุณเปิดใช้ตัวเลือกนี้ คุณจะสามารถปิดการประมูลได้ทันที ซึ่งระบบจะคำนวนส่วนแบ่งของคุณเป็น {" "}
+                                    <strong>{feePolicy.auctionSellerKeepEarlyPct}%</strong> · ไม่มีผู้บิด → คืนเครดิต 100% ของราคาเริ่ม
+                                </p>
+                            </div>
+
+                            <div className="mt-4 rounded-xl border border-sky-200/90 bg-sky-50/80 p-4">
+                                <label className="flex cursor-pointer items-start gap-3">
+                                    <input
+                                        type="checkbox"
+                                        className="mt-1 h-4 w-4 rounded border-sky-400 text-sky-600 focus:ring-sky-500"
+                                        checked={autoRenew}
+                                        onChange={(e) => setAutoRenew(e.target.checked)}
+                                    />
+                                    <span className="text-sm font-semibold text-sky-950">
+                                        ต่ออายุโพสอัตโนมัติเมื่อไม่มีผู้บิด ({optionFeeLabel(listingPolicy.autoRenewOptionFeeThb)})
+                                    </span>
+                                </label>
+                                <p className="mt-2 pl-7 text-xs leading-relaxed text-sky-900/90">
+                                    คืน 100% เมื่อไม่มีผู้บิด/ลบโพส
+                                </p>
+                            </div>
+
+                            <div className="mt-4 rounded-xl border border-violet-200/90 bg-violet-50/80 p-4">
+                                <label className="flex cursor-pointer items-start gap-3">
+                                    <input
+                                        type="checkbox"
+                                        className="mt-1 h-4 w-4 rounded border-violet-400 text-violet-600 focus:ring-violet-500"
+                                        checked={allowBidCancel}
+                                        onChange={(e) => setAllowBidCancel(e.target.checked)}
+                                    />
+                                    <span className="text-sm font-semibold text-violet-950">
+                                        อนุญาตให้ผู้ประมูลยกเลิกการบิดได้ ({optionFeeLabel(listingPolicy.bidCancelOptionFeeThb)})
+                                    </span>
+                                </label>
+                                <p className="mt-2 pl-7 text-xs leading-relaxed text-violet-900/90">
+                                    คืน 100% เมื่อไม่มีผู้บิด/ลบโพส
+                                </p>
                             </div>
                         </Section>
                     </div>
@@ -649,7 +704,101 @@ export default function NewSellerAuctionPage() {
                                             <dd className="font-semibold text-rose-800">เปิดใช้</dd>
                                         </div>
                                     )}
+                                    {autoRenew && (
+                                        <div className="flex justify-between gap-2">
+                                            <dt className="text-sky-700">ต่ออายุอัตโนมัติ</dt>
+                                            <dd className="font-semibold text-sky-800">เปิดใช้</dd>
+                                        </div>
+                                    )}
+                                    {allowBidCancel && (
+                                        <div className="flex justify-between gap-2">
+                                            <dt className="text-violet-700">ยกเลิกบิดได้</dt>
+                                            <dd className="font-semibold text-violet-800">เปิดใช้</dd>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between gap-2 border-t border-slate-100 pt-2">
+                                        <dt className="text-slate-600">มัดจำประกาศ (10%)</dt>
+                                        <dd className="font-medium tabular-nums text-heading">{listingDepositNum.toLocaleString()} ฿</dd>
+                                    </div>
+                                    {autoRenew && (
+                                        <div className="flex justify-between gap-2">
+                                            <dt className="text-sky-700">มัดจำต่ออายุอัตโนมัติ</dt>
+                                            <dd className="font-semibold tabular-nums text-sky-800">{optionFeeLabel(listingPolicy.autoRenewOptionFeeThb)}</dd>
+                                        </div>
+                                    )}
+                                    {allowBidCancel && (
+                                        <div className="flex justify-between gap-2">
+                                            <dt className="text-violet-700">มัดจำยกเลิกบิดได้</dt>
+                                            <dd className="font-semibold tabular-nums text-violet-800">{optionFeeLabel(listingPolicy.bidCancelOptionFeeThb)}</dd>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between gap-2 border-t border-slate-100 pt-2 font-semibold">
+                                        <dt className="text-heading">รวมหักตอนโพส</dt>
+                                        <dd className="tabular-nums text-heading">{postHoldTotal.toLocaleString()} ฿</dd>
+                                    </div>
                                 </dl>
+
+                                {allowBidCancel && (
+                                    <div
+                                        role="alert"
+                                        className="mt-3 rounded-xl border border-violet-300 bg-violet-50 p-3 text-xs text-violet-950 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-100"
+                                    >
+                                        <p className="flex items-center gap-1.5 font-semibold text-violet-900 dark:text-violet-50">
+                                            <Icon name="fa-rotate-left" className="text-violet-600 dark:text-violet-400" aria-hidden />
+                                            ยกเลิกบิดได้
+                                        </p>
+                                        <p className="mt-2 leading-relaxed text-violet-900/95 dark:text-violet-100/95">
+                                            ผู้ประมูลยกเลิกได้รับคืนครึ่งหนึ่งของมัดจำ · ยกเลิกแล้วขยายเวลาปิด +10 นาที
+                                        </p>
+                                        <p className="mt-1.5 text-[11px] leading-relaxed text-violet-800/90 dark:text-violet-200/90">
+                                            มัดจำ {optionFeeLabel(listingPolicy.bidCancelOptionFeeThb)} คืนเมื่อไม่มีผู้บิด · ไม่คืนเมื่อขายสำเร็จ · ริบเมื่อไม่ส่งของ
+                                        </p>
+                                    </div>
+                                )}
+
+                                {autoRenew && (
+                                    <div
+                                        role="alert"
+                                        className="mt-3 rounded-xl border border-sky-300 bg-sky-50 p-3 text-xs text-sky-950 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-100"
+                                    >
+                                        <p className="flex items-center gap-1.5 font-semibold text-sky-900 dark:text-sky-50">
+                                            <Icon name="fa-arrows-rotate" className="text-sky-600 dark:text-sky-400" aria-hidden />
+                                            ต่ออายุอัตโนมัติ
+                                        </p>
+                                        <p className="mt-2 leading-relaxed text-sky-900/95 dark:text-sky-100/95">
+                                            ไม่มีผู้บิดเมื่อหมดเวลา → เปิดรอบใหม่ให้อัตโนมัติ (ไม่หักเพิ่ม)
+                                        </p>
+                                        <p className="mt-1.5 text-[11px] leading-relaxed text-sky-800/90 dark:text-sky-200/90">
+                                            ไม่มีผู้บิด → ต่อรอบฟรี · มีผู้บิด → หยุดต่ออายุ · มัดจำ {optionFeeLabel(listingPolicy.autoRenewOptionFeeThb)} คืนเมื่อไม่มีผู้บิด ไม่คืนเมื่อขายสำเร็จ
+                                        </p>
+                                    </div>
+                                )}
+
+                                {durationFeeNotice && (
+                                    <div
+                                        role="alert"
+                                        className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100"
+                                    >
+                                        <p className="flex items-center gap-1.5 font-semibold text-amber-900 dark:text-amber-50">
+                                            <Icon name="fa-clock" className="text-amber-600 dark:text-amber-400" aria-hidden />
+                                            ระยะประมูลเกิน {listingPolicy.freeListingDurationDays} วัน
+                                        </p>
+                                        <p className="mt-2 leading-relaxed text-amber-900/95 dark:text-amber-100/95">
+                                            หากมีผู้ชนะ แพลตฟอร์มหักจาก<strong>ส่วนแบ่งของคุณ</strong>เพิ่ม{" "}
+                                            <strong>
+                                                {listingPolicy.extraListingDayFeePct}% ของราคาปิดต่อวันที่เกิน ({durationFeeNotice.extraDays} วัน ={" "}
+                                                {durationFeeNotice.durationFeePct}%)
+                                            </strong>{" "}
+                                            นอกจากค่าธรรมเนียมปกติ {durationFeeNotice.platformNormalPct}%
+                                        </p>
+                                        <p className="mt-1.5 text-[11px] leading-relaxed text-amber-800/90 dark:text-amber-200/90">
+                                            ตัวอย่างราคาปิด {(startPriceNum + bidStepNum).toLocaleString()} ฿ → แพลตฟอร์ม{" "}
+                                            {durationFeeNotice.platformNormalPct}% ({durationFeeNotice.platformNormalFee.toLocaleString()} ฿) +{" "}
+                                            {durationFeeNotice.durationFeePct}% ({durationFeeNotice.durationFee.toLocaleString()} ฿) = คุณได้ประมาณ{" "}
+                                            {durationFeeNotice.sellerShareAfter.toLocaleString()} ฿ · นับจากตอนเผยแพร่ถึงเวลาปิดจริง (บิดขยายเวลาอาจเพิ่มค่านี้)
+                                        </p>
+                                    </div>
+                                )}
 
                                 {allowEarlyClose && (
                                     <div
@@ -694,10 +843,10 @@ export default function NewSellerAuctionPage() {
                                                     </div>
                                                 </dl>
                                                 <p className="mt-2 text-[11px] leading-relaxed text-violet-800/90 dark:text-violet-200/90">
-                                                    หักมัดจำโพสต์ {startPriceNum.toLocaleString()} ฿ ตอนเผยแพร่แล้ว — สุทธิเทียบก่อนโพสต์ประมาณ{" "}
-                                                    <strong>{Math.max(0, buyNowEarnings.totalCredit - startPriceNum).toLocaleString()} ฿</strong>
+                                                    หักมัดจำโพสต์ {listingDepositNum.toLocaleString()} ฿ (10% ของราคาเริ่ม) ตอนเผยแพร่แล้ว — สุทธิเทียบก่อนโพสต์ประมาณ{" "}
+                                                    <strong>{Math.max(0, buyNowEarnings.totalCredit - listingDepositNum).toLocaleString()} ฿</strong>
                                                     <span className="mt-1 block text-violet-700/80">
-                                                        หลังผู้ซื้อยืนยันรับของ · แพลตฟอร์ม {feePolicy.auctionPlatformFeeNormalPct}% (
+                                                        เมื่อพัสดุส่งถึง · แพลตฟอร์ม {feePolicy.auctionPlatformFeeNormalPct}% (
                                                         {buyNowEarnings.platformFee.toLocaleString()} ฿)
                                                     </span>
                                                 </p>
@@ -728,6 +877,16 @@ export default function NewSellerAuctionPage() {
                                         >
                                             ข้อกำหนด ค่าธรรมเนียม และการหักเงิน
                                         </Link>
+                                        {" "}และ{" "}
+                                        <Link
+                                            href="/terms"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="font-medium text-brand-700 underline hover:text-brand-800 dark:text-brand-400"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            สินค้าที่ห้ามประมูล
+                                        </Link>
                                     </span>
                                 </label>
 
@@ -738,7 +897,7 @@ export default function NewSellerAuctionPage() {
                                         className="btn-primary w-full py-3 text-sm font-semibold shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
                                         disabled={!canPublish || saving}
                                     >
-                                        {saving ? "กำลังเผยแพร่..." : "เผยแพร่ประมูล"}
+                                        {saving ? "กำลังเผยแพร่..." : publishButtonLabel}
                                     </button>
                                     <button type="button" className="btn-outline w-full py-2.5 text-sm" onClick={() => window.history.back()}>
                                         ยกเลิก
@@ -761,7 +920,7 @@ export default function NewSellerAuctionPage() {
                         className="btn-primary flex-[2] py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={!canPublish || saving}
                     >
-                        {saving ? "กำลังเผยแพร่..." : "เผยแพร่"}
+                        {saving ? "กำลังเผยแพร่..." : publishButtonLabelShort}
                     </button>
                 </div>
             </div>
