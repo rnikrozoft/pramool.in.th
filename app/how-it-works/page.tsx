@@ -1,6 +1,19 @@
 import React from "react"
+import type { Metadata } from "next"
 import { AppPageShell, APP_PAGE_INNER, AppPageHeader } from "@/app/components/AppPageShell"
 import { PAGE_BACK } from "@/app/lib/pageNav"
+import { DEFAULT_DESCRIPTION } from "@/app/lib/seo/site"
+
+export const metadata: Metadata = {
+  title: "วิธีการประมูล",
+  description: `ขั้นตอนการสมัคร การเติมเครดิต และการประมูลบน Pramool — ${DEFAULT_DESCRIPTION}`,
+  alternates: { canonical: "/how-it-works" },
+  openGraph: {
+    title: "วิธีการประมูล",
+    description: "ขั้นตอนการใช้งานระบบประมูลแบบย่อ",
+    url: "/how-it-works",
+  },
+}
 
 export default function HowItWorksPage() {
   return (

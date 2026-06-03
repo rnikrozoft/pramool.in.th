@@ -5,7 +5,7 @@ import { fetchListingFeesServer } from "@/app/lib/listingFees"
 import { WALLET_FEES_CONFIG } from "@/app/lib/config/walletFees.config"
 
 export const metadata = {
-  title: "ข้อกำหนดการใช้งาน | Pramool.in.th",
+  title: "ข้อกำหนดการใช้งาน",
   description: "ข้อกำหนดการใช้งานแพลตฟอร์มประมูล Pramool.in.th และสินค้าที่ห้ามลงประกาศ",
 }
 

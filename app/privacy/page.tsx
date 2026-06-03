@@ -6,7 +6,7 @@ import { listDataProcessors } from "@/app/lib/api/privacy"
 import { DPO_EMAIL, PRIVACY_POLICY_VERSION } from "@/app/lib/privacyPolicy"
 
 export const metadata = {
-  title: "นโยบายความเป็นส่วนตัว | Pramool.in.th",
+  title: "นโยบายความเป็นส่วนตัว",
   description: "นโยบายความเป็นส่วนตัว (PDPA) ของแพลตฟอร์มประมูล Pramool.in.th",
 }
 

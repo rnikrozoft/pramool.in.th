@@ -4,7 +4,7 @@ import { PAGE_BACK } from "@/app/lib/pageNav"
 import { COOKIE_POLICY_VERSION } from "@/app/lib/privacyPolicy"
 
 export const metadata = {
-  title: "นโยบายคุกกี้ | Pramool.in.th",
+  title: "นโยบายคุกกี้",
 }
 
 export default function CookiePolicyPage() {

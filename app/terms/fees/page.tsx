@@ -6,7 +6,7 @@ import { fetchListingFeesServer } from "@/app/lib/listingFees"
 import { WALLET_FEES_CONFIG, topupFeePercentLabel } from "@/app/lib/config/walletFees.config"
 
 export const metadata = {
-  title: "นโยบายเครดิตและค่าธรรมเนียม | Pramool.in.th",
+  title: "นโยบายเครดิตและค่าธรรมเนียม",
   description: "มัดจำประกาศ ค่าคอมมิชชัน ระบบค้ำเงิน ต่ออายุโพส ยกเลิกบิด และค่าธรรมเนียม Omise",
 }
 

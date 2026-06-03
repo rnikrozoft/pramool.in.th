@@ -17,6 +17,13 @@ import SwalThemeInit from "./components/SwalThemeInit";
 import QueuedToast from "./components/QueuedToast";
 import ThemeScript from "./components/ThemeScript";
 import { ThemeProvider } from "./context/ThemeContext";
+import {
+  DEFAULT_DESCRIPTION,
+  DEFAULT_OG_IMAGE,
+  SITE_NAME,
+  SITE_TAGLINE,
+  getSiteUrl,
+} from "./lib/seo/site";
 
 const noto = Noto_Sans_Thai({
   subsets: ["latin", "thai"],
@@ -31,9 +38,32 @@ const kanit = Kanit({
 });
 
 export const metadata: Metadata = {
-  title: "Pramool.in.th — ประมูลง่าย ได้ของชัวร์",
-  description:
-    "แพลตฟอร์มประมูลออนไลน์ ของดี ราคาดี เริ่มต้นเพียง 1 บาท ปลอดภัย โปร่งใส",
+  metadataBase: new URL(getSiteUrl()),
+  title: {
+    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: DEFAULT_DESCRIPTION,
+  applicationName: SITE_NAME,
+  openGraph: {
+    type: "website",
+    locale: "th_TH",
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: DEFAULT_DESCRIPTION,
+    images: [{ url: DEFAULT_OG_IMAGE, width: 512, height: 512, alt: SITE_NAME }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: DEFAULT_DESCRIPTION,
+    images: [DEFAULT_OG_IMAGE],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
+  },
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
