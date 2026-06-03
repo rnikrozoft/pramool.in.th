@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useParams, notFound } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { AppPageShell, APP_PAGE_INNER_WIDE } from "@/app/components/AppPageShell"
+import { AuctionCoverImage } from "@/app/components/AuctionCoverImage"
 import Icon from "@/app/components/Icon"
 import { SellerStarsDisplay } from "@/app/components/SellerStarRating"
 import {
@@ -186,12 +187,12 @@ function SellerAuctionGridCard({ item }: { item: PublicAuctionListItem }) {
   const cardBody = (
     <>
       <div className="relative aspect-[4/3] overflow-hidden bg-slate-100 dark:bg-slate-800">
-        <img
+        <AuctionCoverImage
           src={coverImageUrl(item.cover_image_url)}
           alt={item.title}
-          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-          loading="lazy"
-          decoding="async"
+          fill
+          className="object-cover transition duration-300 group-hover:scale-[1.03]"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
         />
         <div className="absolute left-2 top-2 flex max-w-[calc(100%-3.5rem)] flex-col gap-1">
           {!closed ? (
@@ -336,11 +337,16 @@ function ReviewRow({
   )
 }
 
-export default function UserProfileClient() {
+export default function UserProfileClient({ initialProfile = null }: { initialProfile?: PublicUserProfile | null }) {
   const params = useParams()
   const userId = typeof params.id === "string" ? params.id : ""
-  const [profile, setProfile] = useState<PublicUserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
+  const hasInitialProfile = Boolean(
+    initialProfile?.user_id && userId && initialProfile.user_id === userId,
+  )
+  const [profile, setProfile] = useState<PublicUserProfile | null>(
+    hasInitialProfile ? initialProfile : null,
+  )
+  const [loading, setLoading] = useState(!hasInitialProfile)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<ProfileTab>("auctions")
   const [showClosedAuctions, setShowClosedAuctions] = useState(false)
@@ -355,6 +361,11 @@ export default function UserProfileClient() {
       setLoading(false)
       return
     }
+
+    if (hasInitialProfile && initialProfile) {
+      return
+    }
+
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -376,7 +387,7 @@ export default function UserProfileClient() {
     return () => {
       cancelled = true
     }
-  }, [userId])
+  }, [userId, hasInitialProfile, initialProfile])
 
   useEffect(() => {
     if (!showClosedAuctions || !userId || !profile) {

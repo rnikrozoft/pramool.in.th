@@ -1,16 +1,19 @@
 import type { Metadata } from "next"
+import { notFound } from "next/navigation"
 import JsonLd from "@/app/components/seo/JsonLd"
 import ProductClient from "@/app/product/[id]/ProductClient"
-import { getAuctionDetail, ResourceNotFoundError } from "@/app/lib/api/auction"
+import { ResourceNotFoundError } from "@/app/lib/api/auction"
+import { getAuctionDetailCached } from "@/app/lib/api/auctionServer"
 import { auctionCoverImageUrl, formatAuctionPriceBaht } from "@/app/lib/auctionDisplay"
 import { buildBreadcrumbJsonLd, buildProductJsonLd } from "@/app/lib/seo/jsonLd"
 import { absoluteUrl, DEFAULT_DESCRIPTION, SITE_NAME } from "@/app/lib/seo/site"
+import SeoNoscript from "@/app/components/seo/SeoNoscript"
 
 type PageProps = {
   params: Promise<{ id: string }>
 }
 
-function productDescription(auction: Awaited<ReturnType<typeof getAuctionDetail>>): string {
+function productDescription(auction: Awaited<ReturnType<typeof getAuctionDetailCached>>): string {
   const price = formatAuctionPriceBaht(Number(auction.current_bid ?? auction.start_price ?? 0))
   const category = auction.category.split("|").filter(Boolean)[0]
   const plain = auction.description?.replace(/\s+/g, " ").trim()
@@ -24,7 +27,7 @@ function productDescription(auction: Awaited<ReturnType<typeof getAuctionDetail>
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params
   try {
-    const auction = await getAuctionDetail(id)
+    const auction = await getAuctionDetailCached(id)
     const title = auction.title?.trim() || "รายการประมูล"
     const description = productDescription(auction)
     const image = auctionCoverImageUrl(auction.cover_image_url)
@@ -60,27 +63,39 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ProductPage({ params }: PageProps) {
   const { id } = await params
-  let jsonLdBlocks: Record<string, unknown>[] = []
 
   try {
-    const auction = await getAuctionDetail(id)
+    const auction = await getAuctionDetailCached(id)
     const title = auction.title?.trim() || "รายการประมูล"
-    jsonLdBlocks = [
-      buildProductJsonLd(auction),
-      buildBreadcrumbJsonLd([
-        { name: "หน้าแรก", path: "/" },
-        { name: "รายการสินค้า", path: "/auctions" },
-        { name: title },
-      ]),
-    ]
-  } catch {
-    /* client handles not-found after fetch */
-  }
+    const description = productDescription(auction)
+    const price = formatAuctionPriceBaht(Number(auction.current_bid ?? auction.start_price ?? 0))
+    const categories = auction.category.split("|").map((c) => c.trim()).filter(Boolean)
 
-  return (
-    <>
-      {jsonLdBlocks.length > 0 ? <JsonLd data={jsonLdBlocks} /> : null}
-      <ProductClient />
-    </>
-  )
+    return (
+      <>
+        <JsonLd
+          data={[
+            buildProductJsonLd(auction),
+            buildBreadcrumbJsonLd([
+              { name: "หน้าแรก", path: "/" },
+              { name: "รายการสินค้า", path: "/auctions" },
+              { name: title },
+            ]),
+          ]}
+        />
+        <SeoNoscript>
+          <h1>{title}</h1>
+          {categories.length > 0 ? <p>{categories.join(" · ")}</p> : null}
+          <p>{description}</p>
+          <p>ราคาปัจจุบัน {price}</p>
+        </SeoNoscript>
+        <ProductClient initialAuction={auction} />
+      </>
+    )
+  } catch (e) {
+    if (e instanceof ResourceNotFoundError) {
+      notFound()
+    }
+    return <ProductClient />
+  }
 }

@@ -72,3 +72,44 @@ export function buildBreadcrumbJsonLd(items: { name: string; path?: string }[]) 
     })),
   }
 }
+
+export function buildCollectionPageJsonLd(opts: { name: string; path: string; description?: string }) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: opts.name,
+    url: absoluteUrl(opts.path),
+    description: opts.description,
+    isPartOf: {
+      "@type": "WebSite",
+      name: SITE_NAME,
+      url: getSiteUrl(),
+    },
+  }
+}
+
+export function buildPersonJsonLd(profile: {
+  user_id: string
+  display_name: string
+  review_avg_rating?: number
+  review_count?: number
+}) {
+  const name = profile.display_name?.trim() || "ผู้ขาย"
+  return {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name,
+    url: absoluteUrl(`/user/${encodeURIComponent(profile.user_id)}`),
+    ...(Number(profile.review_count) > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: Number(profile.review_avg_rating ?? 0),
+            reviewCount: Number(profile.review_count),
+            bestRating: 5,
+            worstRating: 0.5,
+          },
+        }
+      : {}),
+  }
+}

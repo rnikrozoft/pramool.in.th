@@ -44,17 +44,30 @@ function BidExtensionBadge() {
 }
 
 
-export default function ProductClient() {
+type ProductClientProps = {
+  initialAuction?: AuctionDetail | null
+}
+
+export default function ProductClient({ initialAuction = null }: ProductClientProps) {
   const { user, setUser, refreshSession } = useContext(UserContext)
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const auctionID = String(params?.id ?? '').trim()
-  const [auction, setAuction] = useState<AuctionDetail | null>(null)
-  const [loading, setLoading] = useState(true)
+  const hasInitialAuction = Boolean(
+    initialAuction?.auction_id && auctionID && initialAuction.auction_id === auctionID,
+  )
+  const [auction, setAuction] = useState<AuctionDetail | null>(
+    hasInitialAuction ? initialAuction : null,
+  )
+  const [loading, setLoading] = useState(!hasInitialAuction)
   const [loadError, setLoadError] = useState('')
   const [auctionBidders, setAuctionBidders] = useState<AuctionBidderRow[]>([])
   const [activeImage, setActiveImage] = useState(0)
-  const [bidAmount, setBidAmount] = useState(0)
+  const [bidAmount, setBidAmount] = useState(() =>
+    hasInitialAuction && initialAuction
+      ? Number(initialAuction.current_bid) + Number(initialAuction.bid_step)
+      : 0,
+  )
   const [countdown, setCountdown] = useState('00:00:00')
   /** False once clock passes auction.end_at — hide "ปิดประมูลก่อนหมดเวลา" before backend settles to closed. */
   const [beforeScheduledEnd, setBeforeScheduledEnd] = useState(true)
@@ -211,6 +224,13 @@ export default function ProductClient() {
 
   useEffect(() => {
     if (!auctionID) return
+
+    if (hasInitialAuction && initialAuction) {
+      syncBeforeScheduledEndFromISO(initialAuction.end_at)
+      void refreshAuctionBidders()
+      return
+    }
+
     let cancelled = false
     const gen = ++auctionDetailFetchGen.current
     setLoading(true)
@@ -243,7 +263,7 @@ export default function ProductClient() {
     return () => {
       cancelled = true
     }
-  }, [auctionID, syncBeforeScheduledEndFromISO, refreshAuctionBidders])
+  }, [auctionID, hasInitialAuction, initialAuction, syncBeforeScheduledEndFromISO, refreshAuctionBidders])
 
   useEffect(() => {
     if (!user?.userId || !auctionID) {

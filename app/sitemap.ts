@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next"
 import { listPublicAuctions } from "@/app/lib/api/auction"
+import { listProductCategoriesCached } from "@/app/lib/api/categoriesServer"
 import { absoluteUrl } from "@/app/lib/seo/site"
 
 export const revalidate = 3600
@@ -8,8 +9,6 @@ const STATIC_PATHS = [
   "/",
   "/auctions",
   "/how-it-works",
-  "/login",
-  "/register",
   "/terms",
   "/terms/fees",
   "/privacy",
@@ -23,6 +22,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: now,
     changeFrequency: path === "/" ? "daily" : "weekly",
     priority: path === "/" ? 1 : path === "/auctions" ? 0.9 : 0.5,
+  }))
+
+  const categories = await listProductCategoriesCached()
+  const categoryEntries: MetadataRoute.Sitemap = categories.map((category) => ({
+    url: absoluteUrl(`/auctions?category=${encodeURIComponent(category)}`),
+    lastModified: now,
+    changeFrequency: "daily",
+    priority: 0.75,
   }))
 
   const productEntries: MetadataRoute.Sitemap = []
@@ -67,5 +74,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     offset += pageSize
   }
 
-  return [...staticEntries, ...productEntries, ...sellerEntries]
+  return [...staticEntries, ...categoryEntries, ...productEntries, ...sellerEntries]
 }

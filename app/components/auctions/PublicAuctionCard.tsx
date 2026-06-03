@@ -11,6 +11,7 @@ import {
   formatAuctionCountdown,
   isAuctionClosed,
 } from "@/app/lib/auctions/publicAuctionCardUtils"
+import { AuctionCoverImage } from "@/app/components/AuctionCoverImage"
 import Icon from "@/app/components/Icon"
 import { SellerStarsDisplay } from "@/app/components/SellerStarRating"
 
@@ -56,13 +57,16 @@ const PublicAuctionCard = memo(function PublicAuctionCard({
   return (
     <article className="auction-card">
       <div className="relative shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-800">
-        <img
-          src={auctionCoverImageUrl(item.cover_image_url)}
-          alt={item.title}
-          className="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.03]"
-          loading={imageLoading}
-          decoding="async"
-        />
+        <div className="relative aspect-[4/3] w-full">
+          <AuctionCoverImage
+            src={auctionCoverImageUrl(item.cover_image_url)}
+            alt={item.title}
+            fill
+            className="object-cover transition duration-300 hover:scale-[1.03]"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            priority={imageLoading === "eager"}
+          />
+        </div>
         <div className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-col gap-1">
           {showEarlyCloseBadge ? (
             <span

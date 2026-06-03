@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import Icon from "@/app/components/Icon"
+import { AuctionCoverImage } from "@/app/components/AuctionCoverImage"
 import { HomeCountdownHero } from "@/app/components/home/HomeCountdown"
 import type { HomeShowcaseItem } from "@/app/lib/auctionDisplay"
 
@@ -19,8 +20,16 @@ function HeroFeaturedCard({ slide, featured }: { slide: HomeShowcaseItem; featur
   return (
     <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 p-3 shadow-xl shadow-black/25 ring-1 ring-white/10 backdrop-blur-sm">
       <div className="relative overflow-hidden rounded-xl bg-violet-950/40">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={slide.image} alt={slide.name} className="aspect-[5/3] w-full object-cover" />
+        <div className="relative aspect-[5/3] w-full">
+          <AuctionCoverImage
+            src={slide.image}
+            alt={slide.name}
+            fill
+            className="object-cover"
+            sizes="(max-width: 1024px) 50vw, 320px"
+            priority={Boolean(featured)}
+          />
+        </div>
         {featured ? (
           <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-amber-400 px-2 py-0.5 text-[9px] font-bold text-brand-950">
             <Icon name="fa-star" className="text-[8px]" aria-hidden />

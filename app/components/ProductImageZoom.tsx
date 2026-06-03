@@ -2,6 +2,7 @@
 
 import Image from "next/image"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { isNextImageOptimizable } from "@/app/lib/images/remoteImageHosts"
 
 const ZOOM = 2.5
 
@@ -108,7 +109,7 @@ export function ProductImageZoom({ src, alt }: ProductImageZoomProps) {
         height={675}
         className={`h-full w-full object-contain transition-opacity ${zooming && canZoom ? "opacity-0" : "opacity-100"}`}
         alt={alt}
-        unoptimized
+        unoptimized={!isNextImageOptimizable(src)}
         onLoad={(event) => {
           const img = event.currentTarget
           setNatural({ w: img.naturalWidth, h: img.naturalHeight })

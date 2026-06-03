@@ -1,5 +1,8 @@
 import type { Metadata } from "next"
 import AuctionsPageClient from "@/app/auctions/AuctionsPageClient"
+import JsonLd from "@/app/components/seo/JsonLd"
+import SeoNoscript from "@/app/components/seo/SeoNoscript"
+import { buildBreadcrumbJsonLd, buildCollectionPageJsonLd } from "@/app/lib/seo/jsonLd"
 import { absoluteUrl, DEFAULT_DESCRIPTION, SITE_NAME } from "@/app/lib/seo/site"
 
 type PageProps = {
@@ -53,6 +56,39 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   }
 }
 
-export default function AuctionsPage() {
+export default async function AuctionsPage({ searchParams }: PageProps) {
+  const sp = await searchParams
+  const category = sp.category?.trim() ?? ""
+  const q = sp.q?.trim() ?? ""
+
+  if (category && !q) {
+    const title = `ประมูล ${category}`
+    const path = `/auctions?category=${encodeURIComponent(category)}`
+
+    return (
+      <>
+        <JsonLd
+          data={[
+            buildCollectionPageJsonLd({
+              name: title,
+              path,
+              description: `รายการประมูลหมวด ${category} — ${DEFAULT_DESCRIPTION}`,
+            }),
+            buildBreadcrumbJsonLd([
+              { name: "หน้าแรก", path: "/" },
+              { name: "รายการสินค้า", path: "/auctions" },
+              { name: category },
+            ]),
+          ]}
+        />
+        <SeoNoscript>
+          <h1>{title}</h1>
+          <p>{`รายการประมูลหมวด ${category} — ${DEFAULT_DESCRIPTION}`}</p>
+        </SeoNoscript>
+        <AuctionsPageClient />
+      </>
+    )
+  }
+
   return <AuctionsPageClient />
 }

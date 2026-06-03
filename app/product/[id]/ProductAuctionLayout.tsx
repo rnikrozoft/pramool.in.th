@@ -1,6 +1,6 @@
 "use client"
 
-import Image from "next/image"
+import { AuctionCoverImage } from "@/app/components/AuctionCoverImage"
 import Link from "next/link"
 import type { ReactNode } from "react"
 import Icon from "@/app/components/Icon"
@@ -455,7 +455,7 @@ export function ProductAuctionLayout(props: ProductAuctionLayoutProps) {
                     onClick={() => onActiveImage(index)}
                     className={`h-16 w-20 shrink-0 overflow-hidden rounded-lg border-2 ${activeImage === index ? "border-brand-500" : "border-transparent opacity-70"}`}
                   >
-                    <Image src={image} width={80} height={64} className="h-full w-full object-cover" alt="" unoptimized />
+                    <AuctionCoverImage src={image} width={80} height={64} className="h-full w-full object-cover" alt="" />
                   </button>
                 ))}
               </div>

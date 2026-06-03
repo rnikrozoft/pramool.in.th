@@ -1,13 +1,10 @@
 import type { NextConfig } from "next";
+import { buildAuctionImageRemotePatterns } from "./app/lib/images/remoteImageHosts";
 
 const nextConfig: NextConfig = {
   output: "standalone",
   images: {
-    domains: ["images.unsplash.com", "placehold.co", "mdbcdn.b-cdn.net"],
-    remotePatterns: [
-      { protocol: "https", hostname: "images.unsplash.com" },
-      { protocol: "https", hostname: "placehold.co" },
-    ],
+    remotePatterns: buildAuctionImageRemotePatterns(),
   },
 };
 
