@@ -2,11 +2,11 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import React, { useContext, useEffect, useState } from "react"
+import React, { useContext, useState } from "react"
 import { useRouter } from "next/navigation"
 import { UserContext } from "../context/UserContext"
-import { ONBOARDING_ADDRESS_PATH } from "@/app/lib/onboarding"
-import { getMyOnboardingStatus, signup } from "../lib/api/user"
+import { useGuestOnlyPageRedirect } from "@/app/lib/hooks/useGuestOnlyPageRedirect"
+import { signup } from "../lib/api/user"
 import { runPostAuthRedirect } from "../lib/postAuthRedirect"
 import { notify, queueNotify } from "../lib/utils/notify"
 import { userFacingMessage } from "../lib/utils/userFacingMessage"
@@ -38,7 +38,8 @@ function isValidEmailFormat(value: string): boolean {
 
 export default function RegisterPage() {
   const router = useRouter()
-  const { user, loading, refreshSession } = useContext(UserContext)
+  const { refreshSession } = useContext(UserContext)
+  useGuestOnlyPageRedirect()
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
@@ -52,27 +53,6 @@ export default function RegisterPage() {
   const handleSocial = (provider: string) => {
     notify("info", `การสมัครด้วย ${provider} จะเปิดให้ใช้งานเร็วๆ นี้`)
   }
-
-  /** Already logged in: continue onboarding or go to profile (middleware no longer blocks /register). */
-  useEffect(() => {
-    if (loading || !user) return
-    let cancelled = false
-    void getMyOnboardingStatus()
-      .then((status) => {
-        if (cancelled) return
-        if (status.is_first_registration) {
-          router.replace(ONBOARDING_ADDRESS_PATH)
-          return
-        }
-        router.replace("/")
-      })
-      .catch(() => {
-        /* allow form if status check fails */
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [loading, user, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

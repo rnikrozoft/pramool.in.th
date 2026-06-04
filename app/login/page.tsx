@@ -5,6 +5,7 @@ import Link from "next/link"
 import React, { useContext, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { UserContext } from "../context/UserContext"
+import { useGuestOnlyPageRedirect } from "@/app/lib/hooks/useGuestOnlyPageRedirect"
 import { login } from "../lib/api/user"
 import { runPostAuthRedirect } from "../lib/postAuthRedirect"
 import { notify, queueNotify } from "../lib/utils/notify"
@@ -34,6 +35,7 @@ const REMEMBER_LOGIN_KEY = "pramool_remember_login"
 export default function LoginPage() {
   const router = useRouter()
   const { refreshSession } = useContext(UserContext)
+  useGuestOnlyPageRedirect()
   const [loginId, setLoginId] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)

@@ -3,6 +3,11 @@ import { jwtVerify } from "jose";
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "");
 const ONBOARDING_ADDRESS_PATH = "/register/address";
+const GUEST_ONLY_PATHS = new Set(["/login", "/register", "/forgot-password"]);
+
+function isGuestOnlyPath(pathname: string): boolean {
+  return GUEST_ONLY_PATHS.has(pathname);
+}
 
 function userApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_USER_API_BASE_URL?.trim() || "http://localhost:3001";
@@ -49,10 +54,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isLoggedIn && !isOnboardingAddressPath(pathname)) {
-    if (await needsOnboardingAddress(request)) {
+  if (isLoggedIn) {
+    const needsOnboarding = await needsOnboardingAddress(request);
+
+    if (needsOnboarding && !isOnboardingAddressPath(pathname)) {
       const url = request.nextUrl.clone();
       url.pathname = ONBOARDING_ADDRESS_PATH;
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+
+    if (isGuestOnlyPath(pathname)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.search = "";
       return NextResponse.redirect(url);
     }
   }

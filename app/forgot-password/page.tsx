@@ -3,6 +3,7 @@
 import Link from "next/link"
 import React, { useState } from "react"
 import { useRouter } from "next/navigation"
+import { useGuestOnlyPageRedirect } from "@/app/lib/hooks/useGuestOnlyPageRedirect"
 import Swal from "sweetalert2"
 import Icon from "@/app/components/Icon"
 import { checkForgotPasswordEligibility, resetForgotPassword } from "@/app/lib/api/forgotPassword"
@@ -20,6 +21,7 @@ function normalizeTelInput(raw: string): string {
 
 export default function ForgotPasswordPage() {
   const router = useRouter()
+  useGuestOnlyPageRedirect()
   const [tel, setTel] = useState("")
   const [otpToken, setOtpToken] = useState("")
   const [otpPin, setOtpPin] = useState("")
