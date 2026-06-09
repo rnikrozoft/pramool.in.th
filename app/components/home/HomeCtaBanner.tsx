@@ -21,10 +21,6 @@ export default function HomeCtaBanner() {
       />
       <div className="relative mx-auto flex max-w-7xl flex-col items-center justify-between gap-10 px-4 lg:flex-row lg:items-center lg:gap-12 sm:px-6">
         <div className="max-w-2xl text-center lg:text-left">
-          <span className="home-eyebrow-on-dark">
-            <Icon name="fa-bolt" className="text-[10px]" aria-hidden />
-            เริ่มต้นใช้งาน
-          </span>
           <h2 className="font-display mt-3 text-3xl font-bold leading-tight tracking-tight text-white md:text-4xl">
             พร้อมเริ่ม
             <span className="bg-gradient-to-r from-amber-200 to-orange-200 bg-clip-text text-transparent"> ประมูล</span>

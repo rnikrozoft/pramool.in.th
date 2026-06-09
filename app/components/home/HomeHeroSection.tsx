@@ -1,14 +1,18 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
+import { useEffect, useState } from "react"
 import Icon from "@/app/components/Icon"
-import { AuctionCoverImage } from "@/app/components/AuctionCoverImage"
-import { HomeCountdownHero } from "@/app/components/home/HomeCountdown"
-import type { HomeShowcaseItem } from "@/app/lib/auctionDisplay"
 
-type Props = {
-  slides: HomeShowcaseItem[]
-}
+const HERO_SLIDES = [
+  {
+    src: "/hero/image1.png",
+    alt: "สินค้าไอที สมาร์ทโฟน คอมเกมมิ่ง และนาฬิกา",
+  },
+] as const
+
+const SLIDE_INTERVAL_MS = 5000
 
 const heroStats = [
   { icon: "fa-users", label: "15,000+", sub: "สมาชิก" },
@@ -16,163 +20,133 @@ const heroStats = [
   { icon: "fa-gavel", label: "50,000+", sub: "ประมูลสำเร็จ" },
 ] as const
 
-function HeroFeaturedCard({ slide, featured }: { slide: HomeShowcaseItem; featured?: boolean }) {
-  return (
-    <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 p-3 shadow-xl shadow-black/25 ring-1 ring-white/10 backdrop-blur-sm">
-      <div className="relative overflow-hidden rounded-xl bg-violet-950/40">
-        <div className="relative aspect-[5/3] w-full">
-          <AuctionCoverImage
-            src={slide.image}
-            alt={slide.name}
-            fill
-            className="object-cover"
-            sizes="(max-width: 1024px) 50vw, 320px"
-            priority={Boolean(featured)}
-          />
-        </div>
-        {featured ? (
-          <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-amber-400 px-2 py-0.5 text-[9px] font-bold text-brand-950">
-            <Icon name="fa-star" className="text-[8px]" aria-hidden />
-            แนะนำ
-          </span>
-        ) : null}
-      </div>
+export default function HomeHeroSection() {
+  const [activeIndex, setActiveIndex] = useState(0)
+  const hasMultipleSlides = HERO_SLIDES.length > 1
 
-      <div className="mt-3 px-0.5">
-        <p className="text-[10px] font-medium text-violet-300">#{slide.auctionCode}</p>
-        <h2 className="font-display mt-0.5 line-clamp-1 text-base font-bold text-white">{slide.name}</h2>
-        <div className="mt-2 grid grid-cols-3 gap-1">
-          <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-wide text-violet-300 sm:text-sm">ราคาปัจจุบัน</p>
-            <p className="font-display truncate text-xl font-bold text-amber-300 sm:text-2xl">{slide.price}</p>
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-wide text-violet-300 sm:text-sm">ราคาเปิด</p>
-            <p className="font-display truncate text-xl font-bold text-white sm:text-2xl">{slide.startPrice}</p>
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-wide text-violet-300 sm:text-sm">บิดขั้นต่ำ</p>
-            <p className="font-display truncate text-xl font-bold text-violet-100 sm:text-2xl">{slide.bidStep}</p>
-          </div>
-        </div>
-        <div className="mt-2.5">
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-violet-300 sm:text-sm">ปิดประมูลใน</p>
-          <HomeCountdownHero endAt={slide.countdown} tone="dark" compact fullWidth />
-        </div>
-        <Link
-          href={`/product/${encodeURIComponent(slide.auctionId)}`}
-          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-amber-400 py-2 text-sm font-bold text-brand-950 transition hover:bg-amber-300"
-        >
-          <Icon name="fa-gavel" className="text-xs" aria-hidden />
-          เข้าร่วมประมูล
-        </Link>
-      </div>
-    </article>
-  )
-}
+  useEffect(() => {
+    if (!hasMultipleSlides) return
 
-export default function HomeHeroSection({ slides }: Props) {
-  const heroCards = slides.slice(0, 2)
+    const id = window.setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % HERO_SLIDES.length)
+    }, SLIDE_INTERVAL_MS)
 
-  if (heroCards.length === 0) {
-    return (
-      <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-violet-950 to-indigo-950">
-        <div className="home-container relative py-8 sm:py-10">
-          <div className="mx-auto max-w-lg text-center">
-            <Icon name="fa-gavel" className="mx-auto text-3xl text-amber-300" aria-hidden />
-            <h1 className="font-display mt-3 text-xl font-bold text-white sm:text-2xl">ยังไม่มีรายการประมูล</h1>
-            <p className="mt-2 text-sm text-violet-200">ลองดูรายการทั้งหมด หรือสร้างประมูลใหม่</p>
-            <div className="mt-5 flex flex-wrap justify-center gap-3">
-              <Link
-                href="/auctions"
-                className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-bold text-brand-950 shadow-lg shadow-amber-500/20 hover:bg-amber-300"
-              >
-                ดูประมูลทั้งหมด
-              </Link>
-              <Link
-                href="/seller/auctions/new"
-                className="rounded-lg border border-white/25 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
-              >
-                สร้างรายการประมูล
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-    )
-  }
+    return () => window.clearInterval(id)
+  }, [hasMultipleSlides])
+
+  const goNext = () => setActiveIndex((prev) => (prev + 1) % HERO_SLIDES.length)
+  const goPrev = () =>
+    setActiveIndex((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length)
 
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-violet-950 to-indigo-950">
-      <div
-        className="pointer-events-none absolute -left-32 top-0 h-72 w-72 rounded-full bg-violet-500/20 blur-3xl"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute -right-24 bottom-0 h-56 w-56 rounded-full bg-indigo-400/15 blur-3xl"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.08]"
-        style={{
-          backgroundImage: `radial-gradient(circle at 20% 30%, rgba(255,255,255,0.9) 1px, transparent 1px)`,
-          backgroundSize: "28px 28px",
-        }}
-        aria-hidden
-      />
+    <section className="relative overflow-hidden bg-violet-950">
 
-      <div className="home-container relative py-6 sm:py-8">
-        <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,36rem)] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,38rem)]">
-          <div className="mx-auto max-w-lg text-center lg:mx-0 lg:text-left">
-            <h1 className="font-display text-2xl font-bold leading-tight text-white sm:text-3xl">
+      <div className="home-container relative z-10 py-8 sm:py-10 lg:py-14">
+        <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-10">
+          {/* Col 1 — text */}
+          <div className="mx-auto max-w-xl text-center sm:max-w-2xl lg:mx-0 lg:max-w-none lg:text-left">
+            <h1 className="font-display text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-4xl">
               ประมูลง่าย ได้ของชัวร์
-              <span className="mt-1 block text-base font-semibold text-violet-200 sm:text-lg">
+              <span className="mt-2 block text-xl font-semibold text-amber-400 sm:text-2xl lg:mt-3 lg:text-3xl">
                 สินค้าหลากหลาย เริ่มต้นเพียง 1 บาท
               </span>
             </h1>
-            <p className="mt-3 hidden text-sm leading-relaxed text-violet-200/90 sm:block">
-              ค้นหาสินค้าคุณภาพ ลุ้นราคาที่ใช่ในที่เดียว — โปร่งใส ปลอดภัย
+            <p className="mt-4 text-base leading-relaxed text-violet-200/90 sm:mt-6 sm:text-lg lg:text-1xl">
+              เข้าร่วมประมูลสินค้าคุณภาพในราคาที่คุณพอใจ
+              <br />
+              ปลอดภัย โปร่งใส ได้ของชัวร์ 100%
             </p>
-            <div className="mt-5 flex flex-wrap justify-center gap-2.5 lg:justify-start">
+            <div className="mt-6 flex flex-wrap justify-center gap-4 sm:mt-8 lg:justify-start lg:gap-5">
               <Link
                 href="/auctions"
-                className="inline-flex items-center gap-2 rounded-lg bg-amber-400 px-4 py-2 text-sm font-bold text-brand-950 shadow-md shadow-amber-500/20 transition hover:bg-amber-300"
+                className="inline-flex items-center gap-3 rounded-xl bg-amber-400 px-6 py-3 text-base font-bold text-brand-950 shadow-md shadow-amber-500/20 transition hover:bg-amber-300 sm:px-8 sm:py-4 sm:text-lg lg:text-xl"
               >
                 เริ่มประมูลเลย
-                <Icon name="fa-arrow-right" className="text-xs" aria-hidden />
+                <Icon name="fa-arrow-right" className="text-sm sm:text-base lg:text-lg" aria-hidden />
               </Link>
               <Link
                 href="/how-it-works"
-                className="inline-flex items-center gap-2 rounded-lg border border-white/30 bg-white/5 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/10"
+                className="inline-flex items-center gap-3 rounded-xl border border-white/30 bg-white/5 px-6 py-3 text-base font-semibold text-white backdrop-blur-sm transition hover:bg-white/10 sm:px-8 sm:py-4 sm:text-lg lg:text-xl"
               >
                 วิธีใช้งาน
               </Link>
             </div>
-            <ul className="mt-5 flex flex-wrap justify-center gap-x-4 gap-y-2 sm:gap-x-5 lg:justify-start">
+            <ul className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-3 sm:mt-8 sm:gap-x-8 lg:justify-start lg:gap-x-10">
               {heroStats.map((s) => (
-                <li key={s.sub} className="flex items-center gap-2 text-violet-100">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/15">
-                    <Icon name={s.icon} className="text-xs text-amber-300" aria-hidden />
+                <li key={s.sub} className="flex items-center gap-3 text-violet-100 sm:gap-4">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 sm:h-14 sm:w-14 lg:h-16 lg:w-16">
+                    <Icon name={s.icon} className="text-base text-amber-300 sm:text-lg lg:text-xl" aria-hidden />
                   </span>
                   <span>
-                    <span className="block font-display text-sm font-bold text-white">{s.label}</span>
-                    <span className="text-[11px] text-violet-300">{s.sub}</span>
+                    <span className="block font-display text-base font-bold text-white sm:text-lg lg:text-1xl">
+                      {s.label}
+                    </span>
+                    <span className="text-sm text-violet-300 sm:text-base lg:text-lg">{s.sub}</span>
                   </span>
                 </li>
               ))}
             </ul>
           </div>
 
-          <div
-            className={
-              heroCards.length > 1
-                ? "grid gap-3 sm:grid-cols-2 lg:mx-0"
-                : "relative mx-auto w-full max-w-[17.5rem] lg:mx-0 lg:max-w-none"
-            }
-          >
-            {heroCards.map((item, i) => (
-              <HeroFeaturedCard key={item.auctionId} slide={item} featured={i === 0} />
-            ))}
+          {/* Col 2 — effect bg + รูปสินค้า slide */}
+          <div className="relative mx-auto w-full max-w-xl lg:mx-0 lg:max-w-none">
+            <div className="relative min-h-[220px] sm:min-h-[280px] lg:min-h-[340px]">
+              <div className="relative z-10 flex h-full min-h-[inherit] items-end justify-center px-2 pb-2 pt-4 sm:px-4 sm:pb-4">
+                <div className="relative aspect-[5/3] w-full max-w-[34rem]">
+                  {HERO_SLIDES.map((slide, index) => (
+                    <div
+                      key={slide.src}
+                      className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+                        index === activeIndex ? "opacity-100" : "pointer-events-none opacity-0"
+                      }`}
+                    >
+                      <Image
+                        src={slide.src}
+                        alt={slide.alt}
+                        fill
+                        className="object-contain object-bottom mix-blend-lighten"
+                        sizes="(max-width: 1024px) 90vw, 34rem"
+                        priority={index === 0}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {hasMultipleSlides ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={goPrev}
+                    className="absolute left-1 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/20 backdrop-blur-sm transition hover:bg-white/20 sm:left-0"
+                    aria-label="สไลด์ก่อนหน้า"
+                  >
+                    <Icon name="fa-chevron-left" className="text-xs" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goNext}
+                    className="absolute right-1 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/20 backdrop-blur-sm transition hover:bg-white/20 sm:right-0"
+                    aria-label="สไลด์ถัดไป"
+                  >
+                    <Icon name="fa-chevron-right" className="text-xs" aria-hidden />
+                  </button>
+                  <div className="absolute bottom-1 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+                    {HERO_SLIDES.map((slide, index) => (
+                      <button
+                        key={slide.src}
+                        type="button"
+                        onClick={() => setActiveIndex(index)}
+                        className={`h-2 w-2 rounded-full transition ${
+                          activeIndex === index ? "scale-110 bg-amber-400" : "bg-white/40 hover:bg-white/60"
+                        }`}
+                        aria-label={`สไลด์ ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>

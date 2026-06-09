@@ -24,13 +24,13 @@ export const metadata: Metadata = {
 }
 
 export default async function Home() {
-  const { featuredSlides, tickerItems, gridItems, categoryStats } = await fetchHomePageAuctions()
+  const { tickerItems, gridItems, categoryStats } = await fetchHomePageAuctions()
 
   return (
     <main className="bg-[#f5f5f7] dark:bg-slate-950">
       <JsonLd data={[buildWebsiteJsonLd(), buildOrganizationJsonLd()]} />
       <HomeAuctionTicker items={tickerItems} />
-      <HomeHeroSection slides={featuredSlides} />
+      <HomeHeroSection />
       <HomeCategoryBar categories={categoryStats} />
       <HomeAuctionShowcase items={gridItems} />
       <HomeCtaBanner />

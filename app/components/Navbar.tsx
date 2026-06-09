@@ -111,6 +111,21 @@ export default function Navbar() {
     const navItems = [
         { href: '/auctions', label: 'รายการสินค้า' },
     ]
+
+    const isNavActive = (href: string) => {
+        if (href === '/') return pathname === '/'
+        return pathname === href || pathname.startsWith(`${href}/`)
+    }
+
+    const desktopNavLinkClass = (href: string) =>
+        isNavActive(href)
+            ? 'relative flex items-center whitespace-nowrap px-1 font-semibold text-brand-700 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-brand-600 dark:text-brand-400 dark:after:bg-brand-500'
+            : 'relative flex items-center whitespace-nowrap px-1 font-medium text-slate-600 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400'
+
+    const mobileNavLinkClass = (href: string) =>
+        isNavActive(href)
+            ? 'block rounded-xl border-b-2 border-brand-600 px-2 py-1.5 text-sm font-semibold text-brand-700 dark:border-brand-500 dark:text-brand-400'
+            : 'block rounded-xl border-b-2 border-transparent px-2 py-1.5 text-sm text-body hover:bg-brand-50 dark:hover:bg-brand-950/40'
     const userMenuItems = [
         { href: '/account/notifications', label: 'การแจ้งเตือน', notificationBadge: true },
         { href: '/seller/auctions', label: 'รายการที่เปิดประมูล', shipBadge: true },
@@ -494,11 +509,20 @@ export default function Navbar() {
                                 หน้าแรก
                             </Link>
                             {navItems.map((item) => (
-                                <Link key={item.label} className="block rounded-xl px-2 py-1.5 text-sm text-body hover:bg-brand-50 dark:hover:bg-brand-950/40" href={item.href} onClick={() => setIsOpen(false)}>
+                                <Link
+                                    key={item.label}
+                                    className={mobileNavLinkClass(item.href)}
+                                    href={item.href}
+                                    onClick={() => setIsOpen(false)}
+                                >
                                     {item.label}
                                 </Link>
                             ))}
-                            <Link href="/how-it-works" onClick={() => setIsOpen(false)} className="block rounded-xl px-2 py-1.5 text-sm text-body hover:bg-brand-50 dark:hover:bg-brand-950/40">
+                            <Link
+                                href="/how-it-works"
+                                onClick={() => setIsOpen(false)}
+                                className={mobileNavLinkClass('/how-it-works')}
+                            >
                                 วิธีการประมูล
                             </Link>
                             {!clientReady ? (
@@ -599,34 +623,13 @@ export default function Navbar() {
                         </form>
                         {renderSearchSuggestions()}
                     </div>
-                    <nav className="hidden shrink-0 items-center gap-5 text-sm xl:flex">
-                        {navItems.map((item) => {
-                            const active =
-                                item.href === "/"
-                                    ? pathname === "/"
-                                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
-                            return (
-                                <Link
-                                    key={item.label}
-                                    href={item.href}
-                                    className={
-                                        active
-                                            ? "inline-flex min-h-10 items-center whitespace-nowrap font-semibold text-brand-700"
-                                            : "inline-flex min-h-10 items-center whitespace-nowrap font-medium text-slate-600 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400"
-                                    }
-                                >
-                                    {item.label}
-                                </Link>
-                            );
-                        })}
-                        <Link
-                            href="/how-it-works"
-                            className={
-                                pathname.startsWith("/how-it-works")
-                                    ? "inline-flex min-h-10 items-center whitespace-nowrap font-semibold text-brand-700"
-                                    : "inline-flex min-h-10 items-center whitespace-nowrap font-medium text-slate-600 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400"
-                            }
-                        >
+                    <nav className="hidden shrink-0 -my-3 items-stretch gap-5 self-stretch text-sm xl:flex">
+                        {navItems.map((item) => (
+                            <Link key={item.label} href={item.href} className={desktopNavLinkClass(item.href)}>
+                                {item.label}
+                            </Link>
+                        ))}
+                        <Link href="/how-it-works" className={desktopNavLinkClass('/how-it-works')}>
                             วิธีการประมูล
                         </Link>
                     </nav>

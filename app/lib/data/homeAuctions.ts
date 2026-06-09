@@ -3,11 +3,8 @@ import { listProductCategories } from "@/app/lib/api/categories"
 import {
   auctionCoverImageUrl,
   dedupeAuctionItems,
-  inferHomeBadge,
   toAuctionTickerItems,
-  toHomeShowcaseItem,
   type AuctionTickerItem,
-  type HomeShowcaseItem,
 } from "@/app/lib/auctionDisplay"
 
 import {
@@ -27,7 +24,6 @@ export type HomeCategoryStat = {
 }
 
 export type HomePageAuctionData = {
-  featuredSlides: HomeShowcaseItem[]
   tickerItems: AuctionTickerItem[]
   gridItems: PublicAuctionListItem[]
   categoryStats: HomeCategoryStat[]
@@ -91,21 +87,10 @@ async function fetchCategoryStats(limit = HOME_CATEGORY_LIMIT): Promise<HomeCate
 
 export async function fetchHomePageAuctions(): Promise<HomePageAuctionData> {
   try {
-    const [featuredRes, gridRes, categoryStats] = await Promise.all([
-      listPublicAuctions({ ended: "open", sort: "most_bids", limit: 3, offset: 0 }),
+    const [gridRes, categoryStats] = await Promise.all([
       listPublicAuctions({ ended: "open", sort: "ending_soon", limit: 12, offset: 0 }),
       fetchCategoryStats(),
     ])
-
-    let featuredItems = dedupeAuctionItems(featuredRes.items)
-    if (featuredItems.length === 0) {
-      const fallback = await listPublicAuctions({ ended: "open", sort: "newest", limit: 3, offset: 0 })
-      featuredItems = dedupeAuctionItems(fallback.items)
-    }
-
-    const featuredSlides = featuredItems
-      .slice(0, 2)
-      .map((item, i) => toHomeShowcaseItem(item, { badge: i === 0 ? "featured" : inferHomeBadge(item) }))
 
     let gridPool = dedupeAuctionItems(gridRes.items)
     if (gridPool.length < HOME_SHOWCASE_LIMIT) {
@@ -115,10 +100,9 @@ export async function fetchHomePageAuctions(): Promise<HomePageAuctionData> {
     const gridItems = mixHomeShowcaseMocks(gridPool.slice(0, HOME_SHOWCASE_LIMIT))
     const tickerItems = toAuctionTickerItems(gridItems)
 
-    return { featuredSlides, tickerItems, gridItems, categoryStats }
+    return { tickerItems, gridItems, categoryStats }
   } catch {
     return {
-      featuredSlides: [],
       tickerItems: [],
       gridItems: [],
       categoryStats: [],
