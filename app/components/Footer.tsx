@@ -1,5 +1,6 @@
 import Link from "next/link"
 import PramoolLogo from "@/app/components/PramoolLogo"
+import { shouldPrefetchPath } from "@/app/lib/authPaths"
 
 const footerMenus = [
   {
@@ -68,7 +69,11 @@ export default function Footer() {
               <ul className="space-y-2.5 text-sm text-white/90">
                 {section.items.map((item) => (
                   <li key={item.href}>
-                    <Link href={item.href} className="transition hover:text-white hover:underline">
+                    <Link
+                      href={item.href}
+                      prefetch={shouldPrefetchPath(item.href)}
+                      className="transition hover:text-white hover:underline"
+                    >
                       {item.label}
                     </Link>
                   </li>

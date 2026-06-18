@@ -17,6 +17,7 @@ import PramoolLogo from "@/app/components/PramoolLogo"
 import { SellerStarsDisplay } from "@/app/components/SellerStarRating"
 import { auctionCoverImageUrl } from "@/app/lib/auctionDisplay"
 import dynamic from "next/dynamic"
+import { shouldPrefetchPath } from "@/app/lib/authPaths"
 
 const ThemeToggle = dynamic(() => import("@/app/components/ThemeToggle"), { ssr: false })
 
@@ -555,6 +556,7 @@ export default function Navbar() {
                                         <div className="space-y-2 border-t border-violet-100 pt-2 text-sm text-body dark:border-violet-900/50">
                                             <Link
                                                 href="/seller/auctions/new"
+                                                prefetch={false}
                                                 className="block rounded-2xl bg-brand-600 px-2 py-2.5 text-center text-xs font-semibold leading-snug text-white shadow-md shadow-brand-600/20 hover:bg-brand-700"
                                                 onClick={() => setIsOpen(false)}
                                             >
@@ -565,6 +567,7 @@ export default function Navbar() {
                                                     <Link
                                                         key={item.href}
                                                         href={item.href}
+                                                        prefetch={shouldPrefetchPath(item.href)}
                                                         className="flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-xs text-body hover:bg-brand-50 dark:hover:bg-brand-950/40"
                                                         onClick={() => setIsOpen(false)}
                                                     >
@@ -691,6 +694,7 @@ export default function Navbar() {
                                         <div className="absolute right-0 top-11 z-30 w-64 rounded-2xl border border-violet-100 bg-surface-card p-2 shadow-xl shadow-violet-200/40 dark:border-violet-900/60 dark:shadow-black/40">
                                             <Link
                                                 href="/seller/auctions/new"
+                                                prefetch={false}
                                                 className="block rounded-xl px-3 py-2 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50"
                                                 onClick={() => setIsUserMenuOpen(false)}
                                             >
@@ -701,6 +705,7 @@ export default function Navbar() {
                                                 <Link
                                                     key={item.href}
                                                     href={item.href}
+                                                    prefetch={shouldPrefetchPath(item.href)}
                                                     className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm text-body hover:bg-brand-50 dark:hover:bg-brand-950/40"
                                                     onClick={() => setIsUserMenuOpen(false)}
                                                 >

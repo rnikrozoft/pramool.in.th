@@ -102,6 +102,7 @@ export default function LoginPage() {
       }
       persistPhoneForOnboarding(id)
       await refreshSession({ force: true })
+      router.refresh()
       queueNotify("success", "เข้าสู่ระบบสำเร็จ")
       await runPostAuthRedirect(router)
     } catch {

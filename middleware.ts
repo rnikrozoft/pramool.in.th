@@ -95,6 +95,12 @@ function attachSetCookies(response: NextResponse, setCookies: string[]) {
   }
 }
 
+/** Prevent Next.js from caching middleware auth redirects in the RSC prefetch cache. */
+function noStoreRedirect(response: NextResponse) {
+  response.headers.set("Cache-Control", "private, no-store, must-revalidate");
+  return response;
+}
+
 /**
  * Resolve session from JWT locally (dev) or from core API (production frontend
  * often has no JWT_SECRET in the container — cookies are still valid on the API).
@@ -136,8 +142,7 @@ async function resolveSession(
         setCookies,
       };
     } catch (err) {
-      console.warn("Invalid JWT:", err);
-      return { loggedIn: false, needsOnboarding: false, setCookies: [] };
+      console.warn("Invalid JWT, falling back to API session check:", err);
     }
   }
 
@@ -172,7 +177,7 @@ export async function middleware(request: NextRequest) {
   if (isOnboardingAddressPath(pathname) && !loggedIn) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
-    return withCookies(NextResponse.redirect(url));
+    return withCookies(noStoreRedirect(NextResponse.redirect(url)));
   }
 
   if (loggedIn) {
@@ -180,14 +185,14 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = ONBOARDING_ADDRESS_PATH;
       url.search = "";
-      return withCookies(NextResponse.redirect(url));
+      return withCookies(noStoreRedirect(NextResponse.redirect(url)));
     }
 
     if (isGuestOnlyPath(pathname)) {
       const url = request.nextUrl.clone();
       url.pathname = needsOnboarding ? ONBOARDING_ADDRESS_PATH : "/";
       url.search = "";
-      return withCookies(NextResponse.redirect(url));
+      return withCookies(noStoreRedirect(NextResponse.redirect(url)));
     }
   }
 
@@ -199,7 +204,7 @@ export async function middleware(request: NextRequest) {
   if (requiresAuth && !loggedIn) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return withCookies(NextResponse.redirect(url));
+    return withCookies(noStoreRedirect(NextResponse.redirect(url)));
   }
 
   return withCookies(NextResponse.next());
