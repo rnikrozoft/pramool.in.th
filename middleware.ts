@@ -31,13 +31,11 @@ function isOnboardingAddressPath(pathname: string): boolean {
 
 async function fetchOnboardingStatus(
   request: NextRequest,
+  cookieHeader: string,
 ): Promise<OnboardingStatus | null> {
-  const token = request.cookies.get("access_token")?.value;
-  if (!token) return null;
-
   try {
     const res = await fetch(`${userApiBaseUrl()}/users/onboarding-status`, {
-      headers: { cookie: request.headers.get("cookie") ?? "" },
+      headers: { cookie: cookieHeader },
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -47,54 +45,134 @@ async function fetchOnboardingStatus(
   }
 }
 
+async function tryRefreshSession(
+  request: NextRequest,
+): Promise<{ cookieHeader: string; setCookies: string[] } | null> {
+  const incoming = request.headers.get("cookie") ?? "";
+  if (!incoming.includes("refresh_token=")) return null;
+  try {
+    const res = await fetch(`${userApiBaseUrl()}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        cookie: incoming,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const setCookies =
+      typeof res.headers.getSetCookie === "function"
+        ? res.headers.getSetCookie()
+        : [];
+    if (setCookies.length === 0) return null;
+
+    const jar = new Map<string, string>();
+    for (const part of incoming.split(";")) {
+      const trimmed = part.trim();
+      const eq = trimmed.indexOf("=");
+      if (eq <= 0) continue;
+      jar.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
+    }
+    for (const raw of setCookies) {
+      const first = raw.split(";")[0]?.trim() ?? "";
+      const eq = first.indexOf("=");
+      if (eq <= 0) continue;
+      jar.set(first.slice(0, eq), first.slice(eq + 1));
+    }
+    const cookieHeader = Array.from(jar.entries())
+      .map(([k, v]) => `${k}=${v}`)
+      .join("; ");
+    return { cookieHeader, setCookies };
+  } catch {
+    return null;
+  }
+}
+
+function attachSetCookies(response: NextResponse, setCookies: string[]) {
+  for (const raw of setCookies) {
+    response.headers.append("Set-Cookie", raw);
+  }
+}
+
 /**
  * Resolve session from JWT locally (dev) or from core API (production frontend
  * often has no JWT_SECRET in the container — cookies are still valid on the API).
  */
 async function resolveSession(
   request: NextRequest,
-): Promise<{ loggedIn: boolean; needsOnboarding: boolean }> {
+): Promise<{
+  loggedIn: boolean;
+  needsOnboarding: boolean;
+  setCookies: string[];
+}> {
   const token = request.cookies.get("access_token")?.value;
   if (!token) {
-    return { loggedIn: false, needsOnboarding: false };
+    return { loggedIn: false, needsOnboarding: false, setCookies: [] };
   }
+
+  let cookieHeader = request.headers.get("cookie") ?? "";
+  let setCookies: string[] = [];
 
   if (JWT_SECRET.length > 0) {
     try {
       const { payload } = await jwtVerify(token, JWT_SECRET);
       const loggedIn = typeof payload.sub === "string" && payload.sub.length > 0;
       if (!loggedIn) {
-        return { loggedIn: false, needsOnboarding: false };
+        return { loggedIn: false, needsOnboarding: false, setCookies: [] };
       }
-      const status = await fetchOnboardingStatus(request);
+      let status = await fetchOnboardingStatus(request, cookieHeader);
+      if (!status) {
+        const refreshed = await tryRefreshSession(request);
+        if (refreshed) {
+          cookieHeader = refreshed.cookieHeader;
+          setCookies = refreshed.setCookies;
+          status = await fetchOnboardingStatus(request, cookieHeader);
+        }
+      }
       return {
-        loggedIn: true,
+        loggedIn: Boolean(status),
         needsOnboarding: Boolean(status?.is_first_registration),
+        setCookies,
       };
     } catch (err) {
       console.warn("Invalid JWT:", err);
-      return { loggedIn: false, needsOnboarding: false };
+      return { loggedIn: false, needsOnboarding: false, setCookies: [] };
     }
   }
 
-  const status = await fetchOnboardingStatus(request);
+  let status = await fetchOnboardingStatus(request, cookieHeader);
   if (!status) {
-    return { loggedIn: false, needsOnboarding: false };
+    const refreshed = await tryRefreshSession(request);
+    if (refreshed) {
+      cookieHeader = refreshed.cookieHeader;
+      setCookies = refreshed.setCookies;
+      status = await fetchOnboardingStatus(request, cookieHeader);
+    }
+  }
+  if (!status) {
+    return { loggedIn: false, needsOnboarding: false, setCookies: [] };
   }
   return {
     loggedIn: true,
     needsOnboarding: Boolean(status.is_first_registration),
+    setCookies,
   };
 }
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const { loggedIn, needsOnboarding } = await resolveSession(request);
+  const { loggedIn, needsOnboarding, setCookies } = await resolveSession(request);
+
+  const withCookies = (response: NextResponse) => {
+    attachSetCookies(response, setCookies);
+    return response;
+  };
 
   if (isOnboardingAddressPath(pathname) && !loggedIn) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
-    return NextResponse.redirect(url);
+    return withCookies(NextResponse.redirect(url));
   }
 
   if (loggedIn) {
@@ -102,14 +180,14 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = ONBOARDING_ADDRESS_PATH;
       url.search = "";
-      return NextResponse.redirect(url);
+      return withCookies(NextResponse.redirect(url));
     }
 
     if (isGuestOnlyPath(pathname)) {
       const url = request.nextUrl.clone();
       url.pathname = needsOnboarding ? ONBOARDING_ADDRESS_PATH : "/";
       url.search = "";
-      return NextResponse.redirect(url);
+      return withCookies(NextResponse.redirect(url));
     }
   }
 
@@ -121,10 +199,10 @@ export async function middleware(request: NextRequest) {
   if (requiresAuth && !loggedIn) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return withCookies(NextResponse.redirect(url));
   }
 
-  return NextResponse.next();
+  return withCookies(NextResponse.next());
 }
 
 export const config = {
