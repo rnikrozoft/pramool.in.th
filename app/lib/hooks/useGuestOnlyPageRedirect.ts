@@ -21,7 +21,7 @@ export function useGuestOnlyPageRedirect() {
         router.replace(status.is_first_registration ? ONBOARDING_ADDRESS_PATH : "/")
       })
       .catch(() => {
-        if (!cancelled) router.replace("/")
+        if (!cancelled) router.replace(ONBOARDING_ADDRESS_PATH)
       })
 
     return () => {
